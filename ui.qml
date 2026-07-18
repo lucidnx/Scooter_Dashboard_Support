@@ -1,5 +1,6 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
+import QtQuick.Controls.Material 2.15
 import QtQuick.Layouts 1.15
 import Vedder.vesc.commands 1.0
 import Vedder.vesc.utility 1.0
@@ -14,8 +15,67 @@ Item {
     property bool settingsLoaded: false
     property real titleSize: Qt.application.font.pointSize > 0 ? Qt.application.font.pointSize + 3 : 14
 
+    // Live scooter state for the Control tab
+    property bool stOff: false
+    property bool stLock: false
+    property bool stLight: false
+    property bool stSecret: false
+    property int stMode: 4
+    property real stBatt: 0
+    property real stVin: 0
+    property real stSpeed: 0
+    property real stWatts: 0
+    property real stWhkm: 0
+    property real stRange: 0
+    property real stAmps: 0
+    property real stMax: 60
+
+    function applyStateLine(line) {
+        var p = line.split(" ")
+        stOff = parseBoolToken(p[1])
+        stLock = parseBoolToken(p[2])
+        stLight = parseBoolToken(p[3])
+        stSecret = parseBoolToken(p[4])
+        stMode = Number.parseInt(p[5]) || 4
+        stBatt = Number.parseFloat(p[6]) || 0
+        stVin = Number.parseFloat(p[7]) || 0
+        stSpeed = Number.parseFloat(p[8]) || 0
+        stWatts = Number.parseFloat(p[9]) || 0
+        stWhkm = Number.parseFloat(p[10]) || 0
+        stRange = Number.parseFloat(p[11]) || 0
+        stAmps = Number.parseFloat(p[12]) || 0
+        stMax = Number.parseFloat(p[13]) || 60
+    }
+
+    function ctrlCode(str) {
+        sendCode(str)
+        sendCode("(send-state)")
+    }
+
     function sendCode(str) {
         mCommands.sendCustomAppData(str + "\0")
+    }
+
+    // Saving fires many commands - pace them so the BLE link and the
+    // script's event queue keep up (a raw burst drops packets over nRF)
+    property var sendQueue: []
+
+    Timer {
+        id: sendTimer
+        interval: 60
+        repeat: true
+        onTriggered: {
+            if (root.sendQueue.length === 0) {
+                sendTimer.stop()
+                return
+            }
+            mCommands.sendCustomAppData(root.sendQueue.shift() + "\0")
+        }
+    }
+
+    function queueCode(str) {
+        root.sendQueue.push(str)
+        sendTimer.start()
     }
 
     function boolAtom(box) {
@@ -54,7 +114,7 @@ Item {
     }
 
     function readReal(field, decimals) {
-        var number = Number.parseFloat(field.text)
+        var number = Number.parseFloat(field.text.replace(",", "."))
         if (!Number.isFinite(number)) {
             number = 0
         }
@@ -64,26 +124,26 @@ Item {
     function setReal(field, value, decimals) {
         var number = Number(value)
         if (Number.isFinite(number)) {
-            field.text = number.toFixed(decimals)
+            field.text = (number % 1 === 0) ? number.toString() : number.toFixed(decimals)
         }
     }
 
     function saveAllSettings() {
-        sendCode("(save-general-settings "
+        queueCode("(save-general-settings "
             + boolAtom(softwareAdc)
-            + " " + minAdcThrottle.value.toFixed(2)
-            + " " + minAdcBrake.value.toFixed(2)
+            + " " + readReal(minAdcThrottle, 2)
+            + " " + readReal(minAdcBrake, 2)
             + " " + boolAtom(showBatteryInIdle)
             + " " + boolAtom(showBatterySecret)
             + " " + readReal(minSpeed, 1)
             + ")")
 
-        sendCode("(save-temp-settings "
+        queueCode("(save-temp-settings "
             + readReal(tempWarningMotor, 1)
             + " " + readReal(tempWarningFet, 1)
             + ")")
 
-        sendCode("(save-mode-settings "
+        queueCode("(save-mode-settings "
             + readReal(ecoSpeed, 1)
             + " " + readReal(ecoCurrent, 2)
             + " " + readReal(ecoWatts, 0)
@@ -97,9 +157,12 @@ Item {
             + " " + readReal(sportWatts, 0)
             + " " + readReal(sportFw, 1)
             + " " + bootModeValue()
+            + " " + readReal(ecoOm, 2)
+            + " " + readReal(driveOm, 2)
+            + " " + readReal(sportOm, 2)
             + ")")
 
-        sendCode("(save-secret-settings "
+        queueCode("(save-secret-settings "
             + boolAtom(secretEnabled)
             + " " + readReal(secretEcoSpeed, 1)
             + " " + readReal(secretEcoCurrent, 2)
@@ -113,20 +176,25 @@ Item {
             + " " + readReal(secretSportCurrent, 2)
             + " " + readReal(secretSportWatts, 0)
             + " " + readReal(secretSportFw, 1)
+            + " " + readReal(secretEcoOm, 2)
+            + " " + readReal(secretDriveOm, 2)
+            + " " + readReal(secretSportOm, 2)
             + ")")
 
-        sendCode("(save-apply-settings "
+        queueCode("(save-apply-settings "
             + boolAtom(applySpeed)
             + " " + boolAtom(applyCurrent)
             + " " + boolAtom(applyWatts)
             + " " + boolAtom(applyFw)
+            + " " + boolAtom(applyOm)
             + " " + boolAtom(secretApplySpeed)
             + " " + boolAtom(secretApplyCurrent)
             + " " + boolAtom(secretApplyWatts)
             + " " + boolAtom(secretApplyFw)
+            + " " + boolAtom(secretApplyOm)
             + ")")
 
-        sendCode("(save-gesture-settings "
+        queueCode("(save-gesture-settings "
             + secretPresses.currentIndex
             + " " + comboFromBoxes(secretBrake, secretThrottle)
             + " " + boolAtom(secretRequiresLock)
@@ -140,23 +208,43 @@ Item {
             + " " + boolAtom(lightLocked)
             + ")")
 
-        sendCode("(save-misc-settings "
+        queueCode("(save-misc-settings "
             + boolAtom(lightOnBoot)
             + " " + readReal(buttonSpeed, 1)
+            + " " + boolAtom(useMph)
+            + " " + boolAtom(bmsSoc)
+            + " " + boolAtom(secretExitOnLock)
             + ")")
 
-        sendCode("(save-alarm-settings "
+        queueCode("(save-light-offsets "
+            + readReal(lightOffThr, 2)
+            + " " + readReal(lightOffBrk, 2)
+            + ")")
+
+        queueCode("(save-rear-settings "
+            + boolAtom(rearLightEnable)
+            + " " + boolAtom(autoTaillight)
+            + " " + [1, 2, 0][brakeLightMode.currentIndex]
+            + ")")
+
+        queueCode("(save-cruise-settings "
+            + boolAtom(cruiseEnabled)
+            + " " + readReal(cruiseDelay, 1)
+            + " " + readReal(cruiseDeviation, 1)
+            + ")")
+
+        queueCode("(save-alarm-settings "
             + boolAtom(alarmTone)
             + " " + readReal(alarmSpeedThreshold, 1)
             + " " + readReal(alarmGyroThreshold, 1)
             + " " + readReal(alarmVoltage, 1)
             + ")")
 
-        sendCode("(finish-settings-save)")
+        queueCode("(finish-settings-save)")
 
         // Model change needs a lisp restart, ack-gated via "model-ok"
         if (modelBox.currentIndex !== loadedModel) {
-            sendCode("(save-model " + modelBox.currentIndex + ")")
+            queueCode("(save-model " + modelBox.currentIndex + ")")
         }
     }
 
@@ -173,8 +261,8 @@ Item {
             modelBox.currentIndex = loadedModel
         } else if (parts[0] === "general") {
             softwareAdc.checked = parseBoolToken(parts[1])
-            minAdcThrottle.value = Number.parseFloat(parts[2]) || 0
-            minAdcBrake.value = Number.parseFloat(parts[3]) || 0
+            setReal(minAdcThrottle, parts[2], 2)
+            setReal(minAdcBrake, parts[3], 2)
             showBatteryInIdle.checked = parseBoolToken(parts[4])
             showBatterySecret.checked = parseBoolToken(parts[5])
             setReal(minSpeed, parts[6], 1)
@@ -195,6 +283,9 @@ Item {
             setReal(sportWatts, parts[11], 0)
             setReal(sportFw, parts[12], 1)
             setBootMode(Number.parseInt(parts[13]) || 4)
+            setReal(ecoOm, parts[14], 2)
+            setReal(driveOm, parts[15], 2)
+            setReal(sportOm, parts[16], 2)
         } else if (parts[0] === "secret") {
             secretEnabled.checked = parseBoolToken(parts[1])
             setReal(secretEcoSpeed, parts[2], 1)
@@ -209,15 +300,20 @@ Item {
             setReal(secretSportCurrent, parts[11], 2)
             setReal(secretSportWatts, parts[12], 0)
             setReal(secretSportFw, parts[13], 1)
+            setReal(secretEcoOm, parts[14], 2)
+            setReal(secretDriveOm, parts[15], 2)
+            setReal(secretSportOm, parts[16], 2)
         } else if (parts[0] === "apply") {
             applySpeed.checked = parseBoolToken(parts[1])
             applyCurrent.checked = parseBoolToken(parts[2])
             applyWatts.checked = parseBoolToken(parts[3])
             applyFw.checked = parseBoolToken(parts[4])
-            secretApplySpeed.checked = parseBoolToken(parts[5])
-            secretApplyCurrent.checked = parseBoolToken(parts[6])
-            secretApplyWatts.checked = parseBoolToken(parts[7])
-            secretApplyFw.checked = parseBoolToken(parts[8])
+            applyOm.checked = parseBoolToken(parts[5])
+            secretApplySpeed.checked = parseBoolToken(parts[6])
+            secretApplyCurrent.checked = parseBoolToken(parts[7])
+            secretApplyWatts.checked = parseBoolToken(parts[8])
+            secretApplyFw.checked = parseBoolToken(parts[9])
+            secretApplyOm.checked = parseBoolToken(parts[10])
         } else if (parts[0] === "gesture") {
             pressesIndex(secretPresses, parts[1], 2)
             setBoxesFromCombo(Number.parseInt(parts[2]) || 0, secretBrake, secretThrottle)
@@ -234,6 +330,20 @@ Item {
         } else if (parts[0] === "misc") {
             lightOnBoot.checked = parseBoolToken(parts[1])
             setReal(buttonSpeed, parts[2], 1)
+            useMph.checked = parseBoolToken(parts[3])
+            bmsSoc.checked = parseBoolToken(parts[4])
+            secretExitOnLock.checked = parseBoolToken(parts[5])
+            setReal(lightOffThr, parts[6], 2)
+            setReal(lightOffBrk, parts[7], 2)
+        } else if (parts[0] === "rear") {
+            rearLightEnable.checked = parseBoolToken(parts[1])
+            autoTaillight.checked = parseBoolToken(parts[2])
+            var blm = Number.parseInt(parts[3])
+            brakeLightMode.currentIndex = blm === 1 ? 0 : (blm === 2 ? 1 : 2)
+        } else if (parts[0] === "cruise") {
+            cruiseEnabled.checked = parseBoolToken(parts[1])
+            setReal(cruiseDelay, parts[2], 1)
+            setReal(cruiseDeviation, parts[3], 1)
         } else if (parts[0] === "alarm") {
             alarmTone.checked = parseBoolToken(parts[1])
             setReal(alarmSpeedThreshold, parts[2], 1)
@@ -277,14 +387,17 @@ Item {
 
         TabBar {
             id: tabBar
-            currentIndex: swipeView.currentIndex
             Layout.fillWidth: true
             implicitWidth: 0
             clip: true
 
-            property int buttons: 3
-            property int buttonWidth: 90
+            property int buttons: 4
+            property int buttonWidth: 80
 
+            TabButton {
+                text: "Control"
+                width: Math.max(tabBar.buttonWidth, tabBar.width / tabBar.buttons)
+            }
             TabButton {
                 text: "General"
                 width: Math.max(tabBar.buttonWidth, tabBar.width / tabBar.buttons)
@@ -302,9 +415,219 @@ Item {
         SwipeView {
             id: swipeView
             currentIndex: tabBar.currentIndex
+            interactive: false
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
+
+            Page {
+                enabled: !isSlave
+
+                Timer {
+                    interval: 1000
+                    repeat: true
+                    running: swipeView.currentIndex === 0 && !root.isSlave
+                    onTriggered: sendCode("(send-state)")
+                }
+
+                ScrollView {
+                    anchors.fill: parent
+                    contentWidth: availableWidth
+                    clip: true
+
+                    ColumnLayout {
+                        width: parent.width
+                        spacing: 6
+
+                        Item {
+                            Layout.fillWidth: true
+                            Layout.topMargin: 48
+                            Layout.preferredHeight: speedNum.height
+
+                            Label {
+                                id: speedNum
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                text: Math.round(useMph.checked ? (root.stSpeed * 0.621371) : root.stSpeed)
+                                font.pointSize: root.titleSize * 3.8
+                                font.bold: true
+                            }
+                            Label {
+                                anchors.left: speedNum.right
+                                anchors.leftMargin: 10
+                                anchors.baseline: speedNum.baseline
+                                text: useMph.checked ? "mph" : "km/h"
+                                opacity: 0.7
+                            }
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Layout.topMargin: 20
+                            spacing: 3
+                            Repeater {
+                                model: 24
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: 10
+                                    height: 10
+                                    radius: 2
+                                    color: index < Math.min(24, Math.round(root.stSpeed / Math.max(1, root.stMax) * 24)) ? "#ff7a1a" : "#5a5a5a"
+                                }
+                            }
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Layout.topMargin: 22
+                            spacing: 3
+                            Repeater {
+                                model: 10
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: 20
+                                    height: 16
+                                    radius: 2
+                                    color: index < Math.round(root.stBatt / 10) ? (root.stBatt < 20 ? "#e53935" : "#43a047") : "#5a5a5a"
+                                }
+                            }
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Layout.topMargin: 4
+
+                            Label {
+                                text: root.stWhkm.toFixed(1) + " Wh/km"
+                                font.pointSize: root.titleSize * 1.15
+                                opacity: 0.85
+                            }
+                            Item { Layout.fillWidth: true }
+                            Label {
+                                text: Math.round(root.stBatt) + " %"
+                                font.bold: true
+                                font.pointSize: root.titleSize * 1.3
+                            }
+                            Item { Layout.fillWidth: true }
+                            Label {
+                                text: "~" + Math.round(root.stRange) + " km"
+                                font.pointSize: root.titleSize * 1.15
+                                opacity: 0.85
+                            }
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            Layout.topMargin: 26
+                            horizontalAlignment: Text.AlignHCenter
+                            text: root.stVin.toFixed(1) + " V  ·  " + Math.round(root.stWatts) + " W  ·  " + root.stAmps.toFixed(1) + " A"
+                            font.pointSize: root.titleSize * 1.15
+                            opacity: 0.85
+                        }
+
+                        GridLayout {
+                            Layout.fillWidth: true
+                            Layout.topMargin: 18
+                            columns: 2
+                            rowSpacing: 12
+                            columnSpacing: 12
+
+                            Button {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 84
+                                Layout.preferredWidth: 100
+                                font.pointSize: root.titleSize
+                                font.bold: true
+                                text: root.stOff ? "Turn ON" : "Turn OFF"
+                                Material.background: root.stOff ? "#3d3d3d" : "#2e7d32"
+                                Material.foreground: "#ffffff"
+                                onClicked: ctrlCode("(ctrl-power " + (root.stOff ? "true" : "false") + ")")
+                            }
+
+                            Button {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 84
+                                Layout.preferredWidth: 100
+                                font.pointSize: root.titleSize
+                                font.bold: true
+                                text: root.stLock ? "Unlock" : "Lock"
+                                Material.background: root.stLock ? "#c62828" : "#3d3d3d"
+                                Material.foreground: "#ffffff"
+                                onClicked: ctrlCode("(ctrl-lock " + (root.stLock ? "false" : "true") + ")")
+                            }
+
+                            Button {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 84
+                                Layout.preferredWidth: 100
+                                font.pointSize: root.titleSize
+                                font.bold: true
+                                text: "Light"
+                                Material.background: root.stLight ? "#f9a825" : "#3d3d3d"
+                                Material.foreground: root.stLight ? "#000000" : "#ffffff"
+                                onClicked: ctrlCode("(ctrl-light " + (root.stLight ? "false" : "true") + ")")
+                            }
+
+                            Button {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 84
+                                Layout.preferredWidth: 100
+                                font.pointSize: root.titleSize
+                                font.bold: true
+                                text: "Secret"
+                                Material.background: root.stSecret ? "#6a1b9a" : "#3d3d3d"
+                                Material.foreground: "#ffffff"
+                                onClicked: ctrlCode("(ctrl-secret " + (root.stSecret ? "false" : "true") + ")")
+                            }
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Layout.topMargin: 12
+                            spacing: 12
+
+                            Button {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 56
+                                Layout.preferredWidth: 80
+                                font.bold: true
+                                text: "Eco"
+                                Material.background: root.stMode === 2 ? "#1e88e5" : "#3d3d3d"
+                                Material.foreground: "#ffffff"
+                                onClicked: ctrlCode("(ctrl-mode 2)")
+                            }
+                            Button {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 56
+                                Layout.preferredWidth: 80
+                                font.bold: true
+                                text: "Drive"
+                                Material.background: root.stMode === 1 ? "#26a69a" : "#3d3d3d"
+                                Material.foreground: "#ffffff"
+                                onClicked: ctrlCode("(ctrl-mode 1)")
+                            }
+                            Button {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 56
+                                Layout.preferredWidth: 80
+                                font.bold: true
+                                text: "Sport"
+                                Material.background: root.stMode === 4 ? "#ef6c00" : "#3d3d3d"
+                                Material.foreground: "#ffffff"
+                                onClicked: ctrlCode("(ctrl-mode 4)")
+                            }
+                        }
+
+                        Label {
+                            Layout.topMargin: 40
+                            text: "Lock, unlock and power off only react at standstill."
+                            font.pointSize: Qt.application.font.pointSize > 0 ? Qt.application.font.pointSize - 1 : 10
+                            opacity: 0.6
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                        }
+                    }
+                }
+            }
 
             Page {
                 enabled: !isSlave
@@ -318,7 +641,7 @@ Item {
                         width: parent.width
                         spacing: 4
 
-                        Label { text: "General"; font.bold: true; font.pointSize: root.titleSize }
+                        Label { text: "General"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 10 }
 
                         RowLayout {
                             Layout.fillWidth: true
@@ -329,19 +652,37 @@ Item {
                         RowLayout {
                             Layout.fillWidth: true
                             Label { text: "Secret"; Layout.fillWidth: true }
-                            CheckBox { id: secretEnabled; text: "Enable"; spacing: 4 }
+                            CheckBox { id: secretEnabled; text: "Enabled"; spacing: 4 }
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Label { text: "Disable secret when locked"; Layout.fillWidth: true }
+                            CheckBox { id: secretExitOnLock; text: "Enabled"; checked: true; spacing: 4 }
                         }
 
                         RowLayout {
                             Layout.fillWidth: true
                             Label { text: "Start Speed (km/h)"; Layout.fillWidth: true }
-                            TextField { id: minSpeed; Layout.preferredWidth: 100; maximumLength: 7; validator: DoubleValidator { bottom: 0.0; top: 50.0; decimals: 1 } }
+                            TextField { id: minSpeed; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
                         }
 
                         RowLayout {
                             Layout.fillWidth: true
                             Label { text: "Auto headlight"; Layout.fillWidth: true }
-                            CheckBox { id: lightOnBoot; text: "Enable"; spacing: 4 }
+                            CheckBox { id: lightOnBoot; text: "Enabled"; spacing: 4 }
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Label { text: "Always ON Tail light"; Layout.fillWidth: true }
+                            CheckBox { id: autoTaillight; text: "Enabled"; spacing: 4 }
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Label { text: "Brake light"; Layout.fillWidth: true }
+                            ComboBox { id: brakeLightMode; Layout.preferredWidth: 100; model: ["On", "Blink", "Off"] }
                         }
 
                         RowLayout {
@@ -354,10 +695,16 @@ Item {
                         RowLayout {
                             Layout.fillWidth: true
                             Label { text: "Alarm"; Layout.fillWidth: true }
-                            CheckBox { id: alarmTone; text: "Enable"; spacing: 4 }
+                            CheckBox { id: alarmTone; text: "Enabled"; spacing: 4 }
                         }
 
-                        Label { text: "Gestures"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 14 }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Label { text: "Cruise Control (EXP)"; Layout.fillWidth: true }
+                            CheckBox { id: cruiseEnabled; text: "Enabled"; spacing: 4 }
+                        }
+
+                        Label { text: "Gestures"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 24 }
 
                         RowLayout {
                             Layout.fillWidth: true
@@ -417,7 +764,7 @@ Item {
                         width: parent.width
                         spacing: 4
 
-                        Label { text: "Normal"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 6 }
+                        Label { text: "Normal"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 10 }
 
                         RowLayout {
                             Layout.fillWidth: true
@@ -430,36 +777,44 @@ Item {
                         RowLayout {
                             Layout.fillWidth: true
                             CheckBox { id: applySpeed; text: "Speed"; checked: true; Layout.preferredWidth: 110 }
-                            TextField { id: ecoSpeed; enabled: applySpeed.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; validator: DoubleValidator { bottom: 0.0; top: 150.0; decimals: 1 } }
-                            TextField { id: driveSpeed; enabled: applySpeed.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; validator: DoubleValidator { bottom: 0.0; top: 150.0; decimals: 1 } }
-                            TextField { id: sportSpeed; enabled: applySpeed.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; validator: DoubleValidator { bottom: 0.0; top: 300.0; decimals: 1 } }
+                            TextField { id: ecoSpeed; enabled: applySpeed.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                            TextField { id: driveSpeed; enabled: applySpeed.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                            TextField { id: sportSpeed; enabled: applySpeed.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
                         }
 
                         RowLayout {
                             Layout.fillWidth: true
                             CheckBox { id: applyCurrent; text: "Current"; checked: true; Layout.preferredWidth: 110 }
-                            TextField { id: ecoCurrent; enabled: applyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; validator: DoubleValidator { bottom: 0.0; top: 5.0; decimals: 2 } }
-                            TextField { id: driveCurrent; enabled: applyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; validator: DoubleValidator { bottom: 0.0; top: 5.0; decimals: 2 } }
-                            TextField { id: sportCurrent; enabled: applyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; validator: DoubleValidator { bottom: 0.0; top: 5.0; decimals: 2 } }
+                            TextField { id: ecoCurrent; enabled: applyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                            TextField { id: driveCurrent; enabled: applyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                            TextField { id: sportCurrent; enabled: applyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
                         }
 
                         RowLayout {
                             Layout.fillWidth: true
                             CheckBox { id: applyWatts; text: "Watts"; checked: true; Layout.preferredWidth: 110 }
-                            TextField { id: ecoWatts; enabled: applyWatts.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; validator: DoubleValidator { bottom: 0.0; top: 3000000.0; decimals: 0 } }
-                            TextField { id: driveWatts; enabled: applyWatts.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; validator: DoubleValidator { bottom: 0.0; top: 3000000.0; decimals: 0 } }
-                            TextField { id: sportWatts; enabled: applyWatts.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; validator: DoubleValidator { bottom: 0.0; top: 3000000.0; decimals: 0 } }
+                            TextField { id: ecoWatts; enabled: applyWatts.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                            TextField { id: driveWatts; enabled: applyWatts.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                            TextField { id: sportWatts; enabled: applyWatts.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
                         }
 
                         RowLayout {
                             Layout.fillWidth: true
                             CheckBox { id: applyFw; text: "Field Weak."; checked: true; Layout.preferredWidth: 110 }
-                            TextField { id: ecoFw; enabled: applyFw.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; validator: DoubleValidator { bottom: 0.0; top: 100.0; decimals: 1 } }
-                            TextField { id: driveFw; enabled: applyFw.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; validator: DoubleValidator { bottom: 0.0; top: 100.0; decimals: 1 } }
-                            TextField { id: sportFw; enabled: applyFw.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; validator: DoubleValidator { bottom: 0.0; top: 100.0; decimals: 1 } }
+                            TextField { id: ecoFw; enabled: applyFw.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                            TextField { id: driveFw; enabled: applyFw.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                            TextField { id: sportFw; enabled: applyFw.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
                         }
 
-                        Label { text: "Secret"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 14 }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            CheckBox { id: applyOm; text: "Overmod."; Layout.preferredWidth: 110 }
+                            TextField { id: ecoOm; enabled: applyOm.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                            TextField { id: driveOm; enabled: applyOm.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                            TextField { id: sportOm; enabled: applyOm.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                        }
+
+                        Label { text: "Secret"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 24 }
 
                         RowLayout {
                             Layout.fillWidth: true
@@ -472,33 +827,41 @@ Item {
                         RowLayout {
                             Layout.fillWidth: true
                             CheckBox { id: secretApplySpeed; text: "Speed"; checked: true; Layout.preferredWidth: 110 }
-                            TextField { id: secretEcoSpeed; enabled: secretApplySpeed.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; validator: DoubleValidator { bottom: 0.0; top: 300.0; decimals: 1 } }
-                            TextField { id: secretDriveSpeed; enabled: secretApplySpeed.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; validator: DoubleValidator { bottom: 0.0; top: 400.0; decimals: 1 } }
-                            TextField { id: secretSportSpeed; enabled: secretApplySpeed.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; validator: DoubleValidator { bottom: 0.0; top: 1000.0; decimals: 1 } }
+                            TextField { id: secretEcoSpeed; enabled: secretApplySpeed.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                            TextField { id: secretDriveSpeed; enabled: secretApplySpeed.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                            TextField { id: secretSportSpeed; enabled: secretApplySpeed.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
                         }
 
                         RowLayout {
                             Layout.fillWidth: true
                             CheckBox { id: secretApplyCurrent; text: "Current"; checked: true; Layout.preferredWidth: 110 }
-                            TextField { id: secretEcoCurrent; enabled: secretApplyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; validator: DoubleValidator { bottom: 0.0; top: 5.0; decimals: 2 } }
-                            TextField { id: secretDriveCurrent; enabled: secretApplyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; validator: DoubleValidator { bottom: 0.0; top: 5.0; decimals: 2 } }
-                            TextField { id: secretSportCurrent; enabled: secretApplyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; validator: DoubleValidator { bottom: 0.0; top: 5.0; decimals: 2 } }
+                            TextField { id: secretEcoCurrent; enabled: secretApplyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                            TextField { id: secretDriveCurrent; enabled: secretApplyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                            TextField { id: secretSportCurrent; enabled: secretApplyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
                         }
 
                         RowLayout {
                             Layout.fillWidth: true
                             CheckBox { id: secretApplyWatts; text: "Watts"; checked: true; Layout.preferredWidth: 110 }
-                            TextField { id: secretEcoWatts; enabled: secretApplyWatts.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; validator: DoubleValidator { bottom: 0.0; top: 3000000.0; decimals: 0 } }
-                            TextField { id: secretDriveWatts; enabled: secretApplyWatts.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; validator: DoubleValidator { bottom: 0.0; top: 3000000.0; decimals: 0 } }
-                            TextField { id: secretSportWatts; enabled: secretApplyWatts.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; validator: DoubleValidator { bottom: 0.0; top: 3000000.0; decimals: 0 } }
+                            TextField { id: secretEcoWatts; enabled: secretApplyWatts.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                            TextField { id: secretDriveWatts; enabled: secretApplyWatts.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                            TextField { id: secretSportWatts; enabled: secretApplyWatts.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
                         }
 
                         RowLayout {
                             Layout.fillWidth: true
                             CheckBox { id: secretApplyFw; text: "Field Weak."; checked: true; Layout.preferredWidth: 110 }
-                            TextField { id: secretEcoFw; enabled: secretApplyFw.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; validator: DoubleValidator { bottom: 0.0; top: 100.0; decimals: 1 } }
-                            TextField { id: secretDriveFw; enabled: secretApplyFw.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; validator: DoubleValidator { bottom: 0.0; top: 100.0; decimals: 1 } }
-                            TextField { id: secretSportFw; enabled: secretApplyFw.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; validator: DoubleValidator { bottom: 0.0; top: 100.0; decimals: 1 } }
+                            TextField { id: secretEcoFw; enabled: secretApplyFw.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                            TextField { id: secretDriveFw; enabled: secretApplyFw.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                            TextField { id: secretSportFw; enabled: secretApplyFw.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            CheckBox { id: secretApplyOm; text: "Overmod."; Layout.preferredWidth: 110 }
+                            TextField { id: secretEcoOm; enabled: secretApplyOm.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                            TextField { id: secretDriveOm; enabled: secretApplyOm.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                            TextField { id: secretSportOm; enabled: secretApplyOm.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
                         }
                     }
                 }
@@ -529,60 +892,126 @@ Item {
                             spacing: 4
                             enabled: !isSlave
 
-                            Label { text: "Throttle & Brake"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 14 }
+                            Label { text: "Throttle & Brake"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 24 }
 
                             RowLayout {
                                 Layout.fillWidth: true
                                 Label { text: "Software ADC"; Layout.fillWidth: true }
-                                CheckBox { id: softwareAdc; text: "Enable" }
+                                CheckBox { id: softwareAdc; text: "Enabled" }
                             }
 
-                            Label { text: "Min Throttle ADC: " + minAdcThrottle.value.toFixed(2) }
-                            Slider { id: minAdcThrottle; Layout.fillWidth: true; from: 0.0; to: 1.0; stepSize: 0.01; snapMode: Slider.SnapAlways }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Label { text: "Light offset Throttle (V)"; Layout.fillWidth: true }
+                                TextField { id: lightOffThr; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                            }
 
-                            Label { text: "Min Brake ADC: " + minAdcBrake.value.toFixed(2) }
-                            Slider { id: minAdcBrake; Layout.fillWidth: true; from: 0.0; to: 1.0; stepSize: 0.01; snapMode: Slider.SnapAlways }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Label { text: "Light offset Brake (V)"; Layout.fillWidth: true }
+                                TextField { id: lightOffBrk; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                            }
 
-                            Label { text: "Temperature"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 14 }
+                            Label { text: "Gestures"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 24 }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Label { text: "Min Throttle ADC"; Layout.fillWidth: true }
+                                TextField { id: minAdcThrottle; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Label { text: "Min Brake ADC"; Layout.fillWidth: true }
+                                TextField { id: minAdcBrake; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Label { text: "Disable button above (km/h)"; Layout.fillWidth: true }
+                                TextField { id: buttonSpeed; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                            }
+
+                            Label { text: "Temperature"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 24 }
 
                             RowLayout {
                                 Layout.fillWidth: true
                                 Label { text: "Motor Temp Warning (°C)"; Layout.fillWidth: true }
-                                TextField { id: tempWarningMotor; Layout.preferredWidth: 100; maximumLength: 7; validator: DoubleValidator { bottom: 0.0; top: 200.0; decimals: 1 } }
+                                TextField { id: tempWarningMotor; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
                             }
 
                             RowLayout {
                                 Layout.fillWidth: true
                                 Label { text: "FET Temp Warning (°C)"; Layout.fillWidth: true }
-                                TextField { id: tempWarningFet; Layout.preferredWidth: 100; maximumLength: 7; validator: DoubleValidator { bottom: 0.0; top: 200.0; decimals: 1 } }
+                                TextField { id: tempWarningFet; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
                             }
 
-                            Label { text: "Button"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 14 }
+                            Label { text: "Miscellaneous"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 24 }
 
                             RowLayout {
                                 Layout.fillWidth: true
-                                Label { text: "Active below (km/h)"; Layout.fillWidth: true }
-                                TextField { id: buttonSpeed; Layout.preferredWidth: 100; maximumLength: 7; validator: DoubleValidator { bottom: 0.0; top: 200.0; decimals: 1 } }
+                                Label { text: "Dash speed in Miles"; Layout.fillWidth: true }
+                                CheckBox { id: useMph; text: "Enabled"; spacing: 4 }
                             }
 
-                            Label { text: "Alarm"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 14 }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Label { text: "Use VESC BMS for dash"; Layout.fillWidth: true }
+                                CheckBox { id: bmsSoc; text: "Enabled"; spacing: 4 }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Label { text: "Rear light output"; Layout.fillWidth: true }
+                                CheckBox { id: rearLightEnable; text: "Enabled"; spacing: 4 }
+                            }
+
+                            Label {
+                                text: "MOSFET on the servo/PPM pin, PWM 200 Hz. See the wiring diagram in the README."
+                                opacity: 0.6
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
+
+                            Label { text: "Cruise control (experimental)"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 24 }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Label { text: "Activation Delay (s)"; Layout.fillWidth: true }
+                                TextField { id: cruiseDelay; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Label { text: "Speed deviation (km/h)"; Layout.fillWidth: true }
+                                TextField { id: cruiseDeviation; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                            }
+
+                            Label {
+                                text: "Cruise activates after holding a steady speed with the throttle for the set delay, then engages when you release the throttle. Any throttle or brake input cancels it instantly. Requires \"Cruise Control\" enabled (not inverted) under App Settings -> ADC -> Buttons, and Software ADC on."
+                                opacity: 0.6
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
+
+                            Label { text: "Alarm"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 24 }
 
                             RowLayout {
                                 Layout.fillWidth: true
                                 Label { text: "Speed Trigger (km/h)"; Layout.fillWidth: true }
-                                TextField { id: alarmSpeedThreshold; Layout.preferredWidth: 100; maximumLength: 7; validator: DoubleValidator { bottom: 0.0; top: 50.0; decimals: 1 } }
+                                TextField { id: alarmSpeedThreshold; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
                             }
 
                             RowLayout {
                                 Layout.fillWidth: true
                                 Label { text: "Gyro Trigger (deg/s)"; Layout.fillWidth: true }
-                                TextField { id: alarmGyroThreshold; Layout.preferredWidth: 100; maximumLength: 7; validator: DoubleValidator { bottom: 0.0; top: 1000.0; decimals: 1 } }
+                                TextField { id: alarmGyroThreshold; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
                             }
 
                             RowLayout {
                                 Layout.fillWidth: true
                                 Label { text: "Volume (V)"; Layout.fillWidth: true }
-                                TextField { id: alarmVoltage; Layout.preferredWidth: 100; maximumLength: 7; validator: DoubleValidator { bottom: 0.0; top: 100.0; decimals: 1 } }
+                                TextField { id: alarmVoltage; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
                             }
                         }
                     }
@@ -592,6 +1021,7 @@ Item {
 
         RowLayout {
             Layout.fillWidth: true
+            visible: swipeView.currentIndex !== 0
 
             Button {
                 Layout.fillWidth: true
@@ -619,6 +1049,11 @@ Item {
         function onCustomAppDataReceived(data) {
             var message = data.toString().trim()
 
+            if (message.startsWith("state ")) {
+                applyStateLine(message)
+                return
+            }
+
             if (message.startsWith("model ")
                     || message.startsWith("general ")
                     || message.startsWith("temps ")
@@ -627,6 +1062,8 @@ Item {
                     || message.startsWith("apply ")
                     || message.startsWith("gesture ")
                     || message.startsWith("misc ")
+                    || message.startsWith("rear ")
+                    || message.startsWith("cruise ")
                     || message.startsWith("alarm ")) {
                 applySettingsLine(message)
             } else if (message === "model-ok") {

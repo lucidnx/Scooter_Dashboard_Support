@@ -1,12 +1,17 @@
 # VESC Scooter Support
 
 Connect a Xiaomi or Ninebot dashboard to a VESC controller. Speed modes, secret modes,
-lock with alarm, fully remappable button/lever gestures - everything configured from a
-phone-friendly UI and stored on the ESC.
+lock with alarm, fully remappable button/lever gestures, cruise control, rear light,
+BMS support and a live remote-control dashboard - all configured from a phone-friendly UI
+and stored on the ESC.
 
-| General | Modes | Setup |
-|---------|-------|-------|
-| ![General](screenshots/general.jpg) | ![Modes](screenshots/modes.jpg) | ![Setup](screenshots/setup.jpg) |
+| Control | Modes |
+|---------|-------|
+| ![Control](screenshots/control.jpg) | ![Modes](screenshots/modes.jpg) |
+
+| General | General | Setup | Setup |
+|---------|---------|-------|-------|
+| ![General 1](screenshots/general1.jpg) | ![General 2](screenshots/general2.jpg) | ![Setup 1](screenshots/setup1.jpg) | ![Setup 2](screenshots/setup2.jpg) |
 
 ## Requirements
 
@@ -28,6 +33,33 @@ VESC firmware 7.00, available at https://vesc-project.com/
 **Updating:** just install the new package over the old one - your settings are kept and
 migrated automatically. To go back to defaults, use the **Reset** button in the UI.
 
+## Required VESC configuration
+
+The package feeds the throttle and brake from the dashboard into the VESC's ADC app, so a
+few controller settings must be set (in VESC Tool, not the package UI):
+
+**On the dashboard unit (master):**
+
+- **App Settings -> General -> App to Use = `ADC`**
+- **App Settings -> ADC -> General -> Control Type = `Current No Reverse Brake ADC2`**
+- **App Settings -> ADC -> General -> Multiple VESCs Over CAN = `True`** (dual-motor setups)
+- Keep **Software ADC** enabled in the package **Setup** tab (default) - the dashboard
+  supplies throttle/brake over UART; the package overrides the ADC app inputs.
+- For accurate battery % and range, set your pack under
+  **Motor Settings -> Additional Info -> Battery**: type, cell count and Ah.
+
+**On every other unit (slave):**
+
+- **App Settings -> General -> App to Use = `No App`** - a running ADC app on the slave
+  fights the master's commands and causes stuttering.
+
+**For cruise control (optional):**
+
+- **App Settings -> ADC -> Buttons -> enable `Cruise Control`** (leave it *not* inverted).
+  The package uses the VESC's built-in cruise button, so this must be on.
+
+After changing controller settings, write the configuration to each unit.
+
 ## Models
 
 One package for everything - the model is stored on the ESC and selected in the UI:
@@ -41,7 +73,7 @@ One package for everything - the model is stored on the ESC and selected in the 
 
 ### Speed modes
 - Three speed modes (Eco / Drive / Sport) plus three **secret** modes, each with its own
-  speed, current scale, watts and field weakening
+  speed, current scale, watts, field weakening and overmodulation factor
 - **Per-parameter apply toggles**: each parameter is only written to the motor config when
   its checkbox is enabled - separately for normal and secret modes. Disabled parameters
   never touch your VESC motor settings (e.g. keep your own field weakening setup)
@@ -61,21 +93,40 @@ Lock, mode switching, headlight and secret mode activation are all **fully remap
 ### Lock & alarm
 - Lock mode: motor braked when pushed, alarm with beeping and (optional) siren on
   gyro or wheel movement, configurable thresholds and volume
-- Locking always leaves secret mode; unlocking restores it
+- Optional "disable secret when locked"
+
+### Cruise control (experimental)
+- Hold a steady speed with the throttle for the configured delay (default 5 s, deviation
+  window configurable); release the throttle and the scooter keeps that speed
+- Built on the VESC's native cruise function, so **any throttle or brake input overrides
+  it instantly** at firmware level; a large speed drop or a stop cancels it too
+- Off by default - enable in General, tune in Setup. Requires the ADC Cruise Control
+  button enabled (see above). Use with care.
+
+### Remote control (Control tab)
+- Live dashboard in the app: **speed, battery %, voltage, watts, amps, Wh/km and estimated
+  range** (range and Wh/km computed the same way VESC Tool does)
+- Buttons: turn the dashboard on/off, lock/unlock (standstill only), headlight,
+  mode selection and secret toggle - with live status
 
 ### Comfort
 - **Auto headlight**: turn the headlight on automatically at power on
+- **Rear / brake light** on the servo pin (MOSFET driver): dim tail light following the
+  headlight (or always on), full or blinking brake light while braking
 - **Battery % at idle** on the dashboard, separately configurable for normal and secret modes
+- **BMS battery %**: if a VESC BMS reports, its SOC is used as the battery percentage,
+  with a temperature warning above 50 °C or below 0 °C
+- **Headlight voltage offset**: compensate a constant throttle/brake ADC shift when the
+  headlight (fed from the same 5 V) is on
+- **mph display**: dash speed switchable between km/h and mph (rounded properly)
 - Motor start speed (kick-start) and temperature warning icon with configurable thresholds
-- Long button press turns the Dashboard off (not VESC itself)
+- Long button press turns the Dashboard off (not the VESC itself)
 
 ### Robustness
 - Throttle watchdog: throttle and brake are released if the dashboard link drops mid-ride
 - Hardened UART frame parsing and supervised reader threads
-- All settings stored on the ESC with versioned, automatic migrations between releases
-
-Features to be added:
-- [ ] App communication
+- Script runs from flash (low RAM/CPU); settings stored on the ESC with versioned,
+  automatic migrations between releases
 
 ## Wiring
 
@@ -86,6 +137,14 @@ Features to be added:
 1k Ohm Resistor from <span style="color:rgb(251, 160, 38);">3.3V</span> to <span style="color:rgb(97, 189, 109);">RX (Button)</span>
 
 ![image](guide/imgs/23999.png)
+
+### Rear / brake light (optional)
+
+The rear light is driven from the **servo/PPM pin** through an N-channel MOSFET
+(PWM at 200 Hz - dim tail light, full brightness brake light). Enable it in the
+**Setup** tab. Wiring by [Zodiak1993](https://github.com/Zodiak1993/vesc_m365_dash):
+
+![taillight](guide/imgs/taillight.jpg)
 
 ## Tested Hardware
 
@@ -112,6 +171,17 @@ Features to be added:
 - More recommended VESCs:
     - [MP2 300A 100V/150V VESC](https://github.com/badgineer/MP2-ESC)
     - and many more - use whatever you like.
+
+## Thanks
+
+- **Izuna, AKA13 and Netzpfuscher** - the original VESC dashboard scripts this package
+  builds on
+- **[Zodiak1993](https://github.com/Zodiak1993/vesc_m365_dash)** - rear/brake light wiring
+  and the BMS, overmodulation and cruise-control ideas
+- **[Benjamin Vedder](https://github.com/vedderb)** - VESC, VESC Tool, LispBM and the
+  CAN code-server library
+- **[Koxx3](https://github.com/Koxx3/SmartESC_STM32_v2)** - reference work for Xiaomi ESCs
+- The **rollerplausch.com** community for guides and testing
 
 ## See Also
 

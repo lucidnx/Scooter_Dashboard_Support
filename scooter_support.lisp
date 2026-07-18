@@ -69,6 +69,7 @@
 (def secret-presses 1)
 (def secret-combo 0)
 (def secret-requires-lock false) ; secret gesture only works while locked
+(def secret-exit-on-lock true) ; locking drops back to normal modes
 (def lock-presses 2)
 (def lock-combo 1)
 (def mode-presses 2)
@@ -78,7 +79,34 @@
 (def light-combo 3)
 (def light-requires-lock false)
 (def light-on-boot false)
+(def light-offset-thr 0.0) ; volts added to throttle while the headlight is on
+(def light-offset-brk 0.0) ; volts added to brake while the headlight is on
 (def boot-mode 1) ; speed mode applied at boot (1=drive, 2=eco, 4=sport)
+
+; Display / battery
+(def use-mph false) ; dash shows mph instead of km/h
+(def bms-soc-enable false) ; battery % from a VESC BMS when one reports
+
+; Rear light on the servo/PPM pin via PWM (MOSFET driver)
+(def rear-light-enable false)
+(def auto-taillight false) ; taillight on from power on
+(def brake-light-mode 1) ; 0=off, 1=on while braking, 2=blink while braking
+(def taillight-brightness 0.4)
+
+; Overmodulation factor per mode (max recommended 1.15)
+(def eco-om 1.0)
+(def drive-om 1.0)
+(def sport-om 1.0)
+(def secret-eco-om 1.0)
+(def secret-drive-om 1.0)
+(def secret-sport-om 1.0)
+(def apply-om false)
+(def secret-apply-om false)
+
+; Cruise control (experimental)
+(def cruise-enabled false)
+(def cruise-delay 5.0) ; seconds of steady speed to activate
+(def cruise-deviation 1.0) ; km/h window counted as "steady"
 
 ; -> Code starts here (DO NOT CHANGE ANYTHING BELOW THIS LINE IF YOU DON'T KNOW WHAT YOU ARE DOING)
 
@@ -127,9 +155,25 @@
 (def cur-speed-kmh 0.0)
 (def cur-batt 0.0)
 
+; BMS state
+(def bms-active false)
+(def bms-warn false)
+
+; rear light state
+(def pwm-started false)
+(def blink-state false)
+(def blink-since (systime))
+
+; cruise control state
+(def cruising false)
+(def cruise-thr-released false)
+(def cruise-blocked false)
+(def cruise-ref 0.0)
+(def cruise-since (systime))
+
 @const-start
 
-(def settings-version 305i32)
+(def settings-version 308i32)
 
 ; Persistent settings: (label . (eeprom-offset type))
 (def eeprom-addrs '(
@@ -194,6 +238,25 @@
     (show-batt-idle-secret . (58 b))
     (mode-requires-lock    . (59 b))
     (light-requires-lock   . (60 b))
+    (use-mph               . (61 b))
+    (rear-light-enable     . (62 b))
+    (auto-taillight        . (63 b))
+    (brake-light-mode      . (64 i))
+    (eco-om                . (65 f))
+    (drive-om              . (66 f))
+    (sport-om              . (67 f))
+    (secret-eco-om         . (68 f))
+    (secret-drive-om       . (69 f))
+    (secret-sport-om       . (70 f))
+    (apply-om              . (71 b))
+    (secret-apply-om       . (72 b))
+    (bms-soc-enable        . (73 b))
+    (cruise-enabled        . (74 b))
+    (cruise-delay          . (75 f))
+    (cruise-deviation      . (76 f))
+    (secret-exit-on-lock   . (77 b))
+    (light-offset-thr      . (78 f))
+    (light-offset-brk      . (79 f))
 ))
 
 (def last-button-state false)
@@ -232,6 +295,38 @@
     }
 )
 
+(defun write-v308-defaults () ; settings added in v308
+    {
+        (write-setting 'light-offset-thr 0.0)
+        (write-setting 'light-offset-brk 0.0)
+    }
+)
+
+(defun write-v307-defaults () ; settings added in v307
+    (write-setting 'secret-exit-on-lock true)
+)
+
+(defun write-v306-defaults () ; settings added in v306
+    {
+        (write-setting 'use-mph false)
+        (write-setting 'rear-light-enable false)
+        (write-setting 'auto-taillight false)
+        (write-setting 'brake-light-mode 1)
+        (write-setting 'eco-om 1.0)
+        (write-setting 'drive-om 1.0)
+        (write-setting 'sport-om 1.0)
+        (write-setting 'secret-eco-om 1.0)
+        (write-setting 'secret-drive-om 1.0)
+        (write-setting 'secret-sport-om 1.0)
+        (write-setting 'apply-om false)
+        (write-setting 'secret-apply-om false)
+        (write-setting 'bms-soc-enable false)
+        (write-setting 'cruise-enabled false)
+        (write-setting 'cruise-delay 5.0)
+        (write-setting 'cruise-deviation 1.0)
+    }
+)
+
 (defun write-v305-defaults () ; settings added in v305
     {
         ; battery-on-idle used to act in secret modes only - keep that behavior
@@ -264,6 +359,9 @@
         (write-secret-mode-toggles)
         (write-remap-defaults)
         (write-v305-defaults)
+        (write-v306-defaults)
+        (write-v307-defaults)
+        (write-v308-defaults)
         (write-setting 'secret-presses 1)
         (write-setting 'secret-combo 0)
         (write-setting 'secret-requires-lock false)
@@ -331,21 +429,48 @@
                     (write-secret-mode-toggles)
                     (write-remap-defaults)
                     (write-v305-defaults)
+                    (write-v306-defaults)
+                    (write-v307-defaults)
+                    (write-v308-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 302i32) {
                     (write-secret-mode-toggles)
                     (write-remap-defaults)
                     (write-v305-defaults)
+                    (write-v306-defaults)
+                    (write-v307-defaults)
+                    (write-v308-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 303i32) {
                     (write-remap-defaults)
                     (write-v305-defaults)
+                    (write-v306-defaults)
+                    (write-v307-defaults)
+                    (write-v308-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 304i32) {
                     (write-v305-defaults)
+                    (write-v306-defaults)
+                    (write-v307-defaults)
+                    (write-v308-defaults)
+                    (write-setting 'ver-code settings-version)
+                })
+                ((eq ver 305i32) {
+                    (write-v306-defaults)
+                    (write-v307-defaults)
+                    (write-v308-defaults)
+                    (write-setting 'ver-code settings-version)
+                })
+                ((eq ver 306i32) {
+                    (write-v307-defaults)
+                    (write-v308-defaults)
+                    (write-setting 'ver-code settings-version)
+                })
+                ((eq ver 307i32) {
+                    (write-v308-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 (t (restore-defaults))
@@ -400,6 +525,9 @@
         (set 'secret-presses (read-setting 'secret-presses))
         (set 'secret-combo (read-setting 'secret-combo))
         (set 'secret-requires-lock (read-setting 'secret-requires-lock))
+        (set 'secret-exit-on-lock (read-setting 'secret-exit-on-lock))
+        (set 'light-offset-thr (read-setting 'light-offset-thr))
+        (set 'light-offset-brk (read-setting 'light-offset-brk))
         (set 'lock-presses (read-setting 'lock-presses))
         (set 'lock-combo (read-setting 'lock-combo))
         (set 'mode-presses (read-setting 'mode-presses))
@@ -411,6 +539,22 @@
         (set 'light-on-boot (read-setting 'light-on-boot))
         (set 'button-safety-speed (/ (read-setting 'button-speed-kmh) 3.6))
         (set 'boot-mode (read-setting 'boot-mode))
+        (set 'use-mph (read-setting 'use-mph))
+        (set 'rear-light-enable (read-setting 'rear-light-enable))
+        (set 'auto-taillight (read-setting 'auto-taillight))
+        (set 'brake-light-mode (read-setting 'brake-light-mode))
+        (set 'eco-om (read-setting 'eco-om))
+        (set 'drive-om (read-setting 'drive-om))
+        (set 'sport-om (read-setting 'sport-om))
+        (set 'secret-eco-om (read-setting 'secret-eco-om))
+        (set 'secret-drive-om (read-setting 'secret-drive-om))
+        (set 'secret-sport-om (read-setting 'secret-sport-om))
+        (set 'apply-om (read-setting 'apply-om))
+        (set 'secret-apply-om (read-setting 'secret-apply-om))
+        (set 'bms-soc-enable (read-setting 'bms-soc-enable))
+        (set 'cruise-enabled (read-setting 'cruise-enabled))
+        (set 'cruise-delay (read-setting 'cruise-delay))
+        (set 'cruise-deviation (read-setting 'cruise-deviation))
 
         (var m (read-setting 'model))
         (if (not (valid-model m)) {
@@ -434,6 +578,13 @@
         (if (!= model 2) { ; slave must not push conf to the master
             (apply-software-adc)
             (apply-mode)
+            (if rear-light-enable
+                (if (not pwm-started) {
+                    (pwm-start 200 0)
+                    (set 'pwm-started true)
+                })
+                (if pwm-started (pwm-set-duty 0.0))
+            )
         })
     }
 )
@@ -460,9 +611,12 @@
         eco-speed-kmh eco-current eco-watts eco-fw
         drive-speed-kmh drive-current drive-watts drive-fw
         sport-speed-kmh sport-current sport-watts sport-fw
-        boot)
+        boot eco-om drive-om sport-om)
     {
         (write-setting 'boot-mode boot)
+        (write-setting 'eco-om eco-om)
+        (write-setting 'drive-om drive-om)
+        (write-setting 'sport-om sport-om)
         (write-setting 'eco-speed-kmh eco-speed-kmh)
         (write-setting 'eco-current eco-current)
         (write-setting 'eco-watts eco-watts)
@@ -482,8 +636,12 @@
         enabled
         eco-speed-kmh eco-current eco-watts eco-fw
         drive-speed-kmh drive-current drive-watts drive-fw
-        sport-speed-kmh sport-current sport-watts sport-fw)
+        sport-speed-kmh sport-current sport-watts sport-fw
+        eco-om drive-om sport-om)
     {
+        (write-setting 'secret-eco-om eco-om)
+        (write-setting 'secret-drive-om drive-om)
+        (write-setting 'secret-sport-om sport-om)
         (write-setting 'secret-enabled enabled)
         (write-setting 'secret-eco-speed-kmh eco-speed-kmh)
         (write-setting 'secret-eco-current eco-current)
@@ -500,16 +658,18 @@
     }
 )
 
-(defun save-apply-settings (speed current watts fw s-speed s-current s-watts s-fw)
+(defun save-apply-settings (speed current watts fw om s-speed s-current s-watts s-fw s-om)
     {
         (write-setting 'apply-speed speed)
         (write-setting 'apply-current current)
         (write-setting 'apply-watts watts)
         (write-setting 'apply-fw fw)
+        (write-setting 'apply-om om)
         (write-setting 'secret-apply-speed s-speed)
         (write-setting 'secret-apply-current s-current)
         (write-setting 'secret-apply-watts s-watts)
         (write-setting 'secret-apply-fw s-fw)
+        (write-setting 'secret-apply-om s-om)
     }
 )
 
@@ -529,10 +689,36 @@
     }
 )
 
-(defun save-misc-settings (auto-light btn-speed-kmh)
+(defun save-misc-settings (auto-light btn-speed-kmh mph bms secret-exit)
     {
         (write-setting 'light-on-boot auto-light)
         (write-setting 'button-speed-kmh btn-speed-kmh)
+        (write-setting 'use-mph mph)
+        (write-setting 'bms-soc-enable bms)
+        (write-setting 'secret-exit-on-lock secret-exit)
+    }
+)
+
+(defun save-light-offsets (thr brk)
+    {
+        (write-setting 'light-offset-thr thr)
+        (write-setting 'light-offset-brk brk)
+    }
+)
+
+(defun save-rear-settings (enable auto-tail brake-mode)
+    {
+        (write-setting 'rear-light-enable enable)
+        (write-setting 'auto-taillight auto-tail)
+        (write-setting 'brake-light-mode brake-mode)
+    }
+)
+
+(defun save-cruise-settings (enable delay deviation)
+    {
+        (write-setting 'cruise-enabled enable)
+        (write-setting 'cruise-delay delay)
+        (write-setting 'cruise-deviation deviation)
     }
 )
 
@@ -568,12 +754,122 @@
     }
 )
 
+; Remote controls for the UI Control tab. They reuse the gesture actions so
+; all side effects stay identical; lock only reacts at standstill.
+(defun ctrl-lock (on)
+    (if (and (not (eq on lock)) (<= (abs (get-speed)) 1.0))
+        (toggle-lock)
+    )
+)
+
+(defun ctrl-light (on)
+    (if (not lock)
+        (set 'light on)
+    )
+)
+
+(defun ctrl-mode (m)
+    (if (and (not lock) (or (= m 1) (= m 2) (= m 4))) {
+        (set 'speedmode m)
+        (apply-mode)
+    })
+)
+
+(defun ctrl-secret (on)
+    (if (and secret-enabled (not (eq on unlock)))
+        (toggle-secret)
+    )
+)
+
+(defun ctrl-power (on)
+    (if on
+        (if off {
+            (set 'off false)
+            (set 'feedback 1)
+            (set 'unlock false)
+            (apply-mode)
+            (stats-reset)
+        })
+        (if (and (not off) (not lock) (<= (abs (get-speed)) 1.0)) {
+            (set 'feedback 1)
+            (set 'unlock false)
+            (apply-mode)
+            (set 'off true)
+        })
+    )
+)
+
+(defun send-state ()
+    (send-data (str-merge
+        "state "
+        (if off "true " "false ")
+        (if lock "true " "false ")
+        (if light "true " "false ")
+        (if unlock "true " "false ")
+        (str-from-n speedmode "%d ")
+        (str-from-n cur-batt "%.0f ")
+        (str-from-n (get-vin) "%.1f ")
+        (str-from-n (abs cur-speed-kmh) "%.1f ")
+        (str-from-n (send-state-watts) "%.0f ")
+        (str-from-n (send-state-whkm) "%.1f ")
+        (str-from-n (send-state-range) "%.1f ")
+        (str-from-n (send-state-amps) "%.1f ")
+        (str-from-n (send-state-maxkmh) "%.0f")
+    ))
+)
+
+; configured max speed of the active mode in km/h - the speed bar scales to it
+(defun send-state-maxkmh ()
+    (* 3.6 (if unlock
+        (cond ((= speedmode 1) secret-drive-speed) ((= speedmode 2) secret-eco-speed) (t secret-sport-speed))
+        (cond ((= speedmode 1) drive-speed) ((= speedmode 2) eco-speed) (t sport-speed))
+    ))
+)
+
+; setup-* values are the combined figures across all CAN VESCs, computed in
+; firmware - no need to sum the units by hand
+(defun send-state-amps () (setup-current-in))
+
+(defun send-state-watts () (* (get-vin) (setup-current-in)))
+
+(defun send-state-whkm () {
+        ; matches VESC Tool: (wh - wh_chg) / abs tacho distance, combined values
+        (var dist-km (/ (get-dist-abs) 1000.0))
+        (if (> dist-km 0.05)
+            (/ (- (setup-wh) (setup-wh-chg)) dist-km)
+            0.0
+        )
+})
+
+; total usable battery Wh the same way mc_interface_get_battery_level does, so
+; range = get-batt * this / wh-km reproduces VESC Tool's estimate. get-batt
+; already carries the non-linear discharge curve.
+(defun batt-wh-tot () {
+        (var cells (conf-get 'si-battery-cells))
+        (var ah (conf-get 'si-battery-ah))
+        (var type (conf-get 'si-battery-type))
+        (cond
+            ((= type 1) (* ah 3.2 cells))    ; LiFePO4 2.6-3.6
+            ((= type 2) (* ah 2.23 cells))   ; lead-acid
+            (t (* 0.85 ah 3.7 cells))        ; Li-ion 3.0-4.2 (default)
+        )
+})
+
+(defun send-state-range () {
+        (var whkm (send-state-whkm))
+        (if (> whkm 0.1)
+            (/ (* (get-batt) (batt-wh-tot)) whkm) ; VESC Tool: wh_batt_left / wh_km
+            0.0
+        )
+})
+
 (defun send-settings ()
     {
         (send-data (str-merge
             "model "
             (str-from-n (read-setting 'model) "%d")
         ))
+        (sleep 0.05)
         (send-data (str-merge
             "general "
             (if (read-setting 'software-adc) "true " "false ")
@@ -583,11 +879,13 @@
             (if (read-setting 'show-batt-idle-secret) "true " "false ")
             (str-from-n (read-setting 'min-speed-kmh) "%.1f")
         ))
+        (sleep 0.05)
         (send-data (str-merge
             "temps "
             (str-from-n (read-setting 'temp-warning-motor) "%.1f ")
             (str-from-n (read-setting 'temp-warning-fet) "%.1f")
         ))
+        (sleep 0.05)
         (send-data (str-merge
             "modes "
             (str-from-n (read-setting 'eco-speed-kmh) "%.1f ")
@@ -602,8 +900,12 @@
             (str-from-n (read-setting 'sport-current) "%.2f ")
             (str-from-n (read-setting 'sport-watts) "%.0f ")
             (str-from-n (read-setting 'sport-fw) "%.1f ")
-            (str-from-n (read-setting 'boot-mode) "%d")
+            (str-from-n (read-setting 'boot-mode) "%d ")
+            (str-from-n (read-setting 'eco-om) "%.2f ")
+            (str-from-n (read-setting 'drive-om) "%.2f ")
+            (str-from-n (read-setting 'sport-om) "%.2f")
         ))
+        (sleep 0.05)
         (send-data (str-merge
             "secret "
             (if (read-setting 'secret-enabled) "true " "false ")
@@ -618,19 +920,26 @@
             (str-from-n (read-setting 'secret-sport-speed-kmh) "%.1f ")
             (str-from-n (read-setting 'secret-sport-current) "%.2f ")
             (str-from-n (read-setting 'secret-sport-watts) "%.0f ")
-            (str-from-n (read-setting 'secret-sport-fw) "%.1f")
+            (str-from-n (read-setting 'secret-sport-fw) "%.1f ")
+            (str-from-n (read-setting 'secret-eco-om) "%.2f ")
+            (str-from-n (read-setting 'secret-drive-om) "%.2f ")
+            (str-from-n (read-setting 'secret-sport-om) "%.2f")
         ))
+        (sleep 0.05)
         (send-data (str-merge
             "apply "
             (if (read-setting 'apply-speed) "true " "false ")
             (if (read-setting 'apply-current) "true " "false ")
             (if (read-setting 'apply-watts) "true " "false ")
             (if (read-setting 'apply-fw) "true " "false ")
+            (if (read-setting 'apply-om) "true " "false ")
             (if (read-setting 'secret-apply-speed) "true " "false ")
             (if (read-setting 'secret-apply-current) "true " "false ")
             (if (read-setting 'secret-apply-watts) "true " "false ")
-            (if (read-setting 'secret-apply-fw) "true" "false")
+            (if (read-setting 'secret-apply-fw) "true " "false ")
+            (if (read-setting 'secret-apply-om) "true" "false")
         ))
+        (sleep 0.05)
         (send-data (str-merge
             "gesture "
             (str-from-n (read-setting 'secret-presses) "%d ")
@@ -645,11 +954,32 @@
             (str-from-n (read-setting 'light-combo) "%d ")
             (if (read-setting 'light-requires-lock) "true" "false")
         ))
+        (sleep 0.05)
         (send-data (str-merge
             "misc "
             (if (read-setting 'light-on-boot) "true " "false ")
-            (str-from-n (read-setting 'button-speed-kmh) "%.1f")
+            (str-from-n (read-setting 'button-speed-kmh) "%.1f ")
+            (if (read-setting 'use-mph) "true " "false ")
+            (if (read-setting 'bms-soc-enable) "true " "false ")
+            (if (read-setting 'secret-exit-on-lock) "true " "false ")
+            (str-from-n (read-setting 'light-offset-thr) "%.2f ")
+            (str-from-n (read-setting 'light-offset-brk) "%.2f")
         ))
+        (sleep 0.05)
+        (send-data (str-merge
+            "rear "
+            (if (read-setting 'rear-light-enable) "true " "false ")
+            (if (read-setting 'auto-taillight) "true " "false ")
+            (str-from-n (read-setting 'brake-light-mode) "%d")
+        ))
+        (sleep 0.05)
+        (send-data (str-merge
+            "cruise "
+            (if (read-setting 'cruise-enabled) "true " "false ")
+            (str-from-n (read-setting 'cruise-delay) "%.1f ")
+            (str-from-n (read-setting 'cruise-deviation) "%.1f")
+        ))
+        (sleep 0.05)
         (send-data (str-merge
             "alarm "
             (if (read-setting 'alarm-tone) "true " "false ")
@@ -674,30 +1004,119 @@
 (defun adc-input(buffer) ; Frame 0x65
     {
         (set 'last-rx (systime)) ; feed the dash link watchdog
-        (let ((throttle (/(bufget-u8 uart-buf thr-idx) 77.2)) ; 255/3.3 = 77.2
-            (brake (/(bufget-u8 uart-buf brk-idx) 77.2)))
-            {
-                (if (< throttle 0)
-                    (setf throttle 0))
-                (if (> throttle 3.3)
-                    (setf throttle 3.3))
-                (if (< brake 0)
-                    (setf brake 0))
-                (if (> brake 3.3)
-                    (setf brake 3.3))
 
-                ; Pass through throttle and brake to VESC
-                (app-adc-override 0 throttle)
-                (app-adc-override 1 brake)
-            }
-        )
+        (var throttle (+ (/ (bufget-u8 uart-buf thr-idx) 77.2) (if light light-offset-thr 0.0))) ; 255/3.3 = 77.2
+        (var brake (+ (/ (bufget-u8 uart-buf brk-idx) 77.2) (if light light-offset-brk 0.0)))
+
+        (if (< throttle 0.0) (setq throttle 0.0))
+        (if (> throttle 3.3) (setq throttle 3.3))
+        (if (< brake 0.0) (setq brake 0.0))
+        (if (> brake 3.3) (setq brake 3.3))
+
+        ; Pass through throttle and brake to VESC
+        (app-adc-override 0 throttle)
+        (app-adc-override 1 brake)
     }
+)
+
+(defun handle-taillight()
+    (if rear-light-enable {
+        (var base (and (not off) (or light auto-taillight)))
+        (var braking (and (not off) (> (get-adc-decoded 1) min-adc-brake)))
+        (pwm-set-duty
+            (if braking
+                (cond
+                    ((= brake-light-mode 1) 1.0)
+                    ((= brake-light-mode 2) {
+                        (if (> (secs-since blink-since) 0.15) {
+                            (set 'blink-state (not blink-state))
+                            (set 'blink-since (systime))
+                        })
+                        (if blink-state 1.0 0.0)
+                    })
+                    (t (if base taillight-brightness 0.0))
+                )
+                (if base taillight-brightness 0.0)
+            )
+        )
+    })
+)
+
+(defun cruise-cancel()
+    (if cruising {
+        (set 'cruising false)
+        (set 'cruise-blocked true) ; no re-arming until the throttle is released
+        (app-adc-override 3 0) ; release the ADC app's cruise button
+        (set 'feedback 1)
+    })
+)
+
+; Experimental cruise control on top of the ADC app's native cruise button:
+; while the virtual button is held and the throttle is released, the app
+; PID-holds the speed and mirrors current to the slaves. Any lever input
+; returns control instantly at firmware level; we just release the button.
+(defun handle-cruise(speed-kmh)
+    (if (and cruise-enabled (not off) (not lock))
+        {
+            (var thr (get-adc-decoded 0))
+            (var brk (get-adc-decoded 1))
+            (if cruising
+                {
+                    ; the throttle is still held at activation - only arm the
+                    ; throttle-cancel after it has been released once
+                    (if (<= thr min-adc-throttle) (set 'cruise-thr-released true))
+                    (if (or (and cruise-thr-released (> thr min-adc-throttle))
+                            (> brk min-adc-brake)
+                            (< speed-kmh 3))
+                        (cruise-cancel)
+                    )
+                }
+                (if (<= thr min-adc-throttle)
+                    { ; throttle released - re-arm and hold the timer at now
+                        (set 'cruise-blocked false)
+                        (set 'cruise-ref speed-kmh)
+                        (set 'cruise-since (systime))
+                    }
+                    (if (and (not cruise-blocked) (> speed-kmh 5))
+                        {
+                            (if (> (abs (- speed-kmh cruise-ref)) cruise-deviation) {
+                                (set 'cruise-ref speed-kmh)
+                                (set 'cruise-since (systime))
+                            })
+                            (if (> (secs-since cruise-since) cruise-delay) {
+                                (set 'cruising true)
+                                (set 'cruise-thr-released false)
+                                (app-adc-override 3 1) ; hold the cruise button
+                                (set 'feedback 2)
+                                (set 'cruise-since (systime))
+                            })
+                        }
+                        { ; blocked or too slow - keep the timer from counting
+                            (set 'cruise-ref speed-kmh)
+                            (set 'cruise-since (systime))
+                        }
+                    )
+                )
+            )
+        }
+        (cruise-cancel)
+    )
 )
 
 (defun handle-features()
     {
         (set 'cur-speed-kmh (* (get-lowest-speed) 3.6))
-        (set 'cur-batt (* (get-batt) 100))
+        (if (and bms-soc-enable (> (get-bms-val 'bms-soc) 0))
+            (set 'bms-active true)
+        )
+        (if (and bms-soc-enable bms-active)
+            {
+                (set 'cur-batt (* (get-bms-val 'bms-soc) 100))
+                (var bt (get-bms-val 'bms-temp-cell-max))
+                (set 'bms-warn (or (> bt 50) (< bt 0)))
+            }
+            (set 'cur-batt (* (get-batt) 100))
+        )
         (var current-speed cur-speed-kmh)
 
         ; Dash link watchdog: release the ADC overrides when throttle frames stop
@@ -706,8 +1125,11 @@
             {
                 (app-adc-override 0 0)
                 (app-adc-override 1 0)
+                (cruise-cancel)
             }
         )
+
+        (handle-cruise current-speed)
 
         (if (or off lock (< current-speed min-speed))
             (if (not (app-is-output-disabled)) ; Disable output when scooter is turned off
@@ -727,6 +1149,7 @@
             )
         )
 
+        (handle-taillight)
         (handle-lock (abs current-speed))
     }
 )
@@ -734,6 +1157,7 @@
 (defun update-dash(buffer) ; Frame 0x64
     {
         (var current-speed (abs cur-speed-kmh))
+        (var disp-speed (+ (if use-mph (* current-speed 0.621371) current-speed) 0.5)) ; rounded for the dash
         (var battery cur-batt)
         (var crc-end (- (buflen tx-frame) 2)) ; crc bytes at end of frame
 
@@ -742,7 +1166,7 @@
             (bufset-u8 tx-frame tx-base 16)
             (if lock
                 (bufset-u8 tx-frame tx-base 32) ; lock display
-                (if (or (> (get-temp-fet) temp-warning-fet) (> (get-temp-mot) temp-warning-motor)) ; temp icon will show up above warning degree
+                (if (or (> (get-temp-fet) temp-warning-fet) (> (get-temp-mot) temp-warning-motor) bms-warn) ; temp icon will show up above warning degree
                     (bufset-u8 tx-frame tx-base (+ 128 speedmode))
                     (bufset-u8 tx-frame tx-base speedmode)
                 )
@@ -778,9 +1202,9 @@
             (bufset-u8 tx-frame (+ tx-base 4) 0) ; lock display
             (if (if unlock show-batt-idle-secret show-batt-in-idle)
                 (if (> current-speed 1)
-                    (bufset-u8 tx-frame (+ tx-base 4) current-speed)
+                    (bufset-u8 tx-frame (+ tx-base 4) disp-speed)
                     (bufset-u8 tx-frame (+ tx-base 4) battery))
-                (bufset-u8 tx-frame (+ tx-base 4) current-speed)
+                (bufset-u8 tx-frame (+ tx-base 4) disp-speed)
             )
         )
 
@@ -907,9 +1331,8 @@
 (defun toggle-lock()
     {
         (set 'lock (not lock)) ; lock on or off
-        (if lock (set 'unlock false)) ; locking always leaves secret mode, unlocking keeps it
+        (if (and lock secret-exit-on-lock) (set 'unlock false)) ; optionally leave secret mode when locking
         (apply-mode)
-        (set 'light false) ; turn off light when locking
         (set 'feedback 1) ; beep feedback
         (if (not lock)
             (stop-alarm)
@@ -1043,24 +1466,25 @@
 (defun apply-mode()
     (if (not unlock)
         (cond
-            ((= speedmode 1) (configure-speed drive-speed drive-watts drive-current drive-fw false))
-            ((= speedmode 2) (configure-speed eco-speed eco-watts eco-current eco-fw false))
-            ((= speedmode 4) (configure-speed sport-speed sport-watts sport-current sport-fw false))
+            ((= speedmode 1) (configure-speed drive-speed drive-watts drive-current drive-fw drive-om false))
+            ((= speedmode 2) (configure-speed eco-speed eco-watts eco-current eco-fw eco-om false))
+            ((= speedmode 4) (configure-speed sport-speed sport-watts sport-current sport-fw sport-om false))
         )
         (cond
-            ((= speedmode 1) (configure-speed secret-drive-speed secret-drive-watts secret-drive-current secret-drive-fw true))
-            ((= speedmode 2) (configure-speed secret-eco-speed secret-eco-watts secret-eco-current secret-eco-fw true))
-            ((= speedmode 4) (configure-speed secret-sport-speed secret-sport-watts secret-sport-current secret-sport-fw true))
+            ((= speedmode 1) (configure-speed secret-drive-speed secret-drive-watts secret-drive-current secret-drive-fw secret-drive-om true))
+            ((= speedmode 2) (configure-speed secret-eco-speed secret-eco-watts secret-eco-current secret-eco-fw secret-eco-om true))
+            ((= speedmode 4) (configure-speed secret-sport-speed secret-sport-watts secret-sport-current secret-sport-fw secret-sport-om true))
         )
     )
 )
 
-(defun configure-speed(speed watts current fw secret) ; normal and secret modes gate each parameter separately
+(defun configure-speed(speed watts current fw om secret) ; normal and secret modes gate each parameter separately
     {
         (if (if secret secret-apply-speed apply-speed) (set-param 'max-speed speed))
         (if (if secret secret-apply-watts apply-watts) (set-param 'l-watt-max watts))
         (if (if secret secret-apply-current apply-current) (set-param 'l-current-max-scale current))
         (if (if secret secret-apply-fw apply-fw) (set-param 'foc-fw-current-max fw))
+        (if (if secret secret-apply-om apply-om) (set-param 'foc-overmod-factor om))
     }
 )
 
@@ -1319,6 +1743,10 @@
         } {
             (set 'speedmode (if (or (= boot-mode 1) (= boot-mode 2) (= boot-mode 4)) boot-mode 4))
             (if light-on-boot (set 'light true))
+            (if rear-light-enable {
+                (pwm-start 200 0)
+                (set 'pwm-started true)
+            })
 
             ; Packet handling
             (uart-start 115200 'half-duplex)
