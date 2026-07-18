@@ -13,6 +13,28 @@ and stored on the ESC.
 |---------|---------|-------|-------|
 | ![General 1](screenshots/general1.jpg) | ![General 2](screenshots/general2.jpg) | ![Setup 1](screenshots/setup1.jpg) | ![Setup 2](screenshots/setup2.jpg) |
 
+## ⚠️ Disclaimer
+
+**Use at your own risk.** This is community software provided **as-is, without any warranty**
+of any kind, express or implied. It controls a moving vehicle - a bug, misconfiguration, or
+hardware fault could cause **loss of motor power, unintended acceleration or braking, or
+failure of the lock, alarm, or cruise features**, potentially resulting in a crash, injury,
+or damage.
+
+By installing or using this package you accept **full responsibility** for it. The authors
+and contributors accept **no liability** for any damage, injury, or loss arising from its use.
+
+- **Test everything on a stand, wheels off the ground, before riding** - especially throttle,
+  brake, mode limits, lock/unlock, and cruise control.
+- **Cruise control is experimental** - verify the throttle/brake cancel works reliably before
+  trusting it, and try it first at low speed on open ground.
+- Set your motor current, battery, and temperature limits correctly in VESC Tool; this package
+  does not protect your hardware from bad configuration.
+- Riding a modified scooter may be illegal on public roads in your jurisdiction and may void
+  warranties. Wear appropriate safety gear.
+
+If you don't accept these terms, don't install it.
+
 ## Requirements
 
 VESC firmware 7.00, available at https://vesc-project.com/
