@@ -763,13 +763,11 @@
 )
 
 (defun ctrl-light (on)
-    (if (not lock)
-        (set 'light on)
-    )
+    (set 'light on) ; allowed while locked too, like secret/mode from the app
 )
 
 (defun ctrl-mode (m)
-    (if (and (not lock) (or (= m 1) (= m 2) (= m 4))) {
+    (if (or (= m 1) (= m 2) (= m 4)) {
         (set 'speedmode m)
         (apply-mode)
     })
@@ -1106,16 +1104,19 @@
 (defun handle-features()
     {
         (set 'cur-speed-kmh (* (get-lowest-speed) 3.6))
-        (if (and bms-soc-enable (> (get-bms-val 'bms-soc) 0))
-            (set 'bms-active true)
-        )
-        (if (and bms-soc-enable bms-active)
-            {
-                (set 'cur-batt (* (get-bms-val 'bms-soc) 100))
-                (var bt (get-bms-val 'bms-temp-cell-max))
-                (set 'bms-warn (or (> bt 50) (< bt 0)))
-            }
-            (set 'cur-batt (* (get-batt) 100))
+
+        ; battery %: BMS reads can throw if no BMS is present - keep them from
+        ; skipping the safety-critical output/lock handling below
+        (trap
+            (if (and bms-soc-enable (> (get-bms-val 'bms-soc) 0))
+                {
+                    (set 'bms-active true)
+                    (set 'cur-batt (* (get-bms-val 'bms-soc) 100))
+                    (var bt (get-bms-val 'bms-temp-cell-max))
+                    (set 'bms-warn (or (> bt 50) (< bt 0)))
+                }
+                (set 'cur-batt (* (get-batt) 100))
+            )
         )
         (var current-speed cur-speed-kmh)
 
@@ -1129,7 +1130,7 @@
             }
         )
 
-        (handle-cruise current-speed)
+        (trap (handle-cruise current-speed)) ; experimental - never let it break the loop
 
         (if (or off lock (< current-speed min-speed))
             (if (not (app-is-output-disabled)) ; Disable output when scooter is turned off
@@ -1149,7 +1150,7 @@
             )
         )
 
-        (handle-taillight)
+        (trap (handle-taillight))
         (handle-lock (abs current-speed))
     }
 )
@@ -1624,12 +1625,12 @@
     {
         (var speed (get-speed))
         (loopforeach i (can-list-devs)
-            {
+            (trap { ; a CAN device dropping off the bus must not break speed reads
                 (var can-speed (canget-speed i))
                 (if (< can-speed speed)
                     (set 'speed can-speed)
                 )
-            }
+            })
         )
 
         speed
@@ -1683,7 +1684,7 @@
     {
         (loopwhile t
             {
-                (var button-state (read-button-pin))
+                (var button-state (read-button-pin)) ; paces the loop with its own sleeps
 
                 (if (and button-state (not last-button-state))
                     {
@@ -1691,14 +1692,17 @@
                         (set 'press-time (systime))
                     }
                 )
-
-                (button-apply button-state)
-
                 (set 'last-button-state button-state)
-                (if (and (not off) (<= (abs (get-speed)) button-safety-speed))
-                    (handle-lever-gestures)
-                )
-                (handle-features)
+
+                ; A transient error here (BMS/CAN/gyro) must not permanently kill
+                ; button, lock, alarm and output handling - trap and keep looping.
+                (trap {
+                    (button-apply button-state)
+                    (if (and (not off) (<= (abs (get-speed)) button-safety-speed))
+                        (handle-lever-gestures)
+                    )
+                    (handle-features)
+                })
             }
         )
     }

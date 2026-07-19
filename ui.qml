@@ -12,7 +12,30 @@ Item {
     property Commands mCommands: VescIf.commands()
     property int loadedModel: -1
     property bool isSlave: modelBox.currentIndex === 2
+    // Load is only complete once every settings message has arrived. Saving
+    // before that would write empty fields as 0 and wipe modes/general, so
+    // Save stays disabled and the UI keeps re-requesting until all are in.
+    property var settingsSeen: ({})
+    property int settingsSeenCount: 0
     property bool settingsLoaded: false
+    property bool saving: false
+    readonly property var settingsMsgs: ["model", "general", "temps", "modes",
+        "secret", "apply", "gesture", "misc", "rear", "cruise", "alarm"]
+
+    function markSettingsSeen(key) {
+        if (settingsMsgs.indexOf(key) < 0 || settingsSeen[key])
+            return
+        settingsSeen[key] = true
+        settingsSeenCount += 1
+        if (settingsSeenCount >= settingsMsgs.length)
+            settingsLoaded = true
+    }
+
+    function resetSettingsLoad() {
+        settingsSeen = ({})
+        settingsSeenCount = 0
+        settingsLoaded = false
+    }
     property real titleSize: Qt.application.font.pointSize > 0 ? Qt.application.font.pointSize + 3 : 14
 
     // Live scooter state for the Control tab
@@ -86,6 +109,15 @@ Item {
         return token === "true" || token === "1"
     }
 
+    // Wh/km: "0" when zero, one decimal below 10, no decimals from 10 up
+    function fmtWhkm(v) {
+        if (v < 0.05)
+            return "0"
+        if (v >= 10)
+            return Math.round(v).toString()
+        return v.toFixed(1)
+    }
+
     // Lever combo codes: 0=brake+throttle, 1=brake only, 2=throttle only, 3=none
     function comboFromBoxes(brakeBox, throttleBox) {
         if (brakeBox.checked && throttleBox.checked) return 0
@@ -129,6 +161,10 @@ Item {
     }
 
     function saveAllSettings() {
+        if (!settingsLoaded || saving)
+            return
+        saving = true
+        saveTimeout.restart()
         queueCode("(save-general-settings "
             + boolAtom(softwareAdc)
             + " " + readReal(minAdcThrottle, 2)
@@ -253,8 +289,8 @@ Item {
     }
 
     function applySettingsLine(line) {
-        settingsLoaded = true
         var parts = line.split(" ")
+        markSettingsSeen(parts[0])
 
         if (parts[0] === "model") {
             loadedModel = Number.parseInt(parts[1])
@@ -369,6 +405,29 @@ Item {
         id: reloadTimer
         interval: 1500
         onTriggered: getSettings()
+    }
+
+    // Clears the "Saving..." state if the ack never comes back
+    Timer {
+        id: saveTimeout
+        interval: 6000
+        onTriggered: root.saving = false
+    }
+
+    Dialog {
+        id: resetDialog
+        anchors.centerIn: parent
+        width: Math.min(parent.width - 40, 360)
+        modal: true
+        title: "Reset all settings?"
+        standardButtons: Dialog.Yes | Dialog.No
+        onAccepted: { resetSettingsLoad(); sendCode("(restore-settings-ui)") }
+
+        Label {
+            width: parent.width
+            wrapMode: Text.WordWrap
+            text: "This restores every setting to defaults. Your model selection is kept. This cannot be undone."
+        }
     }
 
     // The script may still be booting (or writing first-install defaults)
@@ -487,29 +546,37 @@ Item {
                                     Layout.preferredWidth: 20
                                     height: 16
                                     radius: 2
-                                    color: index < Math.round(root.stBatt / 10) ? (root.stBatt < 20 ? "#e53935" : "#43a047") : "#5a5a5a"
+                                    // lit segments shift green -> yellow -> red as charge drops
+                                    color: index < Math.round(root.stBatt / 10) ? Qt.hsla((root.stBatt / 100) * 0.333, 0.9, 0.45, 1) : "#5a5a5a"
                                 }
                             }
                         }
 
-                        RowLayout {
+                        Item {
                             Layout.fillWidth: true
                             Layout.topMargin: 4
+                            Layout.preferredHeight: battPctLabel.height
 
                             Label {
-                                text: root.stWhkm.toFixed(1) + " Wh/km"
+                                anchors.left: parent.left
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: fmtWhkm(useMph.checked ? (root.stWhkm / 0.621371) : root.stWhkm)
+                                    + (useMph.checked ? " Wh/mi" : " Wh/km")
                                 font.pointSize: root.titleSize * 1.15
                                 opacity: 0.85
                             }
-                            Item { Layout.fillWidth: true }
                             Label {
+                                id: battPctLabel
+                                anchors.horizontalCenter: parent.horizontalCenter
                                 text: Math.round(root.stBatt) + " %"
                                 font.bold: true
                                 font.pointSize: root.titleSize * 1.3
                             }
-                            Item { Layout.fillWidth: true }
                             Label {
-                                text: "~" + Math.round(root.stRange) + " km"
+                                anchors.right: parent.right
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "~" + Math.round(useMph.checked ? (root.stRange * 0.621371) : root.stRange)
+                                    + (useMph.checked ? " mi" : " km")
                                 font.pointSize: root.titleSize * 1.15
                                 opacity: 0.85
                             }
@@ -601,7 +668,7 @@ Item {
                                 Layout.preferredWidth: 80
                                 font.bold: true
                                 text: "Drive"
-                                Material.background: root.stMode === 1 ? "#26a69a" : "#3d3d3d"
+                                Material.background: root.stMode === 1 ? "#43a047" : "#3d3d3d"
                                 Material.foreground: "#ffffff"
                                 onClicked: ctrlCode("(ctrl-mode 1)")
                             }
@@ -611,7 +678,7 @@ Item {
                                 Layout.preferredWidth: 80
                                 font.bold: true
                                 text: "Sport"
-                                Material.background: root.stMode === 4 ? "#ef6c00" : "#3d3d3d"
+                                Material.background: root.stMode === 4 ? "#e53935" : "#3d3d3d"
                                 Material.foreground: "#ffffff"
                                 onClicked: ctrlCode("(ctrl-mode 4)")
                             }
@@ -1025,20 +1092,22 @@ Item {
 
             Button {
                 Layout.fillWidth: true
-                text: "Load"
-                onClicked: getSettings()
-            }
-
-            Button {
-                Layout.fillWidth: true
-                text: "Save"
-                onClicked: saveAllSettings()
-            }
-
-            Button {
-                Layout.fillWidth: true
                 text: "Reset"
-                onClicked: sendCode("(restore-settings-ui)")
+                enabled: !root.saving
+                onClicked: resetDialog.open()
+            }
+
+            Button {
+                Layout.fillWidth: true
+                text: "Load"
+                onClicked: { resetSettingsLoad(); getSettings() }
+            }
+
+            Button {
+                Layout.fillWidth: true
+                text: root.saving ? "Saving..." : (root.settingsLoaded ? "Save" : "Loading...")
+                enabled: root.settingsLoaded && !root.saving
+                onClicked: saveAllSettings()
             }
         }
     }
@@ -1068,11 +1137,13 @@ Item {
                 applySettingsLine(message)
             } else if (message === "model-ok") {
                 loadedModel = modelBox.currentIndex
-                root.settingsLoaded = false
+                resetSettingsLoad()
                 VescIf.emitStatusMessage("Model saved, restarting...", true)
                 mCommands.lispSetRunning(false)
                 restartTimer.start()
             } else if (message === "ok") {
+                root.saving = false
+                saveTimeout.stop()
                 VescIf.emitStatusMessage("Scooter settings saved.", true)
             }
         }
