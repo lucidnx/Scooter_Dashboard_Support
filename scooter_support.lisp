@@ -155,6 +155,7 @@
 (def cur-speed-kmh 0.0)
 (def cur-batt 0.0)
 
+
 ; BMS state
 (def bms-active false)
 (def bms-warn false)
@@ -842,16 +843,11 @@
 ; total usable battery Wh the same way mc_interface_get_battery_level does, so
 ; range = get-batt * this / wh-km reproduces VESC Tool's estimate. get-batt
 ; already carries the non-linear discharge curve.
-(defun batt-wh-tot () {
-        (var cells (conf-get 'si-battery-cells))
-        (var ah (conf-get 'si-battery-ah))
-        (var type (conf-get 'si-battery-type))
-        (cond
-            ((= type 1) (* ah 3.2 cells))    ; LiFePO4 2.6-3.6
-            ((= type 2) (* ah 2.23 cells))   ; lead-acid
-            (t (* 0.85 ah 3.7 cells))        ; Li-ion 3.0-4.2 (default)
-        )
-})
+(defun batt-wh-tot ()
+        ; Li-ion assumed (scooter default, si-battery-type isn't a valid
+        ; conf-get param in fw 7.0). Matches VESC Tool: 0.85 usable * 3.7 V/cell
+        (* 0.85 (conf-get 'si-battery-ah) (* 3.7 (conf-get 'si-battery-cells)))
+)
 
 (defun send-state-range () {
         (var whkm (send-state-whkm))
@@ -1492,6 +1488,7 @@
 (defun set-param(param value)
     {
         (conf-set param value)
+        ; live enumeration here (infrequent, and must catch the slave at boot)
         (loopforeach id (can-list-devs)
             (looprange i 0 5 {
                 (if (eq (rcode-run id 0.1 `(conf-set (quote ,param) ,value)) t) (break t))

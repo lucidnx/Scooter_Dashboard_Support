@@ -19,6 +19,8 @@ Item {
     property int settingsSeenCount: 0
     property bool settingsLoaded: false
     property bool saving: false
+    property bool statePending: false
+    property double statePendingSince: 0
     readonly property var settingsMsgs: ["model", "general", "temps", "modes",
         "secret", "apply", "gesture", "misc", "rear", "cruise", "alarm"]
 
@@ -424,7 +426,7 @@ Item {
         onAccepted: { resetSettingsLoad(); sendCode("(restore-settings-ui)") }
 
         Label {
-            width: parent.width
+            width: resetDialog.availableWidth
             wrapMode: Text.WordWrap
             text: "This restores every setting to defaults. Your model selection is kept. This cannot be undone."
         }
@@ -482,11 +484,21 @@ Item {
             Page {
                 enabled: !isSlave
 
+                // Adaptive polling: keep at most one request in flight so it
+                // paces to the BLE round-trip instead of piling up (which caused
+                // periodic stalls). Re-sends after 700 ms if a reply is lost.
                 Timer {
-                    interval: 1000
+                    interval: 40
                     repeat: true
                     running: swipeView.currentIndex === 0 && !root.isSlave
-                    onTriggered: sendCode("(send-state)")
+                    onTriggered: {
+                        var now = Date.now()
+                        if (!root.statePending || (now - root.statePendingSince) > 700) {
+                            root.statePending = true
+                            root.statePendingSince = now
+                            sendCode("(send-state)")
+                        }
+                    }
                 }
 
                 ScrollView {
@@ -1119,6 +1131,7 @@ Item {
             var message = data.toString().trim()
 
             if (message.startsWith("state ")) {
+                root.statePending = false
                 applyStateLine(message)
                 return
             }
