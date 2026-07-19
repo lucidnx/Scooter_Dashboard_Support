@@ -160,11 +160,25 @@ Lock, mode switching, headlight and secret mode activation are all **fully remap
 
 ![image](guide/imgs/23999.png)
 
+> **Check your 5V budget first.** The dashboard is powered from the VESC's 5V
+> output, and if you also add the rear/brake light (and/or a headlight) that all
+> draws from the same rail. VESC 5V regulators are small - often only a few
+> hundred mA. Add up the current draw of everything you connect and compare it
+> to your controller's 5V rating (check its datasheet). If it's marginal or over,
+> **don't overload the VESC 5V - use a separate step-down (buck) converter from
+> the main battery** to power the lights (and/or dashboard) instead, sharing a
+> common ground with the VESC. Overloading the 5V rail can brown out the
+> dashboard mid-ride or damage the regulator.
+
 ### Rear / brake light (optional)
 
 The rear light is driven from the **servo/PPM pin** through an N-channel MOSFET
 (PWM at 200 Hz - dim tail light, full brightness brake light). Enable it in the
-**Setup** tab. Wiring by [Zodiak1993](https://github.com/Zodiak1993/vesc_m365_dash):
+**Setup** tab. Wiring by [Zodiak1993](https://github.com/Zodiak1993/vesc_m365_dash).
+
+Power the LED strip from a source that can supply it (see the 5V note above) - a
+higher-current light should run from a step-down module off the battery, not the
+VESC 5V:
 
 ![taillight](guide/imgs/taillight.jpg)
 
