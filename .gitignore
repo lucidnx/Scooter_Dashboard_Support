@@ -2,4 +2,3 @@ vesc_scooter_support.vescpkg
 vesc_tool
 tools/
 .DS_Store
-*_stock.vescpkg

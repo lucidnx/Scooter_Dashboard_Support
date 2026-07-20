@@ -95,7 +95,11 @@ One package for everything - the model is stored on the ESC and selected in the 
 
 ### Speed modes
 - Three speed modes (Eco / Drive / Sport) plus three **secret** modes, each with its own
-  speed, current scale, watts, field weakening and overmodulation factor
+  speed, current, watts, field weakening and overmodulation factor
+- **Current %**: shown and entered as a percentage of your VESC's Motor Current Max, hard
+  capped at 100% so it can never scale current above what you've configured
+- **Overmodulation**: floored at 1.0 (VESC's own minimum - no overmodulation) so it can't
+  be saved below the safe range
 - **Per-parameter apply toggles**: each parameter is only written to the motor config when
   its checkbox is enabled - separately for normal and secret modes. Disabled parameters
   never touch your VESC motor settings (e.g. keep your own field weakening setup)
@@ -122,14 +126,15 @@ Lock, mode switching, headlight and secret mode activation are all **fully remap
   window configurable); release the throttle and the scooter keeps that speed
 - Built on the VESC's native cruise function, so **any throttle or brake input overrides
   it instantly** at firmware level; a large speed drop or a stop cancels it too
-- Off by default - enable in General, tune in Setup. Requires the ADC Cruise Control
-  button enabled (see above). Use with care.
+- Off by default - **toggle it live from the Control tab** (button between Light and
+  Secret), tune the delay/deviation in Setup. Requires the ADC Cruise Control button
+  enabled (see above). Use with care.
 
 ### Remote control (Control tab)
 - Live dashboard in the app: **speed, battery %, voltage, watts, amps, Wh/km and estimated
   range** (range and Wh/km computed the same way VESC Tool does)
-- Buttons: turn the dashboard on/off, lock/unlock (standstill only), headlight,
-  mode selection and secret toggle - with live status
+- Buttons: power on/off, lock/unlock (standstill only), headlight, secret toggle, cruise
+  control on/off, and mode selection - with live status
 
 ### Comfort
 - **Auto headlight**: turn the headlight on automatically at power on
@@ -138,9 +143,17 @@ Lock, mode switching, headlight and secret mode activation are all **fully remap
 - **Battery % at idle** on the dashboard, separately configurable for normal and secret modes
 - **BMS battery %**: if a VESC BMS reports, its SOC is used as the battery percentage,
   with a temperature warning above 50 °C or below 0 °C
-- **Headlight voltage offset**: compensate a constant throttle/brake ADC shift when the
-  headlight (fed from the same 5 V) is on
-- **mph display**: dash speed switchable between km/h and mph (rounded properly)
+- **Light compensation**: the headlight sags throttle/brake voltage non-linearly across
+  the lever range (not by a fixed amount), so this applies an affine correction
+  (offset + gain) rather than a flat offset. A guided **calibration wizard** in Setup
+  does this automatically: one button per channel walks through 4 steps (released and
+  full press, with the light off then on), each with a short "get ready" countdown
+  before a hold-and-average measurement. The motor stays disengaged for the whole
+  sequence, so pressing the levers fully never moves the scooter - no stand needed -
+  and output stays disengaged briefly after the last step so the lever can be released
+  before normal control resumes. Values can also be entered directly.
+- **mph display**: dash speed and all speed-related settings switchable between km/h and
+  mph (stored internally as km/h; rounded properly for the dash)
 - Motor start speed (kick-start) and temperature warning icon with configurable thresholds
 - Long button press turns the Dashboard off (not the VESC itself)
 

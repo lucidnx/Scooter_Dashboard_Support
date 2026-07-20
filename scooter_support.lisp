@@ -1,11 +1,3 @@
-; VESC Scooter Support lisp script v2.0 by Izuna, AKA13 and Netzpfuscher
-; Supports G30 (Ninebot), M365/1S/PRO2 (Xiaomi) dashboards and Slave ESCs - model is set in the package UI
-; Tested with VESC 7.00 on Spintend Ubox Single 85 200
-
-; -> Installation
-; UART Wiring: red=5V black=GND yellow=COM-TX (UART-HDX) green=COM-RX (button)+3.3V with 1K Resistor
-; Guide (German): https://rollerplausch.com/threads/vesc-controller-einbau-1s-pro2-g30.6032/
-
 (def software-adc true)
 (def min-adc-throttle 0.1)
 (def min-adc-brake 0.1)
@@ -79,8 +71,13 @@
 (def light-combo 3)
 (def light-requires-lock false)
 (def light-on-boot false)
-(def light-offset-thr 0.0) ; volts added to throttle while the headlight is on
-(def light-offset-brk 0.0) ; volts added to brake while the headlight is on
+; Light compensation: reconstructs the light-off reading from a light-on
+; reading via corrected = (raw - offset) / gain. Calibrated with the Sample
+; buttons in Setup; gain=1/offset=0 is a no-op (uncalibrated default).
+(def light-offset-thr 0.0)
+(def light-gain-thr 1.0)
+(def light-offset-brk 0.0)
+(def light-gain-brk 1.0)
 (def boot-mode 1) ; speed mode applied at boot (1=drive, 2=eco, 4=sport)
 
 ; Display / battery
@@ -174,10 +171,37 @@
 (def cruise-shown-time (systime)) ; activation time - drives the 3s dash "C5"
 (def cruise-thr-ref 1) ; raw throttle byte held at activation (capture-assist)
 (def dash-thr-raw 0) ; raw dash throttle byte, tracked in adc-input
+(def dash-brk-raw 0) ; raw dash brake byte, tracked in adc-input
+
+; Light-compensation calibration wizard state.
+; One guided auto-sequence per channel, walking through 4 static hold-and-
+; average samples (off-rel, off-full, on-rel, on-full): each step gives a
+; "get ready" prep window (light set, user gets into position) before the
+; measurement window starts, so the lever is already settled when sampling
+; begins. A steady hold + averaging rejects sample noise far better than a
+; moving sweep.
+(def calib-stage 'idle) ; 'idle / 'prep / 'measure
+(def calib-step 0) ; 0=off-rel, 1=off-full, 2=on-rel, 3=on-full
+(def calib-channel 'thr) ; 'thr or 'brk - which raw signal to sample
+(def calib-since (systime))
+(def calib-prep-duration 3.0) ; time to get into position before measuring
+(def calib-measure-duration 3.0) ; hold-and-average window
+(def calib-release-duration 3.0) ; grace window after the last step to let go
+                                  ; of the lever before real output resumes
+(def calib-sum 0.0)
+(def calib-cnt 0)
+(def thr-off-rel-v 0.0) (def thr-off-rel-ok false)
+(def thr-off-full-v 0.0) (def thr-off-full-ok false)
+(def thr-on-rel-v 0.0) (def thr-on-rel-ok false)
+(def thr-on-full-v 0.0) (def thr-on-full-ok false)
+(def brk-off-rel-v 0.0) (def brk-off-rel-ok false)
+(def brk-off-full-v 0.0) (def brk-off-full-ok false)
+(def brk-on-rel-v 0.0) (def brk-on-rel-ok false)
+(def brk-on-full-v 0.0) (def brk-on-full-ok false)
 
 @const-start
 
-(def settings-version 308i32)
+(def settings-version 309i32)
 
 ; Persistent settings: (label . (eeprom-offset type))
 (def eeprom-addrs '(
@@ -261,6 +285,8 @@
     (secret-exit-on-lock   . (77 b))
     (light-offset-thr      . (78 f))
     (light-offset-brk      . (79 f))
+    (light-gain-thr        . (80 f))
+    (light-gain-brk        . (81 f))
 ))
 
 (def last-button-state false)
@@ -296,6 +322,19 @@
         (write-setting 'secret-apply-speed true)
         (write-setting 'secret-apply-current true)
         (write-setting 'secret-apply-watts true)
+    }
+)
+
+; v309 replaces the flat light offset with a gain+offset affine correction
+; (raw wasn't shifted by a constant volts - it scaled non-linearly with lever
+; position). A flat offset from v308 would be WRONG under the new formula
+; (sign-inverted at points), so it's reset here - recalibrate with Sample.
+(defun write-v309-defaults ()
+    {
+        (write-setting 'light-offset-thr 0.0)
+        (write-setting 'light-gain-thr 1.0)
+        (write-setting 'light-offset-brk 0.0)
+        (write-setting 'light-gain-brk 1.0)
     }
 )
 
@@ -366,6 +405,7 @@
         (write-v306-defaults)
         (write-v307-defaults)
         (write-v308-defaults)
+        (write-v309-defaults)
         (write-setting 'secret-presses 1)
         (write-setting 'secret-combo 0)
         (write-setting 'secret-requires-lock false)
@@ -436,6 +476,7 @@
                     (write-v306-defaults)
                     (write-v307-defaults)
                     (write-v308-defaults)
+                    (write-v309-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 302i32) {
@@ -445,6 +486,7 @@
                     (write-v306-defaults)
                     (write-v307-defaults)
                     (write-v308-defaults)
+                    (write-v309-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 303i32) {
@@ -453,6 +495,7 @@
                     (write-v306-defaults)
                     (write-v307-defaults)
                     (write-v308-defaults)
+                    (write-v309-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 304i32) {
@@ -460,21 +503,29 @@
                     (write-v306-defaults)
                     (write-v307-defaults)
                     (write-v308-defaults)
+                    (write-v309-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 305i32) {
                     (write-v306-defaults)
                     (write-v307-defaults)
                     (write-v308-defaults)
+                    (write-v309-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 306i32) {
                     (write-v307-defaults)
                     (write-v308-defaults)
+                    (write-v309-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 307i32) {
                     (write-v308-defaults)
+                    (write-v309-defaults)
+                    (write-setting 'ver-code settings-version)
+                })
+                ((eq ver 308i32) {
+                    (write-v309-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 (t (restore-defaults))
@@ -531,7 +582,9 @@
         (set 'secret-requires-lock (read-setting 'secret-requires-lock))
         (set 'secret-exit-on-lock (read-setting 'secret-exit-on-lock))
         (set 'light-offset-thr (read-setting 'light-offset-thr))
+        (set 'light-gain-thr (read-setting 'light-gain-thr))
         (set 'light-offset-brk (read-setting 'light-offset-brk))
+        (set 'light-gain-brk (read-setting 'light-gain-brk))
         (set 'lock-presses (read-setting 'lock-presses))
         (set 'lock-combo (read-setting 'lock-combo))
         (set 'mode-presses (read-setting 'mode-presses))
@@ -703,10 +756,12 @@
     }
 )
 
-(defun save-light-offsets (thr brk)
+(defun save-light-offsets (thr thr-gain brk brk-gain)
     {
         (write-setting 'light-offset-thr thr)
+        (write-setting 'light-gain-thr (if (> thr-gain 0.05) thr-gain 1.0)) ; never persist a near-zero/invalid gain
         (write-setting 'light-offset-brk brk)
+        (write-setting 'light-gain-brk (if (> brk-gain 0.05) brk-gain 1.0))
     }
 )
 
@@ -887,8 +942,10 @@
             (if (read-setting 'use-mph) "true " "false ")
             (if (read-setting 'bms-soc-enable) "true " "false ")
             (if (read-setting 'secret-exit-on-lock) "true " "false ")
-            (str-from-n (read-setting 'light-offset-thr) "%.2f ")
-            (str-from-n (read-setting 'light-offset-brk) "%.2f")
+            (str-from-n (read-setting 'light-offset-thr) "%.3f ")
+            (str-from-n (read-setting 'light-gain-thr) "%.3f ")
+            (str-from-n (read-setting 'light-offset-brk) "%.3f ")
+            (str-from-n (read-setting 'light-gain-brk) "%.3f")
         ))
         (sleep 0.05)
         (send-data (str-merge
@@ -1011,14 +1068,143 @@
 
 @const-start
 
+; ---- Light-compensation calibration wizard ----
+; The headlight sags throttle/brake readings non-linearly across the lever
+; range (not a flat volts shift), so calibration fits an affine correction
+; corrected = (raw - offset) / gain, from 4 static hold-and-average samples
+; per channel: released and full-press, each with the light off and on.
+; A moving sweep (tried first) was too noisy/order-sensitive; a steady hold
+; averaged over the window rejects sample jitter far better.
+
+(defun calib-reset-accum() { (set 'calib-sum 0.0) (set 'calib-cnt 0) })
+
+(defun calib-add(val)
+    { (set 'calib-sum (+ calib-sum val)) (set 'calib-cnt (+ calib-cnt 1)) }
+)
+
+; Two-point fit from the released/full-press averages, inverted for runtime
+; use: corrected = (on_measured - offset) / gain
+(defun calib-finish-regression(label off-rel off-full on-rel on-full)
+    {
+        (var off-range (- off-full off-rel))
+        (if (< off-range 0.3) ; released/full too close together - bad sample
+            (send-data (str-merge "calib-error " label))
+            {
+                (var gain (/ (- on-full on-rel) off-range))
+                (var offset (- on-rel (* gain off-rel)))
+                ; hard safety bounds - gain must stay well clear of 0 (division
+                ; at runtime) and within a sane range for a lighting-induced sag
+                (if (< gain 0.3) (setq gain 0.3))
+                (if (> gain 3.0) (setq gain 3.0))
+                (if (< offset -1.5) (setq offset -1.5))
+                (if (> offset 1.5) (setq offset 1.5))
+                (send-data (str-merge "calib-result " label " "
+                    (str-from-n offset "%.3f ") (str-from-n gain "%.3f ")
+                    (str-from-n off-rel "%.3f ") (str-from-n off-full "%.3f ")
+                    (str-from-n on-rel "%.3f ") (str-from-n on-full "%.3f")))
+            }
+        )
+    }
+)
+
+(defun calib-step-label(step)
+    (cond ((= step 0) "off-rel") ((= step 1) "off-full") ((= step 2) "on-rel") (t "on-full"))
+)
+
+(defun calib-phase-light(step) (>= step 2)) ; steps 0,1 = light off; 2,3 = light on
+
+; Store this step's average into the right persistent var for the channel.
+(defun calib-store-step(ch step avg)
+    (if (eq ch 'thr)
+        (cond
+            ((= step 0) { (set 'thr-off-rel-v avg) (set 'thr-off-rel-ok true) })
+            ((= step 1) { (set 'thr-off-full-v avg) (set 'thr-off-full-ok true) })
+            ((= step 2) { (set 'thr-on-rel-v avg) (set 'thr-on-rel-ok true) })
+            (t          { (set 'thr-on-full-v avg) (set 'thr-on-full-ok true) })
+        )
+        (cond
+            ((= step 0) { (set 'brk-off-rel-v avg) (set 'brk-off-rel-ok true) })
+            ((= step 1) { (set 'brk-off-full-v avg) (set 'brk-off-full-ok true) })
+            ((= step 2) { (set 'brk-on-rel-v avg) (set 'brk-on-rel-ok true) })
+            (t          { (set 'brk-on-full-v avg) (set 'brk-on-full-ok true) })
+        )
+    )
+)
+
+(defun calib-can-start() (and (not off) (<= (abs (get-speed)) 1.0)))
+
+(defun calib-begin-prep(step)
+    {
+        (set 'calib-step step)
+        (set 'light (calib-phase-light step))
+        (set 'calib-stage 'prep)
+        (set 'calib-since (systime))
+        (send-data (str-merge "calib-stage prep " (calib-step-label step)))
+    }
+)
+
+(defun calib-begin-measure()
+    {
+        (set 'calib-stage 'measure)
+        (calib-reset-accum)
+        (set 'calib-since (systime))
+        (send-data (str-merge "calib-stage measure " (calib-step-label calib-step)))
+    }
+)
+
+(defun calib-finish-step()
+    {
+        (var avg (if (> calib-cnt 0) (/ calib-sum calib-cnt) 0.0))
+        (var ch calib-channel)
+        (var st calib-step)
+        (calib-store-step ch st avg)
+        (send-data (str-merge "calib-progress " (if (eq ch 'thr) "thr " "brk ") (calib-step-label st) " " (str-from-n avg "%.3f")))
+        (if (< st 3)
+            (calib-begin-prep (+ st 1)) ; next step
+            { ; all 4 steps done - compute and send the result immediately, then
+              ; hold output disengaged a bit longer so the lever (held fully
+              ; pressed for the last step) can be released before real
+              ; throttle/brake control resumes - avoids a surprise full-power
+              ; launch the instant the sequence ends
+                (set 'light false) ; last step ran with the light on - leave it clean afterward
+                (if (eq ch 'thr)
+                    (calib-finish-regression "thr" thr-off-rel-v thr-off-full-v thr-on-rel-v thr-on-full-v)
+                    (calib-finish-regression "brk" brk-off-rel-v brk-off-full-v brk-on-rel-v brk-on-full-v)
+                )
+                (set 'calib-stage 'release)
+                (set 'calib-since (systime))
+                (send-data (str-merge "calib-stage release " (if (eq ch 'thr) "thr" "brk")))
+            }
+        )
+    }
+)
+
+(defun calib-start-channel(channel)
+    (if (calib-can-start)
+        {
+            (set 'calib-channel channel)
+            (calib-begin-prep 0) ; step 0: off-rel
+        }
+        (send-data "calib-refused")
+    )
+)
+
+(defun calib-start-thr() (calib-start-channel 'thr))
+(defun calib-start-brk() (calib-start-channel 'brk))
+
 (defun adc-input(buffer) ; Frame 0x65
     {
         (set 'last-rx (systime)) ; feed the dash link watchdog
 
         (set 'dash-thr-raw (bufget-u8 uart-buf thr-idx)) ; raw physical throttle (before override)
+        (set 'dash-brk-raw (bufget-u8 uart-buf brk-idx)) ; raw physical brake (before override)
+        (var thr-raw-v (/ dash-thr-raw 77.2)) ; 255/3.3 = 77.2
+        (var brk-raw-v (/ dash-brk-raw 77.2))
 
-        (var throttle (+ (/ dash-thr-raw 77.2) (if light light-offset-thr 0.0))) ; 255/3.3 = 77.2
-        (var brake (+ (/ (bufget-u8 uart-buf brk-idx) 77.2) (if light light-offset-brk 0.0)))
+        ; Affine light compensation: corrected = (raw - offset) / gain.
+        ; gain=1/offset=0 (uncalibrated default) makes this a no-op.
+        (var throttle (if light (/ (- thr-raw-v light-offset-thr) light-gain-thr) thr-raw-v))
+        (var brake (if light (/ (- brk-raw-v light-offset-brk) light-gain-brk) brk-raw-v))
 
         ; cruise capture-assist: hold the throttle signal at 0 from activation
         ; until the lever is physically released, so the app captures the speed
@@ -1030,9 +1216,50 @@
         (if (< brake 0.0) (setq brake 0.0))
         (if (> brake 3.3) (setq brake 3.3))
 
-        ; Pass through throttle and brake to VESC
-        (app-adc-override 0 throttle)
-        (app-adc-override 1 brake)
+        ; Pass through throttle and brake to VESC - except during calibration,
+        ; where the real output stays disengaged so a full press samples the
+        ; correct raw voltage without actually moving the scooter (no stand
+        ; needed; safe to calibrate stopped on the road like people actually do)
+        (if (eq calib-stage 'idle)
+            {
+                (app-adc-override 0 throttle)
+                (app-adc-override 1 brake)
+            }
+            {
+                (app-adc-override 0 0)
+                (app-adc-override 1 0)
+            }
+        )
+
+        ; Light-compensation calibration wizard: drive the prep -> measure ->
+        ; release sequencer. The safety abort only applies during prep/measure
+        ; (invalidates in-progress data); during release the result is already
+        ; sent, so we just let the grace window run out unconditionally.
+        (if (and (not (eq calib-stage 'idle)) (not (eq calib-stage 'release)) (not (calib-can-start)))
+            {
+                (set 'calib-stage 'idle)
+                (send-data "calib-aborted")
+            }
+            (cond
+                ((eq calib-stage 'prep)
+                    (if (> (secs-since calib-since) calib-prep-duration) (calib-begin-measure))
+                )
+                ((eq calib-stage 'measure)
+                    (if (> (secs-since calib-since) calib-measure-duration)
+                        (calib-finish-step)
+                        (calib-add (if (eq calib-channel 'thr) thr-raw-v brk-raw-v))
+                    )
+                )
+                ((eq calib-stage 'release)
+                    (if (> (secs-since calib-since) calib-release-duration)
+                        {
+                            (set 'calib-stage 'idle)
+                            (send-data (str-merge "calib-stage idle " (if (eq calib-channel 'thr) "thr" "brk")))
+                        }
+                    )
+                )
+            )
+        )
     }
 )
 

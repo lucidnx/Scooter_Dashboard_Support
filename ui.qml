@@ -208,6 +208,89 @@ Item {
         setOm(field, readOm(field))
     }
 
+    // Light compensation gain: never let a blank/garbage entry through as 0
+    // (would divide by zero at runtime); floor/ceiling match the firmware clamp.
+    function readGain(field) {
+        var n = Number.parseFloat(field.text.replace(",", "."))
+        if (!Number.isFinite(n)) n = 1.0
+        if (n < 0.3) n = 0.3
+        if (n > 3.0) n = 3.0
+        return n.toFixed(3)
+    }
+
+    function setGain(field, value) {
+        var n = Number(value)
+        if (!Number.isFinite(n)) n = 1.0
+        if (n < 0.3) n = 0.3
+        if (n > 3.0) n = 3.0
+        field.text = n.toFixed(3)
+    }
+
+    function clampGain(field) {
+        setGain(field, readGain(field))
+    }
+
+    function readOffsetV(field) {
+        var n = Number.parseFloat(field.text.replace(",", "."))
+        if (!Number.isFinite(n)) n = 0.0
+        if (n < -1.5) n = -1.5
+        if (n > 1.5) n = 1.5
+        return n.toFixed(3)
+    }
+
+    function setOffsetV(field, value) {
+        var n = Number(value)
+        if (!Number.isFinite(n)) n = 0.0
+        if (n < -1.5) n = -1.5
+        if (n > 1.5) n = 1.5
+        field.text = n.toFixed(3)
+    }
+
+    function clampOffsetV(field) {
+        setOffsetV(field, readOffsetV(field))
+    }
+
+    // Calibration wizard state (light compensation sampling). One guided
+    // button per channel walks through 4 steps (off-rel, off-full, on-rel,
+    // on-full); each step is a "get ready" prep window (light set, user gets
+    // into position) followed by a hold-and-average measurement window - so
+    // sampling never starts before the lever has actually settled.
+    property string calibRunning: "" // "" / "thr" / "brk" - which channel is active
+    property string calibStage: "idle" // "idle" / "prep" / "measure" / "release"
+    property string calibStepLabel: "off-rel"
+    readonly property real calibPrepDuration: 3.0 // must match scooter_support.lisp calib-prep-duration
+    readonly property real calibMeasureDuration: 3.0 // must match calib-measure-duration
+    readonly property real calibReleaseDuration: 3.0 // must match calib-release-duration
+    property real calibRemaining: 0
+    property string calibStatusThr: "Not calibrated"
+    property string calibStatusBrk: "Not calibrated"
+
+    // Shown on the button itself while that channel is running, replacing
+    // "Calibrate Throttle/Brake"; falls back to the button's normal label
+    function calibButtonText(ch) {
+        if (calibRunning !== ch)
+            return ch === "thr" ? "Calibrate Throttle" : "Calibrate Brake"
+        var subject = ch === "thr" ? "throttle" : "brake"
+        if (calibStage === "release") return "Release " + subject + ", ending."
+        if (calibStage === "measure") return "Measuring... " + calibRemaining.toFixed(1) + "s"
+        // prep
+        var base
+        if (calibStepLabel === "off-rel") base = "Keep " + subject + " released"
+        else if (calibStepLabel === "off-full") base = "Press " + subject + " to maximum"
+        else if (calibStepLabel === "on-rel") base = "Release " + subject
+        else base = "Press " + subject + " to maximum" // on-full
+        return base + " " + calibRemaining.toFixed(1) + "s"
+    }
+
+    function calibStartChannel(ch) {
+        if (calibRunning !== "") return
+        calibRunning = ch
+        calibStage = "prep"
+        calibStepLabel = "off-rel"
+        calibRemaining = calibPrepDuration
+        sendCode(ch === "thr" ? "(calib-start-thr)" : "(calib-start-brk)")
+    }
+
     // Speed fields are stored/sent in km/h but shown in mph when "Use Miles" is
     // on. Convert only at the UI boundary; km/h stays the internal unit.
     readonly property real mphFactor: 0.621371
@@ -333,8 +416,10 @@ Item {
             + ")")
 
         queueCode("(save-light-offsets "
-            + readReal(lightOffThr, 2)
-            + " " + readReal(lightOffBrk, 2)
+            + readOffsetV(lightOffThr)
+            + " " + readGain(lightGainThr)
+            + " " + readOffsetV(lightOffBrk)
+            + " " + readGain(lightGainBrk)
             + ")")
 
         queueCode("(save-rear-settings "
@@ -448,8 +533,10 @@ Item {
             setSpeed(buttonSpeed, parts[2], 1)
             bmsSoc.checked = parseBoolToken(parts[4])
             secretExitOnLock.checked = parseBoolToken(parts[5])
-            setReal(lightOffThr, parts[6], 2)
-            setReal(lightOffBrk, parts[7], 2)
+            setOffsetV(lightOffThr, parts[6])
+            setGain(lightGainThr, parts[7])
+            setOffsetV(lightOffBrk, parts[8])
+            setGain(lightGainBrk, parts[9])
         } else if (parts[0] === "rear") {
             rearLightEnable.checked = parseBoolToken(parts[1])
             autoTaillight.checked = parseBoolToken(parts[2])
@@ -483,6 +570,18 @@ Item {
         id: reloadTimer
         interval: 1500
         onTriggered: getSettings()
+    }
+
+    // Client-side countdown for the light-calibration hold. Purely visual -
+    // the actual result comes from calib-progress/calib-result messages, so a
+    // slightly early/late display here has no functional effect.
+    Timer {
+        interval: 200
+        repeat: true
+        running: root.calibRunning !== ""
+        onTriggered: {
+            root.calibRemaining = Math.max(0, root.calibRemaining - 0.2)
+        }
     }
 
     // Clears the "Saving..." state if the ack never comes back
@@ -613,7 +712,7 @@ Item {
                                 visible: root.stCruise
                                 text: "CC"
                                 font.bold: true
-                                color: "#43a047"
+                                color: "#ff7a1a"
                             }
                         }
 
@@ -1077,16 +1176,74 @@ Item {
                                 CheckBox { id: softwareAdc; text: "Enabled" }
                             }
 
-                            RowLayout {
+                            Label { text: "Light Compensation"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 24 }
+
+                            Label {
                                 Layout.fillWidth: true
-                                Label { text: "Light offset Throttle (V)"; Layout.fillWidth: true }
-                                TextField { id: lightOffThr; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                                wrapMode: Text.WordWrap
+                                opacity: 0.7
+                                text: "The headlight sags throttle/brake voltage non-linearly across the lever range. Calibrate walks through 4 steps automatically (get ready, then hold), or edit the values directly."
                             }
 
                             RowLayout {
                                 Layout.fillWidth: true
-                                Label { text: "Light offset Brake (V)"; Layout.fillWidth: true }
-                                TextField { id: lightOffBrk; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                                Label { text: "Throttle Offset (V)"; Layout.fillWidth: true }
+                                TextField { id: lightOffThr; text: "0.000"; Layout.preferredWidth: 90; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampOffsetV(lightOffThr) }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Label { text: "Throttle Gain (k)"; Layout.fillWidth: true }
+                                TextField { id: lightGainThr; text: "1.000"; Layout.preferredWidth: 90; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampGain(lightGainThr) }
+                            }
+
+                            Button {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 56
+                                Layout.topMargin: 4
+                                // stays enabled while THIS channel runs (so its own color
+                                // shows, not the greyed-out disabled palette) - only the
+                                // other channel's button locks out; re-tapping is a no-op
+                                enabled: root.calibRunning === "" || root.calibRunning === "thr"
+                                text: root.calibButtonText("thr")
+                                Material.foreground: root.calibRunning === "thr" ? "#d0faff" : "#ffffff"
+                                onClicked: root.calibStartChannel("thr")
+                            }
+
+                            Label {
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                                font.pointSize: Qt.application.font.pointSize > 0 ? Qt.application.font.pointSize - 1 : 10
+                                text: root.calibStatusThr
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Label { text: "Brake Offset (V)"; Layout.fillWidth: true }
+                                TextField { id: lightOffBrk; text: "0.000"; Layout.preferredWidth: 90; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampOffsetV(lightOffBrk) }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Label { text: "Brake Gain (k)"; Layout.fillWidth: true }
+                                TextField { id: lightGainBrk; text: "1.000"; Layout.preferredWidth: 90; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampGain(lightGainBrk) }
+                            }
+
+                            Button {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 56
+                                Layout.topMargin: 4
+                                enabled: root.calibRunning === "" || root.calibRunning === "brk"
+                                text: root.calibButtonText("brk")
+                                Material.foreground: root.calibRunning === "brk" ? "#d0faff" : "#ffffff"
+                                onClicked: root.calibStartChannel("brk")
+                            }
+
+                            Label {
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                                font.pointSize: Qt.application.font.pointSize > 0 ? Qt.application.font.pointSize - 1 : 10
+                                text: root.calibStatusBrk
                             }
 
                             Label { text: "Gestures"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 24 }
@@ -1237,6 +1394,74 @@ Item {
             if (message.startsWith("state ")) {
                 root.statePending = false
                 applyStateLine(message)
+                return
+            }
+
+            if (message.startsWith("calib-stage ")) {
+                // ["calib-stage", "prep"/"measure", stepLabel] during a step, or
+                // ["calib-stage", "release"/"idle", channel] for the tail end
+                var sp = message.split(" ")
+                var stage = sp[1]
+                if (stage === "prep" || stage === "measure") {
+                    root.calibStage = stage
+                    root.calibStepLabel = sp[2]
+                    root.calibRemaining = (stage === "prep") ? root.calibPrepDuration : root.calibMeasureDuration
+                } else if (stage === "release") {
+                    root.calibStage = "release"
+                    root.calibRemaining = root.calibReleaseDuration
+                } else if (stage === "idle") {
+                    // release grace period elapsed - real control has resumed
+                    root.calibRunning = ""
+                    root.calibStage = "idle"
+                }
+                return
+            }
+            if (message.startsWith("calib-progress ")) {
+                return // covered by the live step instruction; nothing to do
+            }
+            if (message.startsWith("calib-result ")) {
+                // channel stays "running" through the release grace period -
+                // cleared later by the "calib-stage idle" message above
+                // ["calib-result", "thr"/"brk", offset, gain, offRel, offFull, onRel, onFull]
+                var rp = message.split(" ")
+                var range = "OFF " + Number(rp[4]).toFixed(2) + "→" + Number(rp[5]).toFixed(2)
+                    + "V, ON " + Number(rp[6]).toFixed(2) + "→" + Number(rp[7]).toFixed(2) + "V"
+                if (rp[1] === "thr") {
+                    setOffsetV(lightOffThr, rp[2])
+                    setGain(lightGainThr, rp[3])
+                    root.calibStatusThr = "Calibrated (" + range + ") - review the values above, then press Save."
+                } else {
+                    setOffsetV(lightOffBrk, rp[2])
+                    setGain(lightGainBrk, rp[3])
+                    root.calibStatusBrk = "Calibrated (" + range + ") - review the values above, then press Save."
+                }
+                return
+            }
+            if (message === "calib-refused") {
+                var refCh = root.calibRunning
+                root.calibRunning = ""
+                root.calibStage = "idle"
+                var refMsg = "Refused - scooter must be powered on and stationary."
+                if (refCh === "brk") root.calibStatusBrk = refMsg
+                else root.calibStatusThr = refMsg
+                return
+            }
+            if (message === "calib-aborted") {
+                var abortCh = root.calibRunning
+                root.calibRunning = ""
+                root.calibStage = "idle"
+                var abortMsg = "Cancelled - the scooter started moving or was turned off. Try again."
+                if (abortCh === "brk") root.calibStatusBrk = abortMsg
+                else root.calibStatusThr = abortMsg
+                return
+            }
+            if (message.startsWith("calib-error ")) {
+                root.calibRunning = ""
+                root.calibStage = "idle"
+                var errCh = message.split(" ")[1]
+                var errMsg = "Released and full-press readings were too close together. Check the lever actually moved, then try again."
+                if (errCh === "thr") root.calibStatusThr = errMsg
+                else root.calibStatusBrk = errMsg
                 return
             }
 
