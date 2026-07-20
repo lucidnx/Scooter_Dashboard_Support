@@ -9,7 +9,7 @@
 (def software-adc true)
 (def min-adc-throttle 0.1)
 (def min-adc-brake 0.1)
-(def temp-warning-motor 100) ; temperature warning for motor in degree celsius
+(def temp-warning-motor 80) ; temperature warning for motor in degree celsius
 (def temp-warning-fet 80) ; temperature warning for fet in degree celsius
 (def show-batt-in-idle false) ; battery instead of speed at idle, normal modes
 (def show-batt-idle-secret true) ; same but in secret modes
@@ -171,6 +171,9 @@
 (def cruise-blocked false)
 (def cruise-ref 0.0)
 (def cruise-since (systime))
+(def cruise-shown-time (systime)) ; activation time - drives the 3s dash "C5"
+(def cruise-thr-ref 1) ; raw throttle byte held at activation (capture-assist)
+(def dash-thr-raw 0) ; raw dash throttle byte, tracked in adc-input
 
 @const-start
 
@@ -377,7 +380,7 @@
         (write-setting 'software-adc true)
         (write-setting 'min-adc-throttle 0.1)
         (write-setting 'min-adc-brake 0.1)
-        (write-setting 'temp-warning-motor 100.0)
+        (write-setting 'temp-warning-motor 80.0)
         (write-setting 'temp-warning-fet 80.0)
         (write-setting 'show-batt-in-idle true)
         (write-setting 'min-speed-kmh 1.0)
@@ -715,9 +718,8 @@
     }
 )
 
-(defun save-cruise-settings (enable delay deviation)
-    {
-        (write-setting 'cruise-enabled enable)
+(defun save-cruise-settings (delay deviation)
+    { ; enable is toggled live from the Control tab (ctrl-cruise), not here
         (write-setting 'cruise-delay delay)
         (write-setting 'cruise-deviation deviation)
     }
@@ -780,6 +782,16 @@
     )
 )
 
+; Enable/disable the cruise feature live from the Control tab. Persisted so it
+; survives a reboot, and cancels any active hold when switched off.
+(defun ctrl-cruise (on)
+    {
+        (set 'cruise-enabled on)
+        (write-setting 'cruise-enabled on)
+        (if (not on) (cruise-cancel))
+    }
+)
+
 (defun ctrl-power (on)
     (if on
         (if off {
@@ -813,7 +825,9 @@
         (str-from-n (send-state-whkm) "%.1f ")
         (str-from-n (send-state-range) "%.1f ")
         (str-from-n (send-state-amps) "%.1f ")
-        (str-from-n (send-state-maxkmh) "%.0f")
+        (str-from-n (send-state-maxkmh) "%.0f ")
+        (if cruising "true " "false ")
+        (if cruise-enabled "true" "false")
     ))
 )
 
@@ -864,6 +878,19 @@
             (str-from-n (read-setting 'model) "%d")
         ))
         (sleep 0.05)
+        ; misc goes early so the UI knows the km/h vs mph unit before it
+        ; renders the speed fields that follow
+        (send-data (str-merge
+            "misc "
+            (if (read-setting 'light-on-boot) "true " "false ")
+            (str-from-n (read-setting 'button-speed-kmh) "%.1f ")
+            (if (read-setting 'use-mph) "true " "false ")
+            (if (read-setting 'bms-soc-enable) "true " "false ")
+            (if (read-setting 'secret-exit-on-lock) "true " "false ")
+            (str-from-n (read-setting 'light-offset-thr) "%.2f ")
+            (str-from-n (read-setting 'light-offset-brk) "%.2f")
+        ))
+        (sleep 0.05)
         (send-data (str-merge
             "general "
             (if (read-setting 'software-adc) "true " "false ")
@@ -895,9 +922,9 @@
             (str-from-n (read-setting 'sport-watts) "%.0f ")
             (str-from-n (read-setting 'sport-fw) "%.1f ")
             (str-from-n (read-setting 'boot-mode) "%d ")
-            (str-from-n (read-setting 'eco-om) "%.2f ")
-            (str-from-n (read-setting 'drive-om) "%.2f ")
-            (str-from-n (read-setting 'sport-om) "%.2f")
+            (str-from-n (read-setting 'eco-om) "%.3f ")
+            (str-from-n (read-setting 'drive-om) "%.3f ")
+            (str-from-n (read-setting 'sport-om) "%.3f")
         ))
         (sleep 0.05)
         (send-data (str-merge
@@ -915,9 +942,9 @@
             (str-from-n (read-setting 'secret-sport-current) "%.2f ")
             (str-from-n (read-setting 'secret-sport-watts) "%.0f ")
             (str-from-n (read-setting 'secret-sport-fw) "%.1f ")
-            (str-from-n (read-setting 'secret-eco-om) "%.2f ")
-            (str-from-n (read-setting 'secret-drive-om) "%.2f ")
-            (str-from-n (read-setting 'secret-sport-om) "%.2f")
+            (str-from-n (read-setting 'secret-eco-om) "%.3f ")
+            (str-from-n (read-setting 'secret-drive-om) "%.3f ")
+            (str-from-n (read-setting 'secret-sport-om) "%.3f")
         ))
         (sleep 0.05)
         (send-data (str-merge
@@ -947,17 +974,6 @@
             (str-from-n (read-setting 'light-presses) "%d ")
             (str-from-n (read-setting 'light-combo) "%d ")
             (if (read-setting 'light-requires-lock) "true" "false")
-        ))
-        (sleep 0.05)
-        (send-data (str-merge
-            "misc "
-            (if (read-setting 'light-on-boot) "true " "false ")
-            (str-from-n (read-setting 'button-speed-kmh) "%.1f ")
-            (if (read-setting 'use-mph) "true " "false ")
-            (if (read-setting 'bms-soc-enable) "true " "false ")
-            (if (read-setting 'secret-exit-on-lock) "true " "false ")
-            (str-from-n (read-setting 'light-offset-thr) "%.2f ")
-            (str-from-n (read-setting 'light-offset-brk) "%.2f")
         ))
         (sleep 0.05)
         (send-data (str-merge
@@ -999,8 +1015,15 @@
     {
         (set 'last-rx (systime)) ; feed the dash link watchdog
 
-        (var throttle (+ (/ (bufget-u8 uart-buf thr-idx) 77.2) (if light light-offset-thr 0.0))) ; 255/3.3 = 77.2
+        (set 'dash-thr-raw (bufget-u8 uart-buf thr-idx)) ; raw physical throttle (before override)
+
+        (var throttle (+ (/ dash-thr-raw 77.2) (if light light-offset-thr 0.0))) ; 255/3.3 = 77.2
         (var brake (+ (/ (bufget-u8 uart-buf brk-idx) 77.2) (if light light-offset-brk 0.0)))
+
+        ; cruise capture-assist: hold the throttle signal at 0 from activation
+        ; until the lever is physically released, so the app captures the speed
+        ; we were actually riding instead of the lower post-release speed
+        (if (and cruising (not cruise-thr-released)) (setq throttle 0.0))
 
         (if (< throttle 0.0) (setq throttle 0.0))
         (if (> throttle 3.3) (setq throttle 3.3))
@@ -1056,10 +1079,15 @@
             (var brk (get-adc-decoded 1))
             (if cruising
                 {
-                    ; the throttle is still held at activation - only arm the
-                    ; throttle-cancel after it has been released once
-                    (if (<= thr min-adc-throttle) (set 'cruise-thr-released true))
-                    (if (or (and cruise-thr-released (> thr min-adc-throttle))
+                    ; Release is detected from the raw lever position relative to
+                    ; what was held at activation (calibration-free, works with the
+                    ; light offset). Safety timeout after 3 s so the throttle can
+                    ; never stay masked if release detection somehow misses.
+                    (var released (< dash-thr-raw (* cruise-thr-ref 0.4)))
+                    (if (or released (> (secs-since cruise-shown-time) 3))
+                        (set 'cruise-thr-released true)
+                    )
+                    (if (or (and cruise-thr-released (not released))
                             (> brk min-adc-brake)
                             (< speed-kmh 3))
                         (cruise-cancel)
@@ -1080,6 +1108,8 @@
                             (if (> (secs-since cruise-since) cruise-delay) {
                                 (set 'cruising true)
                                 (set 'cruise-thr-released false)
+                                (set 'cruise-thr-ref (if (> dash-thr-raw 1) dash-thr-raw 1)) ; held lever
+                                (set 'cruise-shown-time (systime))
                                 (app-adc-override 3 1) ; hold the cruise button
                                 (set 'feedback 2)
                                 (set 'cruise-since (systime))
@@ -1197,11 +1227,14 @@
         ; speed field
         (if lock
             (bufset-u8 tx-frame (+ tx-base 4) 0) ; lock display
-            (if (if unlock show-batt-idle-secret show-batt-in-idle)
-                (if (> current-speed 1)
+            (if (and cruising (< (secs-since cruise-shown-time) 3))
+                (bufset-u8 tx-frame (+ tx-base 4) 125) ; "C5" for 3s after cruise engages
+                (if (if unlock show-batt-idle-secret show-batt-in-idle)
+                    (if (> current-speed 1)
+                        (bufset-u8 tx-frame (+ tx-base 4) disp-speed)
+                        (bufset-u8 tx-frame (+ tx-base 4) battery))
                     (bufset-u8 tx-frame (+ tx-base 4) disp-speed)
-                    (bufset-u8 tx-frame (+ tx-base 4) battery))
-                (bufset-u8 tx-frame (+ tx-base 4) disp-speed)
+                )
             )
         )
 

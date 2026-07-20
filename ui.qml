@@ -54,6 +54,8 @@ Item {
     property real stRange: 0
     property real stAmps: 0
     property real stMax: 60
+    property bool stCruise: false
+    property bool stCruiseEn: false
 
     function applyStateLine(line) {
         var p = line.split(" ")
@@ -70,6 +72,8 @@ Item {
         stRange = Number.parseFloat(p[11]) || 0
         stAmps = Number.parseFloat(p[12]) || 0
         stMax = Number.parseFloat(p[13]) || 60
+        stCruise = parseBoolToken(p[14])
+        stCruiseEn = parseBoolToken(p[15])
     }
 
     function ctrlCode(str) {
@@ -162,6 +166,80 @@ Item {
         }
     }
 
+    // Current is shown as a percentage in the UI but stored/sent as a 0-1
+    // scale (VESC's l_current_max_scale). Convert at the UI boundary, and
+    // HARD-CAP at 100% - this is a multiplier of Motor Current Max, so a value
+    // above 100 would over-drive the motor. Never let the save path exceed 1.0.
+    function readPct(field) {
+        var n = Number.parseFloat(field.text.replace(",", "."))
+        if (!Number.isFinite(n)) n = 0
+        if (n < 0) n = 0
+        if (n > 100) n = 100
+        return (n / 100).toFixed(3)
+    }
+
+    function setPct(field, value) {
+        var n = Number(value) * 100
+        if (!Number.isFinite(n)) n = 0
+        if (n < 0) n = 0
+        if (n > 100) n = 100
+        field.text = (Math.abs(n - Math.round(n)) < 0.05) ? Math.round(n).toString() : n.toFixed(1)
+    }
+
+    // Clamp a current field to 0-100 as soon as the user leaves it (feedback)
+    function clampPct(field) {
+        setPct(field, readPct(field))
+    }
+
+    // Overmodulation: VESC's floor is 1.0 (no overmod). Never save below 1.0 -
+    // an empty field or a mistaken 0 would be an invalid/harmful factor.
+    function setOm(field, value) {
+        var n = Number(value)
+        if (Number.isFinite(n)) field.text = (n < 1.0 ? 1.0 : n).toFixed(3)
+    }
+
+    function readOm(field) {
+        var n = Number.parseFloat(field.text.replace(",", "."))
+        if (!Number.isFinite(n) || n < 1.0) n = 1.0
+        return n.toFixed(3)
+    }
+
+    function clampOm(field) {
+        setOm(field, readOm(field))
+    }
+
+    // Speed fields are stored/sent in km/h but shown in mph when "Use Miles" is
+    // on. Convert only at the UI boundary; km/h stays the internal unit.
+    readonly property real mphFactor: 0.621371
+
+    function readSpeed(field, decimals) {
+        var n = Number.parseFloat(field.text.replace(",", "."))
+        if (!Number.isFinite(n)) n = 0
+        if (useMph.checked) n = n / mphFactor // mph -> km/h
+        return n.toFixed(decimals)
+    }
+
+    function setSpeed(field, kmh, decimals) {
+        var n = Number(kmh)
+        if (!Number.isFinite(n)) return
+        if (useMph.checked) n = n * mphFactor // km/h -> mph
+        field.text = (Math.abs(n - Math.round(n)) < 0.05) ? Math.round(n).toString() : n.toFixed(decimals)
+    }
+
+    // Re-render all speed fields when the unit toggle flips (user action)
+    function convertSpeedFields(toMiles) {
+        var factor = toMiles ? mphFactor : (1 / mphFactor)
+        var fs = [ecoSpeed, driveSpeed, sportSpeed, secretEcoSpeed, secretDriveSpeed,
+            secretSportSpeed, minSpeed, buttonSpeed, cruiseDeviation, alarmSpeedThreshold]
+        for (var i = 0; i < fs.length; i++) {
+            var n = Number.parseFloat(fs[i].text.replace(",", "."))
+            if (Number.isFinite(n)) {
+                var v = n * factor
+                fs[i].text = (Math.abs(v - Math.round(v)) < 0.05) ? Math.round(v).toString() : v.toFixed(1)
+            }
+        }
+    }
+
     function saveAllSettings() {
         if (!settingsLoaded || saving)
             return
@@ -173,7 +251,7 @@ Item {
             + " " + readReal(minAdcBrake, 2)
             + " " + boolAtom(showBatteryInIdle)
             + " " + boolAtom(showBatterySecret)
-            + " " + readReal(minSpeed, 1)
+            + " " + readSpeed(minSpeed, 1)
             + ")")
 
         queueCode("(save-temp-settings "
@@ -182,41 +260,41 @@ Item {
             + ")")
 
         queueCode("(save-mode-settings "
-            + readReal(ecoSpeed, 1)
-            + " " + readReal(ecoCurrent, 2)
+            + readSpeed(ecoSpeed, 1)
+            + " " + readPct(ecoCurrent)
             + " " + readReal(ecoWatts, 0)
             + " " + readReal(ecoFw, 1)
-            + " " + readReal(driveSpeed, 1)
-            + " " + readReal(driveCurrent, 2)
+            + " " + readSpeed(driveSpeed, 1)
+            + " " + readPct(driveCurrent)
             + " " + readReal(driveWatts, 0)
             + " " + readReal(driveFw, 1)
-            + " " + readReal(sportSpeed, 1)
-            + " " + readReal(sportCurrent, 2)
+            + " " + readSpeed(sportSpeed, 1)
+            + " " + readPct(sportCurrent)
             + " " + readReal(sportWatts, 0)
             + " " + readReal(sportFw, 1)
             + " " + bootModeValue()
-            + " " + readReal(ecoOm, 2)
-            + " " + readReal(driveOm, 2)
-            + " " + readReal(sportOm, 2)
+            + " " + readOm(ecoOm)
+            + " " + readOm(driveOm)
+            + " " + readOm(sportOm)
             + ")")
 
         queueCode("(save-secret-settings "
             + boolAtom(secretEnabled)
-            + " " + readReal(secretEcoSpeed, 1)
-            + " " + readReal(secretEcoCurrent, 2)
+            + " " + readSpeed(secretEcoSpeed, 1)
+            + " " + readPct(secretEcoCurrent)
             + " " + readReal(secretEcoWatts, 0)
             + " " + readReal(secretEcoFw, 1)
-            + " " + readReal(secretDriveSpeed, 1)
-            + " " + readReal(secretDriveCurrent, 2)
+            + " " + readSpeed(secretDriveSpeed, 1)
+            + " " + readPct(secretDriveCurrent)
             + " " + readReal(secretDriveWatts, 0)
             + " " + readReal(secretDriveFw, 1)
-            + " " + readReal(secretSportSpeed, 1)
-            + " " + readReal(secretSportCurrent, 2)
+            + " " + readSpeed(secretSportSpeed, 1)
+            + " " + readPct(secretSportCurrent)
             + " " + readReal(secretSportWatts, 0)
             + " " + readReal(secretSportFw, 1)
-            + " " + readReal(secretEcoOm, 2)
-            + " " + readReal(secretDriveOm, 2)
-            + " " + readReal(secretSportOm, 2)
+            + " " + readOm(secretEcoOm)
+            + " " + readOm(secretDriveOm)
+            + " " + readOm(secretSportOm)
             + ")")
 
         queueCode("(save-apply-settings "
@@ -248,7 +326,7 @@ Item {
 
         queueCode("(save-misc-settings "
             + boolAtom(lightOnBoot)
-            + " " + readReal(buttonSpeed, 1)
+            + " " + readSpeed(buttonSpeed, 1)
             + " " + boolAtom(useMph)
             + " " + boolAtom(bmsSoc)
             + " " + boolAtom(secretExitOnLock)
@@ -266,14 +344,13 @@ Item {
             + ")")
 
         queueCode("(save-cruise-settings "
-            + boolAtom(cruiseEnabled)
-            + " " + readReal(cruiseDelay, 1)
-            + " " + readReal(cruiseDeviation, 1)
+            + readReal(cruiseDelay, 1)
+            + " " + readSpeed(cruiseDeviation, 1)
             + ")")
 
         queueCode("(save-alarm-settings "
             + boolAtom(alarmTone)
-            + " " + readReal(alarmSpeedThreshold, 1)
+            + " " + readSpeed(alarmSpeedThreshold, 1)
             + " " + readReal(alarmGyroThreshold, 1)
             + " " + readReal(alarmVoltage, 1)
             + ")")
@@ -303,44 +380,44 @@ Item {
             setReal(minAdcBrake, parts[3], 2)
             showBatteryInIdle.checked = parseBoolToken(parts[4])
             showBatterySecret.checked = parseBoolToken(parts[5])
-            setReal(minSpeed, parts[6], 1)
+            setSpeed(minSpeed, parts[6], 1)
         } else if (parts[0] === "temps") {
             setReal(tempWarningMotor, parts[1], 1)
             setReal(tempWarningFet, parts[2], 1)
         } else if (parts[0] === "modes") {
-            setReal(ecoSpeed, parts[1], 1)
-            setReal(ecoCurrent, parts[2], 2)
+            setSpeed(ecoSpeed, parts[1], 1)
+            setPct(ecoCurrent, parts[2])
             setReal(ecoWatts, parts[3], 0)
             setReal(ecoFw, parts[4], 1)
-            setReal(driveSpeed, parts[5], 1)
-            setReal(driveCurrent, parts[6], 2)
+            setSpeed(driveSpeed, parts[5], 1)
+            setPct(driveCurrent, parts[6])
             setReal(driveWatts, parts[7], 0)
             setReal(driveFw, parts[8], 1)
-            setReal(sportSpeed, parts[9], 1)
-            setReal(sportCurrent, parts[10], 2)
+            setSpeed(sportSpeed, parts[9], 1)
+            setPct(sportCurrent, parts[10])
             setReal(sportWatts, parts[11], 0)
             setReal(sportFw, parts[12], 1)
             setBootMode(Number.parseInt(parts[13]) || 4)
-            setReal(ecoOm, parts[14], 2)
-            setReal(driveOm, parts[15], 2)
-            setReal(sportOm, parts[16], 2)
+            setOm(ecoOm, parts[14])
+            setOm(driveOm, parts[15])
+            setOm(sportOm, parts[16])
         } else if (parts[0] === "secret") {
             secretEnabled.checked = parseBoolToken(parts[1])
-            setReal(secretEcoSpeed, parts[2], 1)
-            setReal(secretEcoCurrent, parts[3], 2)
+            setSpeed(secretEcoSpeed, parts[2], 1)
+            setPct(secretEcoCurrent, parts[3])
             setReal(secretEcoWatts, parts[4], 0)
             setReal(secretEcoFw, parts[5], 1)
-            setReal(secretDriveSpeed, parts[6], 1)
-            setReal(secretDriveCurrent, parts[7], 2)
+            setSpeed(secretDriveSpeed, parts[6], 1)
+            setPct(secretDriveCurrent, parts[7])
             setReal(secretDriveWatts, parts[8], 0)
             setReal(secretDriveFw, parts[9], 1)
-            setReal(secretSportSpeed, parts[10], 1)
-            setReal(secretSportCurrent, parts[11], 2)
+            setSpeed(secretSportSpeed, parts[10], 1)
+            setPct(secretSportCurrent, parts[11])
             setReal(secretSportWatts, parts[12], 0)
             setReal(secretSportFw, parts[13], 1)
-            setReal(secretEcoOm, parts[14], 2)
-            setReal(secretDriveOm, parts[15], 2)
-            setReal(secretSportOm, parts[16], 2)
+            setOm(secretEcoOm, parts[14])
+            setOm(secretDriveOm, parts[15])
+            setOm(secretSportOm, parts[16])
         } else if (parts[0] === "apply") {
             applySpeed.checked = parseBoolToken(parts[1])
             applyCurrent.checked = parseBoolToken(parts[2])
@@ -366,9 +443,9 @@ Item {
             setBoxesFromCombo(Number.parseInt(parts[10]) || 0, lightBrake, lightThrottle)
             lightLocked.checked = parseBoolToken(parts[11])
         } else if (parts[0] === "misc") {
+            useMph.checked = parseBoolToken(parts[3]) // set unit before any speed field
             lightOnBoot.checked = parseBoolToken(parts[1])
-            setReal(buttonSpeed, parts[2], 1)
-            useMph.checked = parseBoolToken(parts[3])
+            setSpeed(buttonSpeed, parts[2], 1)
             bmsSoc.checked = parseBoolToken(parts[4])
             secretExitOnLock.checked = parseBoolToken(parts[5])
             setReal(lightOffThr, parts[6], 2)
@@ -379,12 +456,11 @@ Item {
             var blm = Number.parseInt(parts[3])
             brakeLightMode.currentIndex = blm === 1 ? 0 : (blm === 2 ? 1 : 2)
         } else if (parts[0] === "cruise") {
-            cruiseEnabled.checked = parseBoolToken(parts[1])
             setReal(cruiseDelay, parts[2], 1)
-            setReal(cruiseDeviation, parts[3], 1)
+            setSpeed(cruiseDeviation, parts[3], 1)
         } else if (parts[0] === "alarm") {
             alarmTone.checked = parseBoolToken(parts[1])
-            setReal(alarmSpeedThreshold, parts[2], 1)
+            setSpeed(alarmSpeedThreshold, parts[2], 1)
             setReal(alarmGyroThreshold, parts[3], 1)
             setReal(alarmVoltage, parts[4], 1)
         }
@@ -523,11 +599,21 @@ Item {
                                 font.bold: true
                             }
                             Label {
+                                id: unitLabel
                                 anchors.left: speedNum.right
                                 anchors.leftMargin: 10
                                 anchors.baseline: speedNum.baseline
                                 text: useMph.checked ? "mph" : "km/h"
                                 opacity: 0.7
+                            }
+                            Label {
+                                anchors.left: unitLabel.left
+                                anchors.bottom: unitLabel.top
+                                anchors.bottomMargin: 4
+                                visible: root.stCruise
+                                text: "CC"
+                                font.bold: true
+                                color: "#43a047"
                             }
                         }
 
@@ -603,20 +689,18 @@ Item {
                             opacity: 0.85
                         }
 
-                        GridLayout {
+                        RowLayout {
                             Layout.fillWidth: true
                             Layout.topMargin: 18
-                            columns: 2
-                            rowSpacing: 12
-                            columnSpacing: 12
+                            spacing: 12
 
                             Button {
                                 Layout.fillWidth: true
+                                Layout.preferredWidth: 1
                                 Layout.preferredHeight: 84
-                                Layout.preferredWidth: 100
                                 font.pointSize: root.titleSize
                                 font.bold: true
-                                text: root.stOff ? "Turn ON" : "Turn OFF"
+                                text: "POWER"
                                 Material.background: root.stOff ? "#3d3d3d" : "#2e7d32"
                                 Material.foreground: "#ffffff"
                                 onClicked: ctrlCode("(ctrl-power " + (root.stOff ? "true" : "false") + ")")
@@ -624,8 +708,8 @@ Item {
 
                             Button {
                                 Layout.fillWidth: true
+                                Layout.preferredWidth: 1
                                 Layout.preferredHeight: 84
-                                Layout.preferredWidth: 100
                                 font.pointSize: root.titleSize
                                 font.bold: true
                                 text: root.stLock ? "Unlock" : "Lock"
@@ -633,11 +717,17 @@ Item {
                                 Material.foreground: "#ffffff"
                                 onClicked: ctrlCode("(ctrl-lock " + (root.stLock ? "false" : "true") + ")")
                             }
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Layout.topMargin: 12
+                            spacing: 12
 
                             Button {
                                 Layout.fillWidth: true
+                                Layout.preferredWidth: 1
                                 Layout.preferredHeight: 84
-                                Layout.preferredWidth: 100
                                 font.pointSize: root.titleSize
                                 font.bold: true
                                 text: "Light"
@@ -648,14 +738,27 @@ Item {
 
                             Button {
                                 Layout.fillWidth: true
+                                Layout.preferredWidth: 1
                                 Layout.preferredHeight: 84
-                                Layout.preferredWidth: 100
                                 font.pointSize: root.titleSize
                                 font.bold: true
                                 text: "Secret"
                                 Material.background: root.stSecret ? "#6a1b9a" : "#3d3d3d"
                                 Material.foreground: "#ffffff"
                                 onClicked: ctrlCode("(ctrl-secret " + (root.stSecret ? "false" : "true") + ")")
+                            }
+
+                            Button {
+                                Layout.fillWidth: true
+                                Layout.preferredWidth: 1
+                                Layout.preferredHeight: 84
+                                font.pointSize: root.titleSize
+                                font.bold: true
+                                // brighter cyan while actively holding, teal when just enabled
+                                text: "Cruise"
+                                Material.background: root.stCruise ? "#00bcd4" : (root.stCruiseEn ? "#00897b" : "#3d3d3d")
+                                Material.foreground: "#ffffff"
+                                onClicked: ctrlCode("(ctrl-cruise " + (root.stCruiseEn ? "false" : "true") + ")")
                             }
                         }
 
@@ -742,7 +845,7 @@ Item {
 
                         RowLayout {
                             Layout.fillWidth: true
-                            Label { text: "Start Speed (km/h)"; Layout.fillWidth: true }
+                            Label { text: "Start Speed (" + (useMph.checked ? "mph" : "km/h") + ")"; Layout.fillWidth: true }
                             TextField { id: minSpeed; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
                         }
 
@@ -775,12 +878,6 @@ Item {
                             Layout.fillWidth: true
                             Label { text: "Alarm"; Layout.fillWidth: true }
                             CheckBox { id: alarmTone; text: "Enabled"; spacing: 4 }
-                        }
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            Label { text: "Cruise Control (EXP)"; Layout.fillWidth: true }
-                            CheckBox { id: cruiseEnabled; text: "Enabled"; spacing: 4 }
                         }
 
                         Label { text: "Gestures"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 24 }
@@ -863,10 +960,10 @@ Item {
 
                         RowLayout {
                             Layout.fillWidth: true
-                            CheckBox { id: applyCurrent; text: "Current"; checked: true; Layout.preferredWidth: 110 }
-                            TextField { id: ecoCurrent; enabled: applyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
-                            TextField { id: driveCurrent; enabled: applyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
-                            TextField { id: sportCurrent; enabled: applyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                            CheckBox { id: applyCurrent; text: "Current %"; checked: true; Layout.preferredWidth: 110 }
+                            TextField { id: ecoCurrent; enabled: applyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampPct(ecoCurrent) }
+                            TextField { id: driveCurrent; enabled: applyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampPct(driveCurrent) }
+                            TextField { id: sportCurrent; enabled: applyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampPct(sportCurrent) }
                         }
 
                         RowLayout {
@@ -888,9 +985,9 @@ Item {
                         RowLayout {
                             Layout.fillWidth: true
                             CheckBox { id: applyOm; text: "Overmod."; Layout.preferredWidth: 110 }
-                            TextField { id: ecoOm; enabled: applyOm.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
-                            TextField { id: driveOm; enabled: applyOm.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
-                            TextField { id: sportOm; enabled: applyOm.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                            TextField { id: ecoOm; enabled: applyOm.checked; text: "1.000"; onEditingFinished: clampOm(ecoOm); Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                            TextField { id: driveOm; enabled: applyOm.checked; text: "1.000"; onEditingFinished: clampOm(driveOm); Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                            TextField { id: sportOm; enabled: applyOm.checked; text: "1.000"; onEditingFinished: clampOm(sportOm); Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
                         }
 
                         Label { text: "Secret"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 24 }
@@ -913,10 +1010,10 @@ Item {
 
                         RowLayout {
                             Layout.fillWidth: true
-                            CheckBox { id: secretApplyCurrent; text: "Current"; checked: true; Layout.preferredWidth: 110 }
-                            TextField { id: secretEcoCurrent; enabled: secretApplyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
-                            TextField { id: secretDriveCurrent; enabled: secretApplyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
-                            TextField { id: secretSportCurrent; enabled: secretApplyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                            CheckBox { id: secretApplyCurrent; text: "Current %"; checked: true; Layout.preferredWidth: 110 }
+                            TextField { id: secretEcoCurrent; enabled: secretApplyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampPct(secretEcoCurrent) }
+                            TextField { id: secretDriveCurrent; enabled: secretApplyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampPct(secretDriveCurrent) }
+                            TextField { id: secretSportCurrent; enabled: secretApplyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampPct(secretSportCurrent) }
                         }
 
                         RowLayout {
@@ -938,9 +1035,9 @@ Item {
                         RowLayout {
                             Layout.fillWidth: true
                             CheckBox { id: secretApplyOm; text: "Overmod."; Layout.preferredWidth: 110 }
-                            TextField { id: secretEcoOm; enabled: secretApplyOm.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
-                            TextField { id: secretDriveOm; enabled: secretApplyOm.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
-                            TextField { id: secretSportOm; enabled: secretApplyOm.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                            TextField { id: secretEcoOm; enabled: secretApplyOm.checked; text: "1.000"; onEditingFinished: clampOm(secretEcoOm); Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                            TextField { id: secretDriveOm; enabled: secretApplyOm.checked; text: "1.000"; onEditingFinished: clampOm(secretDriveOm); Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                            TextField { id: secretSportOm; enabled: secretApplyOm.checked; text: "1.000"; onEditingFinished: clampOm(secretSportOm); Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
                         }
                     }
                 }
@@ -1007,7 +1104,7 @@ Item {
 
                             RowLayout {
                                 Layout.fillWidth: true
-                                Label { text: "Disable button above (km/h)"; Layout.fillWidth: true }
+                                Label { text: "Disable button above (" + (useMph.checked ? "mph" : "km/h") + ")"; Layout.fillWidth: true }
                                 TextField { id: buttonSpeed; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
                             }
 
@@ -1029,8 +1126,14 @@ Item {
 
                             RowLayout {
                                 Layout.fillWidth: true
-                                Label { text: "Dash speed in Miles"; Layout.fillWidth: true }
-                                CheckBox { id: useMph; text: "Enabled"; spacing: 4 }
+                                Label { text: "Use Miles"; Layout.fillWidth: true }
+                                CheckBox {
+                                    id: useMph
+                                    text: "Enabled"
+                                    spacing: 4
+                                    // convert already-shown speed fields on user toggle only
+                                    onCheckedChanged: if (root.settingsLoaded) root.convertSpeedFields(checked)
+                                }
                             }
 
                             RowLayout {
@@ -1062,7 +1165,7 @@ Item {
 
                             RowLayout {
                                 Layout.fillWidth: true
-                                Label { text: "Speed deviation (km/h)"; Layout.fillWidth: true }
+                                Label { text: "Speed deviation (" + (useMph.checked ? "mph" : "km/h") + ")"; Layout.fillWidth: true }
                                 TextField { id: cruiseDeviation; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
                             }
 
@@ -1077,7 +1180,7 @@ Item {
 
                             RowLayout {
                                 Layout.fillWidth: true
-                                Label { text: "Speed Trigger (km/h)"; Layout.fillWidth: true }
+                                Label { text: "Speed Trigger (" + (useMph.checked ? "mph" : "km/h") + ")"; Layout.fillWidth: true }
                                 TextField { id: alarmSpeedThreshold; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
                             }
 
