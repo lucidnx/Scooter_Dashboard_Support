@@ -628,7 +628,8 @@ Item {
                                     Layout.preferredWidth: 10
                                     height: 10
                                     radius: 2
-                                    color: index < Math.min(24, Math.round(root.stSpeed / Math.max(1, root.stMax) * 24)) ? "#ff7a1a" : "#5a5a5a"
+                                    // use the rounded (displayed) speed so the bar fills to the shown number
+                                    color: index < Math.min(24, Math.round(Math.round(root.stSpeed) / Math.max(1, root.stMax) * 24)) ? "#ff7a1a" : "#5a5a5a"
                                 }
                             }
                         }
