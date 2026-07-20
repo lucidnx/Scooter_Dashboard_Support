@@ -158,7 +158,7 @@ Lock, mode switching, headlight and secret mode activation are all **fully remap
 <span style="color:rgb(97, 189, 109);">Green </span>to RX (Button) \
 1k Ohm Resistor from <span style="color:rgb(251, 160, 38);">3.3V</span> to <span style="color:rgb(97, 189, 109);">RX (Button)</span>
 
-![image](guide/imgs/23999.png)
+![image](screenshots/wiring.png)
 
 > **Check your 5V budget first.** The dashboard is powered from the VESC's 5V
 > output, and if you also add the rear/brake light (and/or a headlight) that all
@@ -180,7 +180,7 @@ Power the LED strip from a source that can supply it (see the 5V note above) - a
 higher-current light should run from a step-down module off the battery, not the
 VESC 5V:
 
-![taillight](guide/imgs/taillight.jpg)
+![taillight](screenshots/taillight.jpg)
 
 ## Tested Hardware
 
