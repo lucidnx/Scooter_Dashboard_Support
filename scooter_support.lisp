@@ -1,6 +1,9 @@
 (def software-adc true)
-(def min-adc-throttle 0.1)
-(def min-adc-brake 0.1)
+; Decoded lever position counted as a touch. get-adc-decoded is mapped by the
+; ADC app itself (Start/End voltage + hysteresis, after our light correction),
+; so >0 already means "past the configured start voltage" - this is just an
+; epsilon against float noise, not a user-facing deadband.
+(def adc-touch 0.02)
 (def temp-warning-motor 80) ; temperature warning for motor in degree celsius
 (def temp-warning-fet 80) ; temperature warning for fet in degree celsius
 (def show-batt-in-idle false) ; battery instead of speed at idle, normal modes
@@ -169,7 +172,8 @@
 (def cruise-ref 0.0)
 (def cruise-since (systime))
 (def cruise-shown-time (systime)) ; activation time - drives the 3s dash "C5"
-(def cruise-thr-ref 1) ; raw throttle byte held at activation (capture-assist)
+(def cruise-v1-start 0.3) ; ADC1 start voltage, read from the app config at activation
+(def thr-corr-v 0.0) ; corrected lever voltage before the capture-assist mask
 (def dash-thr-raw 0) ; raw dash throttle byte, tracked in adc-input
 (def dash-brk-raw 0) ; raw dash brake byte, tracked in adc-input
 
@@ -207,8 +211,8 @@
 (def eeprom-addrs '(
     (ver-code              . (0 i))
     (software-adc          . (1 b))
-    (min-adc-throttle      . (2 f))
-    (min-adc-brake         . (3 f))
+    (min-adc-throttle      . (2 f)) ; legacy, unused - kept so old migrations keep working
+    (min-adc-brake         . (3 f)) ; legacy, unused - the ADC app start voltages rule now
     (temp-warning-motor    . (4 f))
     (temp-warning-fet      . (5 f))
     (show-batt-in-idle     . (6 b))
@@ -533,8 +537,6 @@
         )
 
         (set 'software-adc (read-setting 'software-adc))
-        (set 'min-adc-throttle (read-setting 'min-adc-throttle))
-        (set 'min-adc-brake (read-setting 'min-adc-brake))
         (set 'temp-warning-motor (read-setting 'temp-warning-motor))
         (set 'temp-warning-fet (read-setting 'temp-warning-fet))
         (set 'show-batt-in-idle (read-setting 'show-batt-in-idle))
@@ -646,11 +648,9 @@
     }
 )
 
-(defun save-general-settings (adc throttle brake show-batt show-batt-secret min-speed-kmh)
+(defun save-general-settings (adc show-batt show-batt-secret min-speed-kmh)
     {
         (write-setting 'software-adc adc)
-        (write-setting 'min-adc-throttle throttle)
-        (write-setting 'min-adc-brake brake)
         (write-setting 'show-batt-in-idle show-batt)
         (write-setting 'show-batt-idle-secret show-batt-secret)
         (write-setting 'min-speed-kmh min-speed-kmh)
@@ -951,8 +951,6 @@
         (send-data (str-merge
             "general "
             (if (read-setting 'software-adc) "true " "false ")
-            (str-from-n (read-setting 'min-adc-throttle) "%.2f ")
-            (str-from-n (read-setting 'min-adc-brake) "%.2f ")
             (if (read-setting 'show-batt-in-idle) "true " "false ")
             (if (read-setting 'show-batt-idle-secret) "true " "false ")
             (str-from-n (read-setting 'min-speed-kmh) "%.1f")
@@ -1206,15 +1204,17 @@
         (var throttle (if light (/ (- thr-raw-v light-offset-thr) light-gain-thr) thr-raw-v))
         (var brake (if light (/ (- brk-raw-v light-offset-brk) light-gain-brk) brk-raw-v))
 
-        ; cruise capture-assist: hold the throttle signal at 0 from activation
-        ; until the lever is physically released, so the app captures the speed
-        ; we were actually riding instead of the lower post-release speed
-        (if (and cruising (not cruise-thr-released)) (setq throttle 0.0))
-
         (if (< throttle 0.0) (setq throttle 0.0))
         (if (> throttle 3.3) (setq throttle 3.3))
         (if (< brake 0.0) (setq brake 0.0))
         (if (> brake 3.3) (setq brake 3.3))
+
+        (set 'thr-corr-v throttle) ; pre-mask - cruise release detection needs it
+
+        ; cruise capture-assist: hold the throttle signal at 0 from activation
+        ; until the lever is physically released, so the app captures the speed
+        ; we were actually riding instead of the lower post-release speed
+        (if (and cruising (not cruise-thr-released)) (setq throttle 0.0))
 
         ; Pass through throttle and brake to VESC - except during calibration,
         ; where the real output stays disengaged so a full press samples the
@@ -1266,7 +1266,7 @@
 (defun handle-taillight()
     (if rear-light-enable {
         (var base (and (not off) (or light auto-taillight)))
-        (var braking (and (not off) (> (get-adc-decoded 1) min-adc-brake)))
+        (var braking (and (not off) (> (get-adc-decoded 1) adc-touch)))
         (pwm-set-duty
             (if braking
                 (cond
@@ -1306,21 +1306,23 @@
             (var brk (get-adc-decoded 1))
             (if cruising
                 {
-                    ; Release is detected from the raw lever position relative to
-                    ; what was held at activation (calibration-free, works with the
-                    ; light offset). Safety timeout after 3 s so the throttle can
-                    ; never stay masked if release detection somehow misses.
-                    (var released (< dash-thr-raw (* cruise-thr-ref 0.4)))
-                    (if (or released (> (secs-since cruise-shown-time) 3))
+                    ; Released = corrected lever voltage back under the ADC app's
+                    ; own start voltage, i.e. exactly what the firmware counts as
+                    ; "no throttle". Safety timeout after 3 s so the throttle can
+                    ; never stay masked if the lever simply isn't released.
+                    (if (or (< thr-corr-v cruise-v1-start) (> (secs-since cruise-shown-time) 3))
                         (set 'cruise-thr-released true)
                     )
-                    (if (or (and cruise-thr-released (not released))
-                            (> brk min-adc-brake)
-                            (< speed-kmh 3))
+                    ; After release, any lever touch past the ADC mapping start
+                    ; voltage cancels. The live lever is already flowing to the
+                    ; app, so throttle/brake take over the same instant the
+                    ; virtual cruise button is let go - no re-press needed.
+                    (if (or (and cruise-thr-released (> thr adc-touch))
+                            (> brk adc-touch))
                         (cruise-cancel)
                     )
                 }
-                (if (<= thr min-adc-throttle)
+                (if (<= thr adc-touch)
                     { ; throttle released - re-arm and hold the timer at now
                         (set 'cruise-blocked false)
                         (set 'cruise-ref speed-kmh)
@@ -1335,7 +1337,7 @@
                             (if (> (secs-since cruise-since) cruise-delay) {
                                 (set 'cruising true)
                                 (set 'cruise-thr-released false)
-                                (set 'cruise-thr-ref (if (> dash-thr-raw 1) dash-thr-raw 1)) ; held lever
+                                (set 'cruise-v1-start (conf-get 'adc-v1-start)) ; fresh from the app config
                                 (set 'cruise-shown-time (systime))
                                 (app-adc-override 3 1) ; hold the cruise button
                                 (set 'feedback 2)
@@ -1562,10 +1564,10 @@
 
 (defun combo-held(combo thr brk) ; exclusive lever matching
     (cond
-        ((= combo 0) (and (> brk min-adc-brake) (> thr min-adc-throttle)))
-        ((= combo 1) (and (> brk min-adc-brake) (<= thr min-adc-throttle)))
-        ((= combo 2) (and (> thr min-adc-throttle) (<= brk min-adc-brake)))
-        ((= combo 3) (and (<= brk min-adc-brake) (<= thr min-adc-throttle))) ; no levers
+        ((= combo 0) (and (> brk adc-touch) (> thr adc-touch)))
+        ((= combo 1) (and (> brk adc-touch) (<= thr adc-touch)))
+        ((= combo 2) (and (> thr adc-touch) (<= brk adc-touch)))
+        ((= combo 3) (and (<= brk adc-touch) (<= thr adc-touch))) ; no levers
     )
 )
 
@@ -1662,7 +1664,7 @@
     {
         (var thr (get-adc-decoded 0))
         (var brk (get-adc-decoded 1))
-        (var state (+ (if (> brk min-adc-brake) 1 0) (if (> thr min-adc-throttle) 2 0)))
+        (var state (+ (if (> brk adc-touch) 1 0) (if (> thr adc-touch) 2 0)))
 
         (if (!= state lever-state) {
             (set 'lever-state state)

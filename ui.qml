@@ -330,8 +330,6 @@ Item {
         saveTimeout.restart()
         queueCode("(save-general-settings "
             + boolAtom(softwareAdc)
-            + " " + readReal(minAdcThrottle, 2)
-            + " " + readReal(minAdcBrake, 2)
             + " " + boolAtom(showBatteryInIdle)
             + " " + boolAtom(showBatterySecret)
             + " " + readSpeed(minSpeed, 1)
@@ -461,11 +459,9 @@ Item {
             modelBox.currentIndex = loadedModel
         } else if (parts[0] === "general") {
             softwareAdc.checked = parseBoolToken(parts[1])
-            setReal(minAdcThrottle, parts[2], 2)
-            setReal(minAdcBrake, parts[3], 2)
-            showBatteryInIdle.checked = parseBoolToken(parts[4])
-            showBatterySecret.checked = parseBoolToken(parts[5])
-            setSpeed(minSpeed, parts[6], 1)
+            showBatteryInIdle.checked = parseBoolToken(parts[2])
+            showBatterySecret.checked = parseBoolToken(parts[3])
+            setSpeed(minSpeed, parts[4], 1)
         } else if (parts[0] === "temps") {
             setReal(tempWarningMotor, parts[1], 1)
             setReal(tempWarningFet, parts[2], 1)
@@ -1247,18 +1243,6 @@ Item {
                             }
 
                             Label { text: "Gestures"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 24 }
-
-                            RowLayout {
-                                Layout.fillWidth: true
-                                Label { text: "Min Throttle ADC"; Layout.fillWidth: true }
-                                TextField { id: minAdcThrottle; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
-                            }
-
-                            RowLayout {
-                                Layout.fillWidth: true
-                                Label { text: "Min Brake ADC"; Layout.fillWidth: true }
-                                TextField { id: minAdcBrake; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
-                            }
 
                             RowLayout {
                                 Layout.fillWidth: true
