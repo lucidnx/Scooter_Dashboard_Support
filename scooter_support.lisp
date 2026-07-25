@@ -167,9 +167,9 @@
 
 ; app protocol state - buffers are built in main, they must stay out of flash
 (def app-boot-time (systime))
-; frame tracing, set from the VESC Tool Lisp console:
-; 1 = control writes and errors only, 2 = every frame including reads
-(def app-debug 0)
+; (set 'app-debug true) in the VESC Tool Lisp console to trace control
+; writes and errors - reads are answered continuously and are not logged
+(def app-debug false)
 
 ; rear light state
 (def pwm-started false)
@@ -1611,15 +1611,6 @@
     })
 )
 
-; (set 'app-debug true) means the quiet level - full tracing needs an explicit 2
-(defun app-dbg (lvl)
-    (cond
-        ((eq app-debug nil) false)
-        ((eq app-debug t) (= lvl 1))
-        (t (>= app-debug lvl))
-    )
-)
-
 (defun app-log (len) ; src>dst cmd reg len first-payload-byte
     (print (str-merge "app "
         (str-from-n (bufget-u8 uart-buf 0) "%02x>")
@@ -1741,7 +1732,7 @@
 (defun nb-send (from dst cmd reg n bms) ; frame: 5A A5 len src dst cmd arg payload crc
     (let ((buf (array-create (+ n 9))) (crc 0))
         {
-            (if (or (app-dbg 2) (and (app-dbg 1) (= cmd 0x05)))
+            (if (and app-debug (= cmd 0x05)) ; only acknowledgements, reads are constant
                 (print (str-merge "tx r" (str-from-n reg "%02x n") (str-from-n n "%d")))
             )
             (bufset-u16 buf 0 0x5aa5)
@@ -1897,16 +1888,14 @@
                                                     ; reliable discriminator, not the source.
                                                     (if (or (= (bufget-u8 uart-buf 1) 0x20) (= (bufget-u8 uart-buf 1) 0x22))
                                                         {
-                                                            ; the dash floods 0x61 at us, so level 1 shows
-                                                            ; only control writes and level 2 shows all
-                                                            (if (and (!= code 0x64) (!= code 0x65)
-                                                                     (or (app-dbg 2)
-                                                                         (and (app-dbg 1) (or (= code 0x02) (= code 0x03)))))
+                                                            ; reads and the dash's own 0x61 chatter are
+                                                            ; constant and carry nothing worth seeing
+                                                            (if (and app-debug (or (= code 0x02) (= code 0x03)))
                                                                 (app-log len)
                                                             )
                                                             (if (or (= code 0x01) (= code 0x02) (= code 0x03))
                                                                 (let ((r (trap (nb-app-frame (bufget-u8 uart-buf 1) (bufget-u8 uart-buf 0) code (bufget-u8 uart-buf 3) len))))
-                                                                    (if (and (app-dbg 1) (eq (car r) 'exit-error)) (print r))
+                                                                    (if (and app-debug (eq (car r) 'exit-error)) (print r))
                                                                 )
                                                             )
                                                         }
@@ -1922,7 +1911,7 @@
                 }
             )
         ))
-        (if (app-dbg 1) (print e))
+        (if app-debug (print e))
         (sleep 0.1) ; only reached after an error
     })
 )
@@ -1952,7 +1941,7 @@
                                             (let ((cmd (bufget-u8 uart-buf 1)))
                                                 (if (or (= cmd 0x01) (= cmd 0x03))
                                                     (let ((r (trap (xm-app-frame (bufget-u8 uart-buf 0) cmd (bufget-u8 uart-buf 2)))))
-                                                        (if (and (app-dbg 1) (eq (car r) 'exit-error)) (print r))
+                                                        (if (and app-debug (eq (car r) 'exit-error)) (print r))
                                                     )
                                                     (update-dash uart-buf) ; dash expects a reply on every frame
                                                 )
@@ -1966,7 +1955,7 @@
                 }
             )
         ))
-        (if (app-dbg 1) (print e))
+        (if app-debug (print e))
         (sleep 0.1) ; only reached after an error
     })
 )
