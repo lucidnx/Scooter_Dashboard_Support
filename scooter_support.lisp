@@ -1727,6 +1727,7 @@
 (defun nb-send (dst cmd reg n) ; frame: 5A A5 len src dst cmd arg payload crc
     (let ((buf (array-create (+ n 9))) (crc 0))
         {
+            (if app-debug (print (str-merge "tx r" (str-from-n reg "%02x n") (str-from-n n "%d"))))
             (bufset-u16 buf 0 0x5aa5)
             (bufset-u8 buf 2 n)
             (bufset-u8 buf 3 0x20)
@@ -1745,8 +1746,6 @@
             (setq crc (bitwise-xor crc 0xFFFF))
             (bufset-u8 buf (+ n 7) (bitwise-and crc 0xFF))
             (bufset-u8 buf (+ n 8) (bitwise-and (shr crc 8) 0xFF))
-            (if app-debug (print (str-merge "app tx r"
-                (str-from-n reg "%02x n") (str-from-n n "%d"))))
             (uart-write buf)
             (free buf)
         }
@@ -1852,7 +1851,7 @@
 
 (defun read-frames-g30()
     (loopwhile t {
-        (trap ; a parse error must not kill the reader thread
+        (var e (trap ; a parse error must not kill the reader thread
             (loopwhile t
                 {
                     (uart-read-bytes uart-buf 3 0)
@@ -1888,9 +1887,7 @@
                                                             )
                                                             (if (or (= code 0x01) (= code 0x02) (= code 0x03))
                                                                 (let ((r (trap (nb-app-frame (bufget-u8 uart-buf 0) code (bufget-u8 uart-buf 3) len))))
-                                                                    (if (and app-debug (not (eq (car r) 'exit-ok)))
-                                                                        (print "app err" r)
-                                                                    )
+                                                                    (if app-debug (print r))
                                                                 )
                                                             )
                                                         }
@@ -1905,14 +1902,15 @@
                     )
                 }
             )
-        )
+        ))
+        (if app-debug (print e))
         (sleep 0.1) ; only reached after an error
     })
 )
 
 (defun read-frames-m365()
     (loopwhile t {
-        (trap ; a parse error must not kill the reader thread
+        (var e (trap ; a parse error must not kill the reader thread
             (loopwhile t
                 {
                     (uart-read-bytes uart-buf 3 0)
@@ -1935,9 +1933,7 @@
                                             (let ((cmd (bufget-u8 uart-buf 1)))
                                                 (if (or (= cmd 0x01) (= cmd 0x03))
                                                     (let ((r (trap (xm-app-frame (bufget-u8 uart-buf 0) cmd (bufget-u8 uart-buf 2)))))
-                                                        (if (and app-debug (not (eq (car r) 'exit-ok)))
-                                                            (print "app err" r)
-                                                        )
+                                                        (if app-debug (print r))
                                                     )
                                                     (update-dash uart-buf) ; dash expects a reply on every frame
                                                 )
@@ -1950,7 +1946,8 @@
                     )
                 }
             )
-        )
+        ))
+        (if app-debug (print e))
         (sleep 0.1) ; only reached after an error
     })
 )
