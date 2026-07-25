@@ -1769,7 +1769,10 @@
         }))
         ((or (= cmd 0x02) (= cmd 0x03)) {
             (if (and (> len 0) (!= dev 0x22))
-                (app-write reg (+ (bufget-u8 uart-buf 4) (shl (bufget-u8 uart-buf 5) 8)))
+                (app-write reg (if (> len 1) ; controls send one byte, the checksum follows it
+                    (+ (bufget-u8 uart-buf 4) (shl (bufget-u8 uart-buf 5) 8))
+                    (bufget-u8 uart-buf 4)
+                ))
             )
             (nb-send dev src 0x05 reg 1 false)
         })
@@ -1843,7 +1846,7 @@
     )
 )
 
-(defun xm-app-frame (dev cmd reg)
+(defun xm-app-frame (dev cmd reg len)
     (cond
         ((= cmd 0x01) (let ((n (bufget-u8 uart-buf 3)))
             (if (and (> n 1) (<= n 32))
@@ -1851,7 +1854,10 @@
             )
         ))
         ((= cmd 0x03) (if (!= dev 0x22)
-            (app-write reg (+ (bufget-u8 uart-buf 3) (shl (bufget-u8 uart-buf 4) 8)))
+            (app-write reg (if (> len 3)
+                (+ (bufget-u8 uart-buf 3) (shl (bufget-u8 uart-buf 4) 8))
+                (bufget-u8 uart-buf 3)
+            ))
         ))
     )
 )
@@ -1940,7 +1946,7 @@
                                             ; separates its frames from app register access
                                             (let ((cmd (bufget-u8 uart-buf 1)))
                                                 (if (or (= cmd 0x01) (= cmd 0x03))
-                                                    (let ((r (trap (xm-app-frame (bufget-u8 uart-buf 0) cmd (bufget-u8 uart-buf 2)))))
+                                                    (let ((r (trap (xm-app-frame (bufget-u8 uart-buf 0) cmd (bufget-u8 uart-buf 2) len))))
                                                         (if (and app-debug (eq (car r) 'exit-error)) (print r))
                                                     )
                                                     (update-dash uart-buf) ; dash expects a reply on every frame
