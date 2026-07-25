@@ -159,6 +159,17 @@
 ; per-frame dash reply doesn't run CAN queries and allocations itself
 (def cur-speed-kmh 0.0)
 (def cur-batt 0.0)
+(def cur-vin 0.0)
+(def cur-amps 0.0)
+(def cur-range 0.0)
+(def cur-trip 0)
+(def cur-odo 0)
+(def cur-runtime 0)
+(def cur-fet 0.0)
+(def cur-mot 0.0)
+(def cur-maxkmh 0.0)
+(def cur-cells 10)
+(def cur-cap 0)
 
 
 ; BMS state
@@ -1488,6 +1499,7 @@
             )
         )
 
+        (trap (app-cache-update))
         (trap (handle-taillight))
         (handle-lock (abs current-speed))
     }
@@ -1632,16 +1644,32 @@
 
 (defun app-sysinfo (key) (let ((v 0)) { (trap (setq v (sysinfo key))) (to-i v) }))
 
+; One bulk read asks for 26 registers at once, so nothing below may query CAN
+; or read the config - the reply path has to stay cheap, same as the dash
+; frame. Everything expensive is sampled once per cycle in app-cache-update.
+(defun app-cache-update ()
+    {
+        (set 'cur-vin (get-vin))
+        (set 'cur-amps (setup-current-in))
+        (set 'cur-range (send-state-range))
+        (set 'cur-trip (to-i (get-dist-abs)))
+        (set 'cur-odo (app-sysinfo 'odometer))
+        (set 'cur-runtime (app-sysinfo 'runtime))
+        (set 'cur-fet (get-temp-fet))
+        (set 'cur-mot (get-temp-mot))
+        (set 'cur-maxkmh (send-state-maxkmh))
+    }
+)
+
 (defun app-speed-01 () (app-clamp16 (* (abs cur-speed-kmh) 10))) ; 0.1 km/h
-(defun app-trip-m () (to-i (get-dist-abs)))
-(defun app-volt-cv () (app-clamp16 (* (get-vin) 100))) ; 0.01 V
-(defun app-amp-ca () (app-clamp16 (* (setup-current-in) 100))) ; 0.01 A, negative = charging
-(defun app-watts () (app-clamp16 (* (get-vin) (setup-current-in))))
-(defun app-range-10m () (app-clamp16 (* (send-state-range) 100)))
-(defun app-fet-01 () (app-clamp16 (* (get-temp-fet) 10)))
-(defun app-cells () (let ((n (conf-get 'si-battery-cells))) (if (> n 0) n 10)))
-(defun app-cell-mv () (app-clamp16 (/ (* (get-vin) 1000) (app-cells))))
-(defun app-cap-mah () (app-clamp16 (* (conf-get 'si-battery-ah) 1000)))
+(defun app-trip-m () cur-trip)
+(defun app-volt-cv () (app-clamp16 (* cur-vin 100))) ; 0.01 V
+(defun app-amp-ca () (app-clamp16 (* cur-amps 100))) ; 0.01 A, negative = charging
+(defun app-watts () (app-clamp16 (* cur-vin cur-amps)))
+(defun app-range-10m () (app-clamp16 (* cur-range 100)))
+(defun app-fet-01 () (app-clamp16 (* cur-fet 10)))
+(defun app-cell-mv () (app-clamp16 (/ (* cur-vin 1000) cur-cells)))
+(defun app-cap-mah () cur-cap)
 
 ; NB_INF_BOOL: bit0 speed limited, bit1 locked, bit2 buzzer, bit11 activated
 (defun app-bool-word ()
@@ -1649,7 +1677,6 @@
 )
 
 (defun app-workmode () (cond ((= speedmode 2) 1) ((= speedmode 4) 2) (t 0)))
-(defun app-maxspeed-01 () (app-clamp16 (* (send-state-maxkmh) 10)))
 
 ; Writes shared by both protocols. Speed limits are acknowledged but never
 ; applied - the app must not silently overwrite the configured profiles.
@@ -1697,19 +1724,19 @@
         ((= reg 0x22) (to-i cur-batt))
         ((or (= reg 0x24) (= reg 0x25)) (app-range-10m))
         ((= reg 0x26) (app-speed-01))
-        ((= reg 0x29) (bitwise-and (app-sysinfo 'odometer) 0xFFFF))
-        ((= reg 0x2a) (shr (app-sysinfo 'odometer) 16))
+        ((= reg 0x29) (bitwise-and cur-odo 0xFFFF))
+        ((= reg 0x2a) (shr cur-odo 16))
         ((= reg 0x2f) (app-clamp16 (/ (app-trip-m) 10)))
-        ((= reg 0x32) (bitwise-and (app-sysinfo 'runtime) 0xFFFF))
-        ((= reg 0x33) (shr (app-sysinfo 'runtime) 16))
+        ((= reg 0x32) (bitwise-and cur-runtime 0xFFFF))
+        ((= reg 0x33) (shr cur-runtime 16))
         ((= reg 0x3a) (to-i (secs-since app-boot-time)))
         ((= reg 0x3b) (to-i (secs-since app-boot-time)))
         ((= reg 0x3e) (app-fet-01))
-        ((= reg 0x41) (app-clamp16 (* (get-temp-mot) 10)))
+        ((= reg 0x41) (app-clamp16 (* cur-mot 10)))
         ((= reg 0x47) (app-volt-cv))
         ((= reg 0x65) (app-speed-01))
         ((or (= reg 0x66) (= reg 0x67) (= reg 0x68)) app-ver)
-        ((or (= reg 0x72) (= reg 0x73) (= reg 0x74)) (app-maxspeed-01))
+        ((or (= reg 0x72) (= reg 0x73) (= reg 0x74)) (app-clamp16 (* cur-maxkmh 10)))
         ((= reg 0x75) (app-workmode))
         ((= reg 0x7a) (if unlock 1 0))
         ((= reg 0x7b) 0) ; KERS - VESC does not use Xiaomi-style regen levels
@@ -1722,13 +1749,13 @@
         ((= reg 0xb2) (app-bool-word))
         ((= reg 0xb4) (to-i cur-batt))
         ((or (= reg 0xb5) (= reg 0xb6)) (app-speed-01))
-        ((= reg 0xb7) (bitwise-and (app-sysinfo 'odometer) 0xFFFF))
-        ((= reg 0xb8) (shr (app-sysinfo 'odometer) 16))
+        ((= reg 0xb7) (bitwise-and cur-odo 0xFFFF))
+        ((= reg 0xb8) (shr cur-odo 16))
         ((= reg 0xb9) (app-clamp16 (/ (app-trip-m) 10)))
         ((= reg 0xba) (to-i (secs-since app-boot-time)))
         ((= reg 0xbb) (app-fet-01))
-        ((= reg 0xbc) (+ (bitwise-and (to-i (send-state-maxkmh)) 0xFF) ; low: current limit, high: full speed
-                         (shl (bitwise-and (to-i (send-state-maxkmh)) 0xFF) 8)))
+        ((= reg 0xbc) (+ (bitwise-and (to-i cur-maxkmh) 0xFF) ; low: current limit, high: full speed
+                         (shl (bitwise-and (to-i cur-maxkmh) 0xFF) 8)))
         ((= reg 0xb3) (+ (bitwise-and (to-i cur-batt) 0xFF) (shl (bitwise-and (to-i cur-batt) 0xFF) 8)))
         (t 0)
     )
@@ -1737,6 +1764,7 @@
 (defun nb-send (from dst cmd reg n bms) ; frame: 5A A5 len src dst cmd arg payload crc
     (let ((buf (array-create (+ n 9))) (crc 0))
         {
+            (trap {
             (if (and app-debug (= cmd 0x05)) ; only acknowledgements, reads are constant
                 (print (str-merge "tx r" (str-from-n reg "%02x n") (str-from-n n "%d")))
             )
@@ -1759,6 +1787,7 @@
             (bufset-u8 buf (+ n 7) (bitwise-and crc 0xFF))
             (bufset-u8 buf (+ n 8) (bitwise-and (shr crc 8) 0xFF))
             (uart-write buf)
+            })
             (free buf)
         }
     )
@@ -1803,8 +1832,8 @@
         ((= reg 0xb0) (get-fault))
         ((= reg 0xb4) (to-i cur-batt))
         ((or (= reg 0xb5) (= reg 0xb6)) (app-clamp16 (* (abs cur-speed-kmh) 1000)))
-        ((= reg 0xb7) (bitwise-and (app-sysinfo 'odometer) 0xFFFF))
-        ((= reg 0xb8) (shr (app-sysinfo 'odometer) 16))
+        ((= reg 0xb7) (bitwise-and cur-odo 0xFFFF))
+        ((= reg 0xb8) (shr cur-odo 16))
         ((= reg 0xb9) (app-clamp16 (/ (app-trip-m) 10)))
         ((= reg 0xbb) (app-fet-01))
         (t 0)
@@ -1817,12 +1846,12 @@
         ((= reg 0x17) app-ver)
         ((= reg 0x18) (app-cap-mah))
         ((= reg 0x20) 0x3021) ; 7 bit year from 2000, 4 bit month, 5 bit day
-        ((= reg 0x31) (app-clamp16 (* (get-batt) (app-cap-mah))))
+        ((= reg 0x31) (app-clamp16 (/ (* cur-batt cur-cap) 100)))
         ((= reg 0x32) (to-i cur-batt))
         ((= reg 0x33) (app-amp-ca))
         ((= reg 0x34) (app-volt-cv))
-        ((= reg 0x35) (+ (bitwise-and (+ (to-i (get-temp-fet)) 20) 0xFF) ; both temps +20
-                         (shl (bitwise-and (+ (to-i (get-temp-mot)) 20) 0xFF) 8)))
+        ((= reg 0x35) (+ (bitwise-and (+ (to-i cur-fet) 20) 0xFF) ; both temps +20
+                         (shl (bitwise-and (+ (to-i cur-mot) 20) 0xFF) 8)))
         ((= reg 0x3b) 100) ; health
         ((and (>= reg 0x40) (< reg 0x4a)) (app-cell-mv))
         (t 0)
@@ -1832,6 +1861,7 @@
 (defun xm-send (dev reg n bms) ; frame: 55 AA len addr cmd arg payload crc
     (let ((buf (array-create (+ n 8))) (crc 0))
         {
+            (trap {
             (bufset-u16 buf 0 0x55aa)
             (bufset-u8 buf 2 (+ n 2))
             (bufset-u8 buf 3 dev)
@@ -1847,6 +1877,7 @@
             (bufset-u8 buf (+ n 6) (bitwise-and crc 0xFF))
             (bufset-u8 buf (+ n 7) (bitwise-and (shr crc 8) 0xFF))
             (uart-write buf)
+            })
             (free buf)
         }
     )
@@ -2429,6 +2460,8 @@
             ; app protocol identity - mutable, so it is built here and not in flash
             (def app-serial (array-create 14))
             (def app-pin-buf (array-create 6))
+            (set 'cur-cells (let ((n (conf-get 'si-battery-cells))) (if (> n 0) n 10)))
+            (set 'cur-cap (app-clamp16 (* (conf-get 'si-battery-ah) 1000)))
             (app-build-serial)
             (app-build-pin)
             (set 'app-boot-time (systime))
