@@ -178,6 +178,7 @@
 
 ; app protocol state - buffers are built in main, they must stay out of flash
 (def app-boot-time (systime))
+(def app-cache-time (systime))
 
 ; rear light state
 (def pwm-started false)
@@ -1630,7 +1631,8 @@
 ; or read the config - the reply path has to stay cheap, same as the dash
 ; frame. Everything expensive is sampled once per cycle in app-cache-update.
 (defun app-cache-update ()
-    {
+    (if (> (secs-since app-cache-time) 0.2) {
+        (set 'app-cache-time (systime))
         (set 'cur-vin (get-vin))
         (set 'cur-amps (setup-current-in))
         (set 'cur-range (send-state-range))
@@ -1640,7 +1642,7 @@
         (set 'cur-fet (get-temp-fet))
         (set 'cur-mot (get-temp-mot))
         (set 'cur-maxkmh (send-state-maxkmh))
-    }
+    })
 )
 
 (defun app-speed-01 () (app-clamp16 (* (abs cur-speed-kmh) 10))) ; 0.1 km/h
@@ -1693,42 +1695,16 @@
     )
 )
 
-; 0xb0~0xbd mirrors the commonly polled values so the app gets them in one read
-(defun nb-word (reg)
+; 0xb0~0xbd mirrors the commonly polled values so the app can fetch them in a
+; single read, and it does - one bulk read asks for 26 registers at once. That
+; block is split out and tested first, so a bulk read does not walk the whole
+; table 26 times over.
+(defun nb-quick (reg)
     (cond
-        ((and (>= reg 0x10) (< reg 0x17)) (app-word app-serial (- reg 0x10)))
-        ((and (>= reg 0x17) (< reg 0x1a)) (app-word app-pin-buf (- reg 0x17)))
-        ((= reg 0x1a) app-ver)
-        ((= reg 0x1b) (get-fault))
-        ((= reg 0x1c) (if (> alarm 0) 9 0)) ; ALARM_CODE_LOCKED
-        ((= reg 0x1d) (app-bool-word))
-        ((= reg 0x1f) (app-workmode))
-        ((= reg 0x22) (to-i cur-batt))
-        ((or (= reg 0x24) (= reg 0x25)) (app-range-10m))
-        ((= reg 0x26) (app-speed-01))
-        ((= reg 0x29) (bitwise-and cur-odo 0xFFFF))
-        ((= reg 0x2a) (shr cur-odo 16))
-        ((= reg 0x2f) (app-clamp16 (/ (app-trip-m) 10)))
-        ((= reg 0x32) (bitwise-and cur-runtime 0xFFFF))
-        ((= reg 0x33) (shr cur-runtime 16))
-        ((= reg 0x3a) (to-i (secs-since app-boot-time)))
-        ((= reg 0x3b) (to-i (secs-since app-boot-time)))
-        ((= reg 0x3e) (app-fet-01))
-        ((= reg 0x41) (app-clamp16 (* cur-mot 10)))
-        ((= reg 0x47) (app-volt-cv))
-        ((= reg 0x65) (app-speed-01))
-        ((or (= reg 0x66) (= reg 0x67) (= reg 0x68)) app-ver)
-        ((or (= reg 0x72) (= reg 0x73) (= reg 0x74)) (app-clamp16 (* cur-maxkmh 10)))
-        ((= reg 0x75) (app-workmode))
-        ((= reg 0x7a) (if unlock 1 0))
-        ((= reg 0x7b) 0) ; KERS - VESC does not use Xiaomi-style regen levels
-        ((= reg 0x7c) (if cruise-enabled 1 0))
-        ((= reg 0x7d) (if auto-taillight 2 0)) ; the app writes 2 for on
-        ((= reg 0x90) (if light 1 0))
-        ((or (= reg 0x91) (= reg 0x92)) (if alarm-tone 1 0))
         ((= reg 0xb0) (get-fault))
         ((= reg 0xb1) (if (> alarm 0) 9 0))
         ((= reg 0xb2) (app-bool-word))
+        ((= reg 0xb3) (+ (bitwise-and (to-i cur-batt) 0xFF) (shl (bitwise-and (to-i cur-batt) 0xFF) 8)))
         ((= reg 0xb4) (to-i cur-batt))
         ((or (= reg 0xb5) (= reg 0xb6)) (app-speed-01))
         ((= reg 0xb7) (bitwise-and cur-odo 0xFFFF))
@@ -1738,8 +1714,47 @@
         ((= reg 0xbb) (app-fet-01))
         ((= reg 0xbc) (+ (bitwise-and (to-i cur-maxkmh) 0xFF) ; low: current limit, high: full speed
                          (shl (bitwise-and (to-i cur-maxkmh) 0xFF) 8)))
-        ((= reg 0xb3) (+ (bitwise-and (to-i cur-batt) 0xFF) (shl (bitwise-and (to-i cur-batt) 0xFF) 8)))
         (t 0)
+    )
+)
+
+; ordered by how often the app asks, the interpreter walks this top to bottom
+(defun nb-word (reg)
+    (if (>= reg 0xb0)
+        (nb-quick reg)
+        (cond
+            ((= reg 0x1a) app-ver)
+            ((= reg 0x75) (app-workmode))
+            ((= reg 0x7b) 0) ; KERS - VESC does not use Xiaomi-style regen levels
+            ((= reg 0x7c) (if cruise-enabled 1 0))
+            ((= reg 0x7d) (if auto-taillight 2 0)) ; the app writes 2 for on
+            ((or (= reg 0x24) (= reg 0x25)) (app-range-10m))
+            ((= reg 0x3a) (to-i (secs-since app-boot-time)))
+            ((= reg 0x3b) (to-i (secs-since app-boot-time)))
+            ((and (>= reg 0x10) (< reg 0x17)) (app-word app-serial (- reg 0x10)))
+            ((and (>= reg 0x17) (< reg 0x1a)) (app-word app-pin-buf (- reg 0x17)))
+            ((= reg 0x1b) (get-fault))
+            ((= reg 0x1c) (if (> alarm 0) 9 0)) ; ALARM_CODE_LOCKED
+            ((= reg 0x1d) (app-bool-word))
+            ((= reg 0x1f) (app-workmode))
+            ((= reg 0x22) (to-i cur-batt))
+            ((= reg 0x26) (app-speed-01))
+            ((= reg 0x29) (bitwise-and cur-odo 0xFFFF))
+            ((= reg 0x2a) (shr cur-odo 16))
+            ((= reg 0x2f) (app-clamp16 (/ (app-trip-m) 10)))
+            ((= reg 0x32) (bitwise-and cur-runtime 0xFFFF))
+            ((= reg 0x33) (shr cur-runtime 16))
+            ((= reg 0x3e) (app-fet-01))
+            ((= reg 0x41) (app-clamp16 (* cur-mot 10)))
+            ((= reg 0x47) (app-volt-cv))
+            ((= reg 0x65) (app-speed-01))
+            ((or (= reg 0x66) (= reg 0x67) (= reg 0x68)) app-ver)
+            ((or (= reg 0x72) (= reg 0x73) (= reg 0x74)) (app-clamp16 (* cur-maxkmh 10)))
+            ((= reg 0x7a) (if unlock 1 0))
+            ((= reg 0x90) (if light 1 0))
+            ((or (= reg 0x91) (= reg 0x92)) (if alarm-tone 1 0))
+            (t 0)
+        )
     )
 )
 
