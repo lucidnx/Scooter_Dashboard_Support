@@ -1611,11 +1611,11 @@
     })
 )
 
-; a plain (set 'app-debug true) still works and means "trace everything"
+; (set 'app-debug true) means the quiet level - full tracing needs an explicit 2
 (defun app-dbg (lvl)
     (cond
         ((eq app-debug nil) false)
-        ((eq app-debug t) true)
+        ((eq app-debug t) (= lvl 1))
         (t (>= app-debug lvl))
     )
 )
