@@ -1734,7 +1734,7 @@
             (bufset-u8 buf 4 dst)
             (bufset-u8 buf 5 cmd)
             (bufset-u8 buf 6 reg)
-            (if (= cmd 0x05)
+            (if (= cmd 0x05) ; a read answers with 0x04, a write acks with 0x05
                 (bufset-u8 buf 7 1) ; write ack payload
                 (looprange i 0 (/ n 2) {
                     (var w (nb-word (+ reg i)))
@@ -1758,7 +1758,7 @@
         ; requests omit it entirely, in which case one register is meant
         ((= cmd 0x01) (let ((n (if (> len 0) (bufget-u8 uart-buf 4) 2))) {
             (if (or (< n 2) (> n 32)) (setq n 2))
-            (nb-send src 0x01 reg (bitwise-and n 0xFE))
+            (nb-send src 0x04 reg (bitwise-and n 0xFE))
         }))
         ((or (= cmd 0x02) (= cmd 0x03)) {
             (if (> len 0)
