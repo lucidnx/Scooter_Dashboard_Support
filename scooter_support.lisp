@@ -1745,10 +1745,10 @@
             (setq crc (bitwise-xor crc 0xFFFF))
             (bufset-u8 buf (+ n 7) (bitwise-and crc 0xFF))
             (bufset-u8 buf (+ n 8) (bitwise-and (shr crc 8) 0xFF))
-            (uart-write buf)
-            (free buf)
             (if app-debug (print (str-merge "app tx r"
                 (str-from-n reg "%02x n") (str-from-n n "%d"))))
+            (uart-write buf)
+            (free buf)
         }
     )
 )
@@ -1887,7 +1887,11 @@
                                                                 (app-log len)
                                                             )
                                                             (if (or (= code 0x01) (= code 0x02) (= code 0x03))
-                                                                (nb-app-frame (bufget-u8 uart-buf 0) code (bufget-u8 uart-buf 3) len)
+                                                                (let ((r (trap (nb-app-frame (bufget-u8 uart-buf 0) code (bufget-u8 uart-buf 3) len))))
+                                                                    (if (and app-debug (not (eq (car r) 'exit-ok)))
+                                                                        (print "app err" r)
+                                                                    )
+                                                                )
                                                             )
                                                         }
                                                     )
@@ -1930,7 +1934,11 @@
                                             ; separates its frames from app register access
                                             (let ((cmd (bufget-u8 uart-buf 1)))
                                                 (if (or (= cmd 0x01) (= cmd 0x03))
-                                                    (xm-app-frame (bufget-u8 uart-buf 0) cmd (bufget-u8 uart-buf 2))
+                                                    (let ((r (trap (xm-app-frame (bufget-u8 uart-buf 0) cmd (bufget-u8 uart-buf 2)))))
+                                                        (if (and app-debug (not (eq (car r) 'exit-ok)))
+                                                            (print "app err" r)
+                                                        )
+                                                    )
                                                     (update-dash uart-buf) ; dash expects a reply on every frame
                                                 )
                                             )
@@ -2433,9 +2441,9 @@
             (apply-mode)
 
             ; Spawn UART reading frames thread
-            (if (= model 1) ; 200 words: the unlock display branch + trap wrapper need headroom
-                (spawn 200 read-frames-m365)
-                (spawn 200 read-frames-g30)
+            (if (= model 1) ; 500 words: app register replies allocate and nest deeper
+                (spawn 500 read-frames-m365)
+                (spawn 500 read-frames-g30)
             )
             (button-logic) ; Start button logic in main thread - this will block the main thread
         })
