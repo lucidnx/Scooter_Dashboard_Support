@@ -1611,6 +1611,15 @@
     })
 )
 
+; a plain (set 'app-debug true) still works and means "trace everything"
+(defun app-dbg (lvl)
+    (cond
+        ((eq app-debug nil) false)
+        ((eq app-debug t) true)
+        (t (>= app-debug lvl))
+    )
+)
+
 (defun app-log (len) ; src>dst cmd reg len first-payload-byte
     (print (str-merge "app "
         (str-from-n (bufget-u8 uart-buf 0) "%02x>")
@@ -1732,7 +1741,7 @@
 (defun nb-send (from dst cmd reg n bms) ; frame: 5A A5 len src dst cmd arg payload crc
     (let ((buf (array-create (+ n 9))) (crc 0))
         {
-            (if (or (>= app-debug 2) (and (>= app-debug 1) (= cmd 0x05)))
+            (if (or (app-dbg 2) (and (app-dbg 1) (= cmd 0x05)))
                 (print (str-merge "tx r" (str-from-n reg "%02x n") (str-from-n n "%d")))
             )
             (bufset-u16 buf 0 0x5aa5)
@@ -1891,13 +1900,13 @@
                                                             ; the dash floods 0x61 at us, so level 1 shows
                                                             ; only control writes and level 2 shows all
                                                             (if (and (!= code 0x64) (!= code 0x65)
-                                                                     (or (>= app-debug 2)
-                                                                         (and (>= app-debug 1) (or (= code 0x02) (= code 0x03)))))
+                                                                     (or (app-dbg 2)
+                                                                         (and (app-dbg 1) (or (= code 0x02) (= code 0x03)))))
                                                                 (app-log len)
                                                             )
                                                             (if (or (= code 0x01) (= code 0x02) (= code 0x03))
                                                                 (let ((r (trap (nb-app-frame (bufget-u8 uart-buf 1) (bufget-u8 uart-buf 0) code (bufget-u8 uart-buf 3) len))))
-                                                                    (if (and (>= app-debug 1) (eq (car r) 'exit-error)) (print r))
+                                                                    (if (and (app-dbg 1) (eq (car r) 'exit-error)) (print r))
                                                                 )
                                                             )
                                                         }
@@ -1913,7 +1922,7 @@
                 }
             )
         ))
-        (if (>= app-debug 1) (print e))
+        (if (app-dbg 1) (print e))
         (sleep 0.1) ; only reached after an error
     })
 )
@@ -1943,7 +1952,7 @@
                                             (let ((cmd (bufget-u8 uart-buf 1)))
                                                 (if (or (= cmd 0x01) (= cmd 0x03))
                                                     (let ((r (trap (xm-app-frame (bufget-u8 uart-buf 0) cmd (bufget-u8 uart-buf 2)))))
-                                                        (if (and (>= app-debug 1) (eq (car r) 'exit-error)) (print r))
+                                                        (if (and (app-dbg 1) (eq (car r) 'exit-error)) (print r))
                                                     )
                                                     (update-dash uart-buf) ; dash expects a reply on every frame
                                                 )
@@ -1957,7 +1966,7 @@
                 }
             )
         ))
-        (if (>= app-debug 1) (print e))
+        (if (app-dbg 1) (print e))
         (sleep 0.1) ; only reached after an error
     })
 )
