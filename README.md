@@ -183,6 +183,27 @@ Lock, mode switching, headlight and secret mode activation are all **fully remap
 - Buttons: power on/off, lock/unlock (standstill only), headlight, secret toggle, cruise
   control on/off, and mode selection - with live status
 
+### Third-party app support (v4.0)
+Stock scooter apps that talk to the dashboard over BLE - **NineDash** (Ninebot) and
+**m365 Dashboard** (Xiaomi) - now see live data and can control the scooter. The dash BLE
+module bridges their frames onto the same UART the package already listens on, so no extra
+hardware or wiring is needed.
+
+- **Live data**: speed, battery %, voltage, current, power, temperature, odometer, trip
+  distance and time, average speed, estimated range, error and alarm codes
+- **Controls from the app**: lock / unlock, headlight, cruise control, speed mode
+  (Eco / Drive / Sport), secret mode, buzzer, and "find my scooter"
+- **Battery data**: on Xiaomi the BMS is emulated too, so the app's battery screen is
+  populated - pack voltage and current from the VESC (CAN-combined), and per-cell voltage
+  derived from pack voltage ÷ series count when no VESC BMS is present
+- **App pairing PIN**: set your own 6-digit code in Setup
+- Reports firmware version **7.0.0** and a serial number of `VESC` + your controller's
+  UUID, so app authors can detect a VESC and adapt (e.g. hide unsupported functions)
+- Lock and unlock are only accepted at standstill, as on a stock scooter
+- **Shutdown is deliberately ignored**: it would cut power to the dashboard itself. The
+  command is acknowledged so the app doesn't hang, but nothing happens
+- Regenerative braking level (KERS) is reported as off - VESC does not use Xiaomi's levels
+
 ### Comfort
 - **Auto headlight**: turn the headlight on automatically at power on
 - **Rear / brake light** on the servo pin (MOSFET driver): dim tail light following the

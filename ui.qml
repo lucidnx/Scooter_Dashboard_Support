@@ -413,6 +413,7 @@ Item {
             + " " + boolAtom(useMph)
             + " " + boolAtom(bmsSoc)
             + " " + boolAtom(secretExitOnLock)
+            + " " + (Number.parseInt(appPin.text) || 0)
             + ")")
 
         queueCode("(save-light-offsets "
@@ -537,6 +538,7 @@ Item {
             setGain(lightGainThr, parts[7])
             setOffsetV(lightOffBrk, parts[8])
             setGain(lightGainBrk, parts[9])
+            appPin.text = ("00000" + (Number.parseInt(parts[10]) || 0)).slice(-6)
         } else if (parts[0] === "rear") {
             rearLightEnable.checked = parseBoolToken(parts[1])
             autoTaillight.checked = parseBoolToken(parts[2])
@@ -1288,6 +1290,18 @@ Item {
                                 Layout.fillWidth: true
                                 Label { text: "Use VESC BMS for dash"; Layout.fillWidth: true }
                                 CheckBox { id: bmsSoc; text: "Enabled"; spacing: 4 }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Label { text: "App pairing PIN"; Layout.fillWidth: true }
+                                TextField {
+                                    id: appPin
+                                    Layout.preferredWidth: 100
+                                    maximumLength: 6
+                                    inputMethodHints: Qt.ImhDigitsOnly
+                                    validator: RegularExpressionValidator { regularExpression: /[0-9]{0,6}/ }
+                                }
                             }
 
                             RowLayout {

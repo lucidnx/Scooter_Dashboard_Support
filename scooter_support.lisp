@@ -87,6 +87,9 @@
 (def use-mph false) ; dash shows mph instead of km/h
 (def bms-soc-enable false) ; battery % from a VESC BMS when one reports
 
+; BLE pairing code reported to third-party apps, 6 digits
+(def app-pin 0)
+
 ; Rear light on the servo/PPM pin via PWM (MOSFET driver)
 (def rear-light-enable false)
 (def auto-taillight false) ; taillight on from power on
@@ -162,6 +165,9 @@
 (def bms-active false)
 (def bms-warn false)
 
+; app protocol state - buffers are built in main, they must stay out of flash
+(def app-boot-time (systime))
+
 ; rear light state
 (def pwm-started false)
 (def blink-state false)
@@ -204,7 +210,7 @@
 
 @const-start
 
-(def settings-version 310i32)
+(def settings-version 400i32)
 
 ; Persistent settings: (label . (eeprom-offset type))
 (def eeprom-addrs '(
@@ -292,6 +298,7 @@
     (light-offset-brk      . (79 f))
     (light-gain-thr        . (80 f))
     (light-gain-brk        . (81 f))
+    (app-pin               . (84 i))
 ))
 
 (def last-button-state false)
@@ -334,6 +341,10 @@
 ; (raw wasn't shifted by a constant volts - it scaled non-linearly with lever
 ; position). A flat offset from v308 would be WRONG under the new formula
 ; (sign-inverted at points), so it's reset here - recalibrate with Sample.
+(defun write-v400-defaults () ; settings added in v400
+    (write-setting 'app-pin 0)
+)
+
 (defun write-v310-defaults () ; settings added in v310
     {
         (write-setting 'cruise-min-speed 5.0)
@@ -419,6 +430,7 @@
         (write-v308-defaults)
         (write-v309-defaults)
         (write-v310-defaults)
+        (write-v400-defaults)
         (write-setting 'secret-presses 1)
         (write-setting 'secret-combo 0)
         (write-setting 'secret-requires-lock false)
@@ -491,6 +503,7 @@
                     (write-v308-defaults)
                     (write-v309-defaults)
                     (write-v310-defaults)
+                    (write-v400-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 302i32) {
@@ -502,6 +515,7 @@
                     (write-v308-defaults)
                     (write-v309-defaults)
                     (write-v310-defaults)
+                    (write-v400-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 303i32) {
@@ -512,6 +526,7 @@
                     (write-v308-defaults)
                     (write-v309-defaults)
                     (write-v310-defaults)
+                    (write-v400-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 304i32) {
@@ -521,6 +536,7 @@
                     (write-v308-defaults)
                     (write-v309-defaults)
                     (write-v310-defaults)
+                    (write-v400-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 305i32) {
@@ -529,6 +545,7 @@
                     (write-v308-defaults)
                     (write-v309-defaults)
                     (write-v310-defaults)
+                    (write-v400-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 306i32) {
@@ -536,21 +553,29 @@
                     (write-v308-defaults)
                     (write-v309-defaults)
                     (write-v310-defaults)
+                    (write-v400-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 307i32) {
                     (write-v308-defaults)
                     (write-v309-defaults)
                     (write-v310-defaults)
+                    (write-v400-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 308i32) {
                     (write-v309-defaults)
                     (write-v310-defaults)
+                    (write-v400-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 309i32) {
                     (write-v310-defaults)
+                    (write-v400-defaults)
+                    (write-setting 'ver-code settings-version)
+                })
+                ((eq ver 310i32) {
+                    (write-v400-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 (t (restore-defaults))
@@ -637,6 +662,7 @@
         (set 'cruise-deviation (read-setting 'cruise-deviation))
         (set 'cruise-min-speed (read-setting 'cruise-min-speed))
         (set 'cruise-max-speed (read-setting 'cruise-max-speed))
+        (set 'app-pin (read-setting 'app-pin))
 
         (var m (read-setting 'model))
         (if (not (valid-model m)) {
@@ -769,13 +795,14 @@
     }
 )
 
-(defun save-misc-settings (auto-light btn-speed-kmh mph bms secret-exit)
+(defun save-misc-settings (auto-light btn-speed-kmh mph bms secret-exit pin)
     {
         (write-setting 'light-on-boot auto-light)
         (write-setting 'button-speed-kmh btn-speed-kmh)
         (write-setting 'use-mph mph)
         (write-setting 'bms-soc-enable bms)
         (write-setting 'secret-exit-on-lock secret-exit)
+        (write-setting 'app-pin pin)
     }
 )
 
@@ -970,7 +997,8 @@
             (str-from-n (read-setting 'light-offset-thr) "%.3f ")
             (str-from-n (read-setting 'light-gain-thr) "%.3f ")
             (str-from-n (read-setting 'light-offset-brk) "%.3f ")
-            (str-from-n (read-setting 'light-gain-brk) "%.3f")
+            (str-from-n (read-setting 'light-gain-brk) "%.3f ")
+            (str-from-n (read-setting 'app-pin) "%d")
         ))
         (sleep 0.05)
         (send-data (str-merge
@@ -1539,6 +1567,268 @@
     }
 )
 
+; -> App protocol (NineDash, m365 Dashboard)
+; The dash BLE module bridges app frames onto this same half-duplex bus, so
+; their reads arrive here addressed to the ESC (0x20) or, on Xiaomi, to the
+; BMS (0x22) - a VESC has no Xiaomi BMS on the bus, so that device is emulated.
+; Replies are request-driven: never answer a frame the app did not send.
+
+(def app-ver 0x0700) ; 7.0.0 - above every stock version, marks this as a VESC
+
+; Serial is "VESC" + the STM32 UUID in hex, cut to the last 10 digits (the most
+; unique end) or zero-padded in front, so it is always exactly 14 bytes.
+(defun app-build-serial ()
+    (let ((hex ""))
+        {
+            (trap (loopforeach b (sysinfo 'uuid)
+                (setq hex (str-merge hex (str-from-n b "%02x")))
+            ))
+            (var n (str-len hex))
+            (if (> n 10) (setq hex (str-part hex (- n 10) 10)))
+            (looprange i 0 (- 10 (str-len hex)) (setq hex (str-merge "0" hex)))
+            (var s (str-merge "VESC" hex))
+            (looprange i 0 14 (bufset-u8 app-serial i (bufget-u8 s i)))
+        }
+    )
+)
+
+(defun app-build-pin ()
+    (let ((s (str-from-n app-pin "%06d")))
+        (looprange i 0 6 (bufset-u8 app-pin-buf i (bufget-u8 s i)))
+    )
+)
+
+(defun app-set-pin (val)
+    (if (and (>= val 0) (<= val 999999)) {
+        (set 'app-pin val)
+        (write-setting 'app-pin val)
+        (app-build-pin)
+    })
+)
+
+(defun app-word (buf idx) ; register pair out of a byte string, little endian
+    (+ (bufget-u8 buf (* idx 2)) (shl (bufget-u8 buf (+ (* idx 2) 1)) 8))
+)
+
+(defun app-clamp16 (v)
+    (cond ((> v 32767) 32767) ((< v -32768) -32768) (t (to-i v)))
+)
+
+(defun app-sysinfo (key) (let ((v 0)) { (trap (setq v (sysinfo key))) (to-i v) }))
+
+(defun app-speed-01 () (app-clamp16 (* (abs cur-speed-kmh) 10))) ; 0.1 km/h
+(defun app-trip-m () (to-i (get-dist-abs)))
+(defun app-volt-cv () (app-clamp16 (* (get-vin) 100))) ; 0.01 V
+(defun app-amp-ca () (app-clamp16 (* (setup-current-in) 100))) ; 0.01 A, negative = charging
+(defun app-watts () (app-clamp16 (* (get-vin) (setup-current-in))))
+(defun app-range-10m () (app-clamp16 (* (send-state-range) 100)))
+(defun app-fet-01 () (app-clamp16 (* (get-temp-fet) 10)))
+(defun app-cells () (let ((n (conf-get 'si-battery-cells))) (if (> n 0) n 10)))
+(defun app-cell-mv () (app-clamp16 (/ (* (get-vin) 1000) (app-cells))))
+(defun app-cap-mah () (app-clamp16 (* (conf-get 'si-battery-ah) 1000)))
+
+; NB_INF_BOOL: bit0 speed limited, bit1 locked, bit2 buzzer, bit11 activated
+(defun app-bool-word ()
+    (+ (if (= speedmode 2) 1 0) (if lock 2 0) (if (> alarm 0) 4 0) 2048)
+)
+
+(defun app-workmode () (cond ((= speedmode 2) 1) ((= speedmode 4) 2) (t 0)))
+(defun app-maxspeed-01 () (app-clamp16 (* (send-state-maxkmh) 10)))
+
+; Writes shared by both protocols. Speed limits are acknowledged but never
+; applied - the app must not silently overwrite the configured profiles.
+(defun app-write (reg val)
+    (cond
+        ; lock and unlock are only valid in non-riding mode
+        ((= reg 0x70) (if (and (= val 1) (not lock) (<= (abs cur-speed-kmh) 0.5)) (toggle-lock)))
+        ((= reg 0x71) (if (and (= val 1) lock (<= (abs cur-speed-kmh) 0.5)) (toggle-lock)))
+        ((= reg 0x75) {
+            (set 'speedmode (cond ((= val 1) 2) ((= val 2) 4) (t 1)))
+            (apply-mode)
+        })
+        ((= reg 0x7a) { ; VESC extension - secret modes, no stock equivalent
+            (set 'unlock (= val 1))
+            (apply-mode)
+        })
+        ((= reg 0x7c) {
+            (set 'cruise-enabled (= val 1))
+            (write-setting 'cruise-enabled cruise-enabled)
+        })
+        ((or (= reg 0x7d) (= reg 0x90)) (set 'light (= val 1)))
+        ((= reg 0x7e) (if (= val 1) (set 'feedback 3))) ; find my scooter
+        ((or (= reg 0x91) (= reg 0x92)) {
+            (set 'alarm-tone (= val 1))
+            (write-setting 'alarm-tone alarm-tone)
+        })
+        ((= reg 0x17) (app-set-pin val))
+    )
+)
+
+; 0xb0~0xbd mirrors the commonly polled values so the app gets them in one read
+(defun nb-word (reg)
+    (cond
+        ((and (>= reg 0x10) (< reg 0x17)) (app-word app-serial (- reg 0x10)))
+        ((and (>= reg 0x17) (< reg 0x1a)) (app-word app-pin-buf (- reg 0x17)))
+        ((= reg 0x1a) app-ver)
+        ((= reg 0x1b) (get-fault))
+        ((= reg 0x1c) (if (> alarm 0) 9 0)) ; ALARM_CODE_LOCKED
+        ((= reg 0x1d) (app-bool-word))
+        ((= reg 0x1f) (app-workmode))
+        ((= reg 0x22) (to-i cur-batt))
+        ((or (= reg 0x24) (= reg 0x25)) (app-range-10m))
+        ((= reg 0x26) (app-speed-01))
+        ((= reg 0x29) (bitwise-and (app-sysinfo 'odometer) 0xFFFF))
+        ((= reg 0x2a) (shr (app-sysinfo 'odometer) 16))
+        ((= reg 0x2f) (/ (app-trip-m) 10))
+        ((= reg 0x32) (bitwise-and (app-sysinfo 'runtime) 0xFFFF))
+        ((= reg 0x33) (shr (app-sysinfo 'runtime) 16))
+        ((= reg 0x3a) (to-i (secs-since app-boot-time)))
+        ((= reg 0x3b) (to-i (secs-since app-boot-time)))
+        ((= reg 0x3e) (app-fet-01))
+        ((= reg 0x41) (app-clamp16 (* (get-temp-mot) 10)))
+        ((= reg 0x47) (app-volt-cv))
+        ((= reg 0x65) (app-speed-01))
+        ((or (= reg 0x66) (= reg 0x67) (= reg 0x68)) app-ver)
+        ((or (= reg 0x72) (= reg 0x73) (= reg 0x74)) (app-maxspeed-01))
+        ((= reg 0x75) (app-workmode))
+        ((= reg 0x7a) (if unlock 1 0))
+        ((= reg 0x7b) 0) ; KERS - VESC does not use Xiaomi-style regen levels
+        ((= reg 0x7c) (if cruise-enabled 1 0))
+        ((or (= reg 0x7d) (= reg 0x90)) (if light 1 0))
+        ((or (= reg 0x91) (= reg 0x92)) (if alarm-tone 1 0))
+        ((= reg 0xb0) (get-fault))
+        ((= reg 0xb1) (if (> alarm 0) 9 0))
+        ((= reg 0xb2) (app-bool-word))
+        ((= reg 0xb4) (to-i cur-batt))
+        ((or (= reg 0xb5) (= reg 0xb6)) (app-speed-01))
+        ((= reg 0xb7) (bitwise-and (app-sysinfo 'odometer) 0xFFFF))
+        ((= reg 0xb8) (shr (app-sysinfo 'odometer) 16))
+        ((= reg 0xb9) (/ (app-trip-m) 10))
+        ((= reg 0xba) (app-watts))
+        ((= reg 0xbb) (app-fet-01))
+        (t 0)
+    )
+)
+
+(defun nb-send (dst cmd reg n) ; frame: 5A A5 len src dst cmd arg payload crc
+    (let ((buf (array-create (+ n 9))) (crc 0))
+        {
+            (bufset-u16 buf 0 0x5aa5)
+            (bufset-u8 buf 2 n)
+            (bufset-u8 buf 3 0x20)
+            (bufset-u8 buf 4 dst)
+            (bufset-u8 buf 5 cmd)
+            (bufset-u8 buf 6 reg)
+            (if (= cmd 0x05)
+                (bufset-u8 buf 7 1) ; write ack payload
+                (looprange i 0 (/ n 2) {
+                    (var w (nb-word (+ reg i)))
+                    (bufset-u8 buf (+ 7 (* i 2)) (bitwise-and w 0xFF))
+                    (bufset-u8 buf (+ 8 (* i 2)) (bitwise-and (shr w 8) 0xFF))
+                })
+            )
+            (looprange i 2 (+ n 7) (setq crc (+ crc (bufget-u8 buf i))))
+            (setq crc (bitwise-xor crc 0xFFFF))
+            (bufset-u8 buf (+ n 7) (bitwise-and crc 0xFF))
+            (bufset-u8 buf (+ n 8) (bitwise-and (shr crc 8) 0xFF))
+            (uart-write buf)
+            (free buf)
+        }
+    )
+)
+
+(defun nb-app-frame (src cmd reg)
+    (cond
+        ((= cmd 0x01) (let ((n (bufget-u8 uart-buf 4)))
+            (if (and (> n 1) (<= n 32)) (nb-send src 0x01 reg (bitwise-and n 0xFE)))
+        ))
+        ((or (= cmd 0x02) (= cmd 0x03)) {
+            (app-write reg (+ (bufget-u8 uart-buf 4) (shl (bufget-u8 uart-buf 5) 8)))
+            (nb-send src 0x05 reg 1)
+        })
+    )
+)
+
+; Xiaomi: single device byte, 0x20/0x23 for the ESC and 0x22/0x25 for the BMS.
+; Speed is metres/hour here, so it saturates the u16 at 65 km/h.
+(defun xm-word (reg)
+    (cond
+        ((and (>= reg 0x10) (< reg 0x17)) (app-word app-serial (- reg 0x10)))
+        ((and (>= reg 0x17) (< reg 0x1a)) (app-word app-pin-buf (- reg 0x17)))
+        ((= reg 0x1a) app-ver)
+        ((= reg 0x25) (app-range-10m))
+        ((= reg 0x3b) (to-i (secs-since app-boot-time)))
+        ((= reg 0x3e) (app-fet-01))
+        ((= reg 0x67) app-ver)
+        ((= reg 0x75) (if (= speedmode 2) 1 0))
+        ((= reg 0x7a) (if unlock 1 0))
+        ((= reg 0x7b) 0) ; KERS reported as off
+        ((= reg 0x7c) (if cruise-enabled 1 0))
+        ((= reg 0x7d) (if light 2 0))
+        ((= reg 0xb0) (get-fault))
+        ((= reg 0xb4) (to-i cur-batt))
+        ((or (= reg 0xb5) (= reg 0xb6)) (app-clamp16 (* (abs cur-speed-kmh) 1000)))
+        ((= reg 0xb7) (bitwise-and (app-sysinfo 'odometer) 0xFFFF))
+        ((= reg 0xb8) (shr (app-sysinfo 'odometer) 16))
+        ((= reg 0xb9) (/ (app-trip-m) 10))
+        ((= reg 0xbb) (app-fet-01))
+        (t 0)
+    )
+)
+
+(defun xm-bms-word (reg)
+    (cond
+        ((and (>= reg 0x10) (< reg 0x17)) (app-word app-serial (- reg 0x10)))
+        ((= reg 0x17) app-ver)
+        ((= reg 0x18) (app-cap-mah))
+        ((= reg 0x31) (app-clamp16 (* (get-batt) (app-cap-mah))))
+        ((= reg 0x32) (to-i cur-batt))
+        ((= reg 0x33) (app-amp-ca))
+        ((= reg 0x34) (app-volt-cv))
+        ((= reg 0x35) (+ (bitwise-and (+ (to-i (get-temp-fet)) 20) 0xFF) ; both temps +20
+                         (shl (bitwise-and (+ (to-i (get-temp-mot)) 20) 0xFF) 8)))
+        ((= reg 0x3b) 100) ; health
+        ((and (>= reg 0x40) (< reg 0x4a)) (app-cell-mv))
+        (t 0)
+    )
+)
+
+(defun xm-send (dev reg n bms) ; frame: 55 AA len addr cmd arg payload crc
+    (let ((buf (array-create (+ n 8))) (crc 0))
+        {
+            (bufset-u16 buf 0 0x55aa)
+            (bufset-u8 buf 2 (+ n 2))
+            (bufset-u8 buf 3 dev)
+            (bufset-u8 buf 4 0x01)
+            (bufset-u8 buf 5 reg)
+            (looprange i 0 (/ n 2) {
+                (var w (if bms (xm-bms-word (+ reg i)) (xm-word (+ reg i))))
+                (bufset-u8 buf (+ 6 (* i 2)) (bitwise-and w 0xFF))
+                (bufset-u8 buf (+ 7 (* i 2)) (bitwise-and (shr w 8) 0xFF))
+            })
+            (looprange i 2 (+ n 6) (setq crc (+ crc (bufget-u8 buf i))))
+            (setq crc (bitwise-xor crc 0xFFFF))
+            (bufset-u8 buf (+ n 6) (bitwise-and crc 0xFF))
+            (bufset-u8 buf (+ n 7) (bitwise-and (shr crc 8) 0xFF))
+            (uart-write buf)
+            (free buf)
+        }
+    )
+)
+
+(defun xm-app-frame (dev cmd reg)
+    (cond
+        ((= cmd 0x01) (let ((n (bufget-u8 uart-buf 3)))
+            (if (and (> n 1) (<= n 32))
+                (xm-send (if (= dev 0x22) 0x25 0x23) reg (bitwise-and n 0xFE) (= dev 0x22))
+            )
+        ))
+        ((= cmd 0x03) (if (!= dev 0x22)
+            (app-write reg (+ (bufget-u8 uart-buf 3) (shl (bufget-u8 uart-buf 4) 8)))
+        ))
+    )
+)
+
 (defun read-frames-g30()
     (loopwhile t {
         (trap ; a parse error must not kill the reader thread
@@ -1564,6 +1854,12 @@
                                                     )
                                                     (if (= code 0x64) ; dash reply only on 0x64
                                                         (update-dash uart-buf)
+                                                    )
+                                                    ; app frames come from 0x3d-0x3f via the BLE module
+                                                    (let ((src (bufget-u8 uart-buf 0)))
+                                                        (if (and (>= src 0x3d) (<= src 0x3f) (= (bufget-u8 uart-buf 1) 0x20))
+                                                            (nb-app-frame src code (bufget-u8 uart-buf 3))
+                                                        )
                                                     )
                                                 }
                                             )
@@ -1600,7 +1896,14 @@
                                             (if (and (= (bufget-u8 uart-buf 1) 0x65) software-adc (>= len 2)) ; frame must actually carry the throttle/brake bytes
                                                 (adc-input uart-buf)
                                             )
-                                            (update-dash uart-buf) ; dash expects a reply on every frame
+                                            ; the dash also addresses 0x20 - only the command
+                                            ; separates its frames from app register access
+                                            (let ((cmd (bufget-u8 uart-buf 1)))
+                                                (if (or (= cmd 0x01) (= cmd 0x03))
+                                                    (xm-app-frame (bufget-u8 uart-buf 0) cmd (bufget-u8 uart-buf 2))
+                                                    (update-dash uart-buf) ; dash expects a reply on every frame
+                                                )
+                                            )
                                         }
                                     )
                                 }
@@ -2067,6 +2370,13 @@
             (uart-start 115200 'half-duplex)
             (gpio-configure 'pin-rx 'pin-mode-in-pu)
             (def uart-buf (array-create 64))
+
+            ; app protocol identity - mutable, so it is built here and not in flash
+            (def app-serial (array-create 14))
+            (def app-pin-buf (array-create 6))
+            (app-build-serial)
+            (app-build-pin)
+            (set 'app-boot-time (systime))
 
             (if (= model 1) {
                 (define tx-frame (array-create 14))
