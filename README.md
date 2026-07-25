@@ -5,13 +5,15 @@ lock with alarm, fully remappable button/lever gestures, cruise control, rear li
 BMS support and a live remote-control dashboard - all configured from a phone-friendly UI
 and stored on the ESC.
 
+<!-- fixed width so screenshots render the same size regardless of capture resolution -->
+
 | Control | Modes |
 |---------|-------|
-| ![Control](screenshots/control.jpg) | ![Modes](screenshots/modes.jpg) |
+| <img src="screenshots/control.jpg" alt="Control" width="220"> | <img src="screenshots/modes.jpg" alt="Modes" width="220"> |
 
 | General | General | Setup | Setup |
 |---------|---------|-------|-------|
-| ![General 1](screenshots/general1.jpg) | ![General 2](screenshots/general2.jpg) | ![Setup 1](screenshots/setup1.jpg) | ![Setup 2](screenshots/setup2.jpg) |
+| <img src="screenshots/general1.jpg" alt="General 1" width="220"> | <img src="screenshots/general2.jpg" alt="General 2" width="220"> | <img src="screenshots/setup1.jpg" alt="Setup 1" width="220"> | <img src="screenshots/setup2.jpg" alt="Setup 2" width="220"> |
 
 ## ⚠️ Disclaimer
 
