@@ -1576,18 +1576,20 @@
 
 (def app-ver 0x0700) ; 7.0.0 - above every stock version, marks this as a VESC
 
-; Serial is "VESC" + the STM32 UUID in hex, cut to the last 10 digits (the most
-; unique end) or zero-padded in front, so it is always exactly 14 bytes.
+; Apps parse the serial instead of just displaying it: the first three
+; characters select the product series and the year, week and unit fields must
+; be digits, so it has to keep the stock shape or the scooter is rejected
+; outright. Firmware version 7.0.0 is the VESC marker instead. The last four
+; digits come from the controller UUID so each unit still reads differently.
 (defun app-build-serial ()
-    (let ((hex ""))
+    (let ((n 0))
         {
-            (trap (loopforeach b (sysinfo 'uuid)
-                (setq hex (str-merge hex (str-from-n b "%02x")))
+            (trap (loopforeach b (sysinfo 'uuid) (setq n (+ (* n 31) b))))
+            (var tail (str-from-n (mod (bitwise-and n 0x7FFFFFFF) 10000) "%04d"))
+            (var s (if (= model 1)
+                (str-merge "16133/0000" tail) ; Xiaomi M365 shape
+                (str-merge "N4GSD24010" tail) ; Ninebot G30 shape
             ))
-            (var n (str-len hex))
-            (if (> n 10) (setq hex (str-part hex (- n 10) 10)))
-            (looprange i 0 (- 10 (str-len hex)) (setq hex (str-merge "0" hex)))
-            (var s (str-merge "VESC" hex))
             (looprange i 0 14 (bufset-u8 app-serial i (bufget-u8 s i)))
         }
     )
@@ -1745,6 +1747,8 @@
             (bufset-u8 buf (+ n 8) (bitwise-and (shr crc 8) 0xFF))
             (uart-write buf)
             (free buf)
+            (if app-debug (print (str-merge "app tx r"
+                (str-from-n reg "%02x n") (str-from-n n "%d"))))
         }
     )
 )
