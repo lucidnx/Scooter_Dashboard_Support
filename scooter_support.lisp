@@ -1654,24 +1654,24 @@
 (defun app-write (reg val)
     (cond
         ; lock and unlock are only valid in non-riding mode
-        ((= reg 0x70) (if (and (= val 1) (not lock) (<= (abs cur-speed-kmh) 0.5)) (toggle-lock)))
-        ((= reg 0x71) (if (and (= val 1) lock (<= (abs cur-speed-kmh) 0.5)) (toggle-lock)))
+        ((= reg 0x70) (if (and (!= val 0) (not lock) (<= (abs cur-speed-kmh) 0.5)) (toggle-lock)))
+        ((= reg 0x71) (if (and (!= val 0) lock (<= (abs cur-speed-kmh) 0.5)) (toggle-lock)))
         ((= reg 0x75) {
             (set 'speedmode (cond ((= val 1) 2) ((= val 2) 4) (t 1)))
             (apply-mode)
         })
         ((= reg 0x7a) { ; VESC extension - secret modes, no stock equivalent
-            (set 'unlock (= val 1))
+            (set 'unlock (!= val 0))
             (apply-mode)
         })
         ((= reg 0x7c) {
-            (set 'cruise-enabled (= val 1))
+            (set 'cruise-enabled (!= val 0))
             (write-setting 'cruise-enabled cruise-enabled)
         })
-        ((or (= reg 0x7d) (= reg 0x90)) (set 'light (= val 1)))
-        ((= reg 0x7e) (if (= val 1) (set 'feedback 3))) ; find my scooter
+        ((or (= reg 0x7d) (= reg 0x90)) (set 'light (!= val 0)))
+        ((= reg 0x7e) (if (!= val 0) (set 'feedback 3))) ; find my scooter
         ((or (= reg 0x91) (= reg 0x92)) {
-            (set 'alarm-tone (= val 1))
+            (set 'alarm-tone (!= val 0))
             (write-setting 'alarm-tone alarm-tone)
         })
         ((= reg 0x17) (app-set-pin val))
@@ -1720,24 +1720,27 @@
         ((= reg 0xb9) (/ (app-trip-m) 10))
         ((= reg 0xba) (app-watts))
         ((= reg 0xbb) (app-fet-01))
+        ((= reg 0xbc) (+ (bitwise-and (to-i (send-state-maxkmh)) 0xFF) ; low: current limit, high: full speed
+                         (shl (bitwise-and (to-i (send-state-maxkmh)) 0xFF) 8)))
+        ((= reg 0xb3) (+ (bitwise-and (to-i cur-batt) 0xFF) (shl (bitwise-and (to-i cur-batt) 0xFF) 8)))
         (t 0)
     )
 )
 
-(defun nb-send (dst cmd reg n) ; frame: 5A A5 len src dst cmd arg payload crc
+(defun nb-send (from dst cmd reg n bms) ; frame: 5A A5 len src dst cmd arg payload crc
     (let ((buf (array-create (+ n 9))) (crc 0))
         {
             (if app-debug (print (str-merge "tx r" (str-from-n reg "%02x n") (str-from-n n "%d"))))
             (bufset-u16 buf 0 0x5aa5)
             (bufset-u8 buf 2 n)
-            (bufset-u8 buf 3 0x20)
+            (bufset-u8 buf 3 from)
             (bufset-u8 buf 4 dst)
             (bufset-u8 buf 5 cmd)
             (bufset-u8 buf 6 reg)
             (if (= cmd 0x05) ; a read answers with 0x04, a write acks with 0x05
                 (bufset-u8 buf 7 1) ; write ack payload
                 (looprange i 0 (/ n 2) {
-                    (var w (nb-word (+ reg i)))
+                    (var w (if bms (xm-bms-word (+ reg i)) (nb-word (+ reg i))))
                     (bufset-u8 buf (+ 7 (* i 2)) (bitwise-and w 0xFF))
                     (bufset-u8 buf (+ 8 (* i 2)) (bitwise-and (shr w 8) 0xFF))
                 })
@@ -1752,19 +1755,19 @@
     )
 )
 
-(defun nb-app-frame (src cmd reg len)
+(defun nb-app-frame (dev src cmd reg len)
     (cond
         ; a read carries the wanted byte count as its only payload byte; some
         ; requests omit it entirely, in which case one register is meant
         ((= cmd 0x01) (let ((n (if (> len 0) (bufget-u8 uart-buf 4) 2))) {
-            (if (or (< n 2) (> n 32)) (setq n 2))
-            (nb-send src 0x04 reg (bitwise-and n 0xFE))
+            (if (or (< n 2) (> n 64)) (setq n 2))
+            (nb-send dev src 0x04 reg (bitwise-and n 0xFE) (= dev 0x22))
         }))
         ((or (= cmd 0x02) (= cmd 0x03)) {
-            (if (> len 0)
+            (if (and (> len 0) (!= dev 0x22))
                 (app-write reg (+ (bufget-u8 uart-buf 4) (shl (bufget-u8 uart-buf 5) 8)))
             )
-            (nb-send src 0x05 reg 1)
+            (nb-send dev src 0x05 reg 1 false)
         })
     )
 )
@@ -1879,14 +1882,14 @@
                                                     ; module relays it under - the dash only ever
                                                     ; sends us 0x64/0x65, so the command is the
                                                     ; reliable discriminator, not the source.
-                                                    (if (= (bufget-u8 uart-buf 1) 0x20)
+                                                    (if (or (= (bufget-u8 uart-buf 1) 0x20) (= (bufget-u8 uart-buf 1) 0x22))
                                                         {
                                                             ; log anything that is not dash traffic
                                                             (if (and app-debug (!= code 0x64) (!= code 0x65))
                                                                 (app-log len)
                                                             )
                                                             (if (or (= code 0x01) (= code 0x02) (= code 0x03))
-                                                                (let ((r (trap (nb-app-frame (bufget-u8 uart-buf 0) code (bufget-u8 uart-buf 3) len))))
+                                                                (let ((r (trap (nb-app-frame (bufget-u8 uart-buf 1) (bufget-u8 uart-buf 0) code (bufget-u8 uart-buf 3) len))))
                                                                     (if app-debug (print r))
                                                                 )
                                                             )
