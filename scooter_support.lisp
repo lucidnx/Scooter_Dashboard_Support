@@ -126,6 +126,7 @@
 
 ; Protocol offsets, set per model in main
 (def tx-base 7) ; first dash field in tx-frame
+(def tx-hdr-sum 0) ; fixed part of the dash checksum, summed once in main
 (def thr-idx 5) ; throttle byte in uart-buf
 (def brk-idx 6) ; brake byte in uart-buf
 
@@ -1569,9 +1570,9 @@
 
         ; calc crc
 
-        (var crcout 0)
-        (looprange i 2 crc-end
-        (set 'crcout (+ crcout (bufget-u8 tx-frame i))))
+        (var crcout tx-hdr-sum) ; header bytes never change, only the fields do
+        (looprange i tx-base crc-end
+        (setq crcout (+ crcout (bufget-u8 tx-frame i))))
         (set 'crcout (bitwise-xor crcout 0xFFFF))
         (bufset-u8 tx-frame crc-end crcout)
         (bufset-u8 tx-frame (+ crc-end 1) (shr crcout 8))
@@ -1781,15 +1782,21 @@
             (bufset-u8 buf 4 dst)
             (bufset-u8 buf 5 cmd)
             (bufset-u8 buf 6 reg)
+            (setq crc (+ n from dst cmd reg)) ; summed as the frame is built
             (if (= cmd 0x05) ; a read answers with 0x04, a write acks with 0x05
-                (bufset-u8 buf 7 1) ; write ack payload
+                {
+                    (bufset-u8 buf 7 1) ; write ack payload
+                    (setq crc (+ crc 1))
+                }
                 (looprange i 0 (/ n 2) {
                     (var w (if bms (xm-bms-word (+ reg i)) (nb-word (+ reg i))))
-                    (bufset-u8 buf (+ 7 (* i 2)) (bitwise-and w 0xFF))
-                    (bufset-u8 buf (+ 8 (* i 2)) (bitwise-and (shr w 8) 0xFF))
+                    (var lo (bitwise-and w 0xFF))
+                    (var hi (bitwise-and (shr w 8) 0xFF))
+                    (bufset-u8 buf (+ 7 (* i 2)) lo)
+                    (bufset-u8 buf (+ 8 (* i 2)) hi)
+                    (setq crc (+ crc lo hi))
                 })
             )
-            (looprange i 2 (+ n 7) (setq crc (+ crc (bufget-u8 buf i))))
             (setq crc (bitwise-xor crc 0xFFFF))
             (bufset-u8 buf (+ n 7) (bitwise-and crc 0xFF))
             (bufset-u8 buf (+ n 8) (bitwise-and (shr crc 8) 0xFF))
@@ -1878,12 +1885,15 @@
             (bufset-u8 buf 3 dev)
             (bufset-u8 buf 4 0x01)
             (bufset-u8 buf 5 reg)
+            (setq crc (+ n 2 dev 0x01 reg)) ; summed as the frame is built
             (looprange i 0 (/ n 2) {
                 (var w (if bms (xm-bms-word (+ reg i)) (xm-word (+ reg i))))
-                (bufset-u8 buf (+ 6 (* i 2)) (bitwise-and w 0xFF))
-                (bufset-u8 buf (+ 7 (* i 2)) (bitwise-and (shr w 8) 0xFF))
+                (var lo (bitwise-and w 0xFF))
+                (var hi (bitwise-and (shr w 8) 0xFF))
+                (bufset-u8 buf (+ 6 (* i 2)) lo)
+                (bufset-u8 buf (+ 7 (* i 2)) hi)
+                (setq crc (+ crc lo hi))
             })
-            (looprange i 2 (+ n 6) (setq crc (+ crc (bufget-u8 buf i))))
             (setq crc (bitwise-xor crc 0xFFFF))
             (bufset-u8 buf (+ n 6) (bitwise-and crc 0xFF))
             (bufset-u8 buf (+ n 7) (bitwise-and (shr crc 8) 0xFF))
@@ -1917,6 +1927,13 @@
             (loopwhile t
                 {
                     (uart-read-bytes uart-buf 3 0)
+                    ; slide a byte at a time until the header lines up - a three
+                    ; byte window can stay misaligned and drop every lever frame
+                    (loopwhile (!= (bufget-u16 uart-buf 0) 0x5aa5) {
+                        (bufset-u8 uart-buf 0 (bufget-u8 uart-buf 1))
+                        (bufset-u8 uart-buf 1 (bufget-u8 uart-buf 2))
+                        (uart-read-bytes uart-buf 1 2)
+                    })
                     (if (= (bufget-u16 uart-buf 0) 0x5aa5)
                         {
                             (var len (bufget-u8 uart-buf 2))
@@ -1927,7 +1944,7 @@
 
                                     (let ((code (bufget-u8 uart-buf 2)) (checksum (bufget-u16 uart-buf (+ len 4))))
                                         {
-                                            (looprange i 0 (+ len 4) (set 'crc (+ crc (bufget-u8 uart-buf i))))
+                                            (looprange i 0 (+ len 4) (setq crc (+ crc (bufget-u8 uart-buf i))))
 
                                             (if (= checksum (bitwise-and (+ (shr (bitwise-xor crc 0xFFFF) 8) (shl (bitwise-xor crc 0xFFFF) 8)) 65535)) ;If the calculated checksum matches with sent checksum, forward comman
                                                 {
@@ -1956,7 +1973,7 @@
                 }
             )
         )
-        (sleep 0.1) ; only reached after an error
+        (sleep 0.005) ; only reached after an error
     })
 )
 
@@ -1966,6 +1983,13 @@
             (loopwhile t
                 {
                     (uart-read-bytes uart-buf 3 0)
+                    ; slide a byte at a time until the header lines up - a three
+                    ; byte window can stay misaligned and drop every lever frame
+                    (loopwhile (!= (bufget-u16 uart-buf 0) 0x55aa) {
+                        (bufset-u8 uart-buf 0 (bufget-u8 uart-buf 1))
+                        (bufset-u8 uart-buf 1 (bufget-u8 uart-buf 2))
+                        (uart-read-bytes uart-buf 1 2)
+                    })
                     (if (= (bufget-u16 uart-buf 0) 0x55aa)
                         {
                             (var len (bufget-u8 uart-buf 2))
@@ -1974,7 +1998,7 @@
                                 {
                                     (uart-read-bytes uart-buf (+ len 4) 0)
                                     (looprange i 0 len
-                                        (set 'crc (+ crc (bufget-u8 uart-buf i))))
+                                        (setq crc (+ crc (bufget-u8 uart-buf i))))
                                     (if (=(+(shl(bufget-u8 uart-buf (+ len 2))8) (bufget-u8 uart-buf (+ len 1))) (bitwise-xor crc 0xFFFF))
                                         {
                                             (if (and (= (bufget-u8 uart-buf 1) 0x65) software-adc (>= len 2)) ; frame must actually carry the throttle/brake bytes
@@ -1997,7 +2021,7 @@
                 }
             )
         )
-        (sleep 0.1) ; only reached after an error
+        (sleep 0.005) ; only reached after an error
     })
 )
 
@@ -2482,6 +2506,8 @@
                 (set 'thr-idx 5)
                 (set 'brk-idx 6)
             })
+
+            (looprange i 2 tx-base (set 'tx-hdr-sum (+ tx-hdr-sum (bufget-u8 tx-frame i))))
 
             (apply-software-adc)
 
