@@ -1756,10 +1756,10 @@
     (cond
         ; a read carries the wanted byte count as its only payload byte; some
         ; requests omit it entirely, in which case one register is meant
-        ((= cmd 0x01) (let ((n (if (> len 0) (bufget-u8 uart-buf 4) 2)))
+        ((= cmd 0x01) (let ((n (if (> len 0) (bufget-u8 uart-buf 4) 2))) {
             (if (or (< n 2) (> n 32)) (setq n 2))
             (nb-send src 0x01 reg (bitwise-and n 0xFE))
-        ))
+        }))
         ((or (= cmd 0x02) (= cmd 0x03)) {
             (if (> len 0)
                 (app-write reg (+ (bufget-u8 uart-buf 4) (shl (bufget-u8 uart-buf 5) 8)))
