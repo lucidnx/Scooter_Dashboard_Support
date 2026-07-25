@@ -179,6 +179,7 @@
 ; app protocol state - buffers are built in main, they must stay out of flash
 (def app-boot-time (systime))
 (def app-cache-time (systime))
+(def app-reply-time (systime))
 
 ; rear light state
 (def pwm-started false)
@@ -1645,6 +1646,18 @@
     })
 )
 
+; The dash's throttle and brake frames share this bus and this thread, and a
+; reply holds the line while it transmits - 5.3 ms for the 52 byte bulk read at
+; 115200 baud. Nothing may delay the lever path while riding, so above walking
+; pace only short replies are answered and the big blocks wait for a standstill.
+; The app re-requests what it misses, which the traces show it already does.
+(defun app-read-ok (n)
+    (if (> (abs cur-speed-kmh) 1.0)
+        (and (<= n 8) (> (secs-since app-reply-time) 0.2))
+        (> (secs-since app-reply-time) 0.1)
+    )
+)
+
 (defun app-speed-01 () (app-clamp16 (* (abs cur-speed-kmh) 10))) ; 0.1 km/h
 (defun app-trip-m () cur-trip)
 (defun app-volt-cv () (app-clamp16 (* cur-vin 100))) ; 0.01 V
@@ -1793,7 +1806,11 @@
         ; requests omit it entirely, in which case one register is meant
         ((= cmd 0x01) (let ((n (if (> len 0) (bufget-u8 uart-buf 4) 2))) {
             (if (or (< n 2) (> n 64)) (setq n 2))
-            (nb-send dev src 0x04 reg (bitwise-and n 0xFE) (= dev 0x22))
+            (setq n (bitwise-and n 0xFE))
+            (if (app-read-ok n) {
+                (set 'app-reply-time (systime))
+                (nb-send dev src 0x04 reg n (= dev 0x22))
+            })
         }))
         ((or (= cmd 0x02) (= cmd 0x03)) {
             (if (and (> len 0) (!= dev 0x22))
@@ -1879,10 +1896,11 @@
 
 (defun xm-app-frame (dev cmd reg len)
     (cond
-        ((= cmd 0x01) (let ((n (bufget-u8 uart-buf 3)))
-            (if (and (> n 1) (<= n 32))
-                (xm-send (if (= dev 0x22) 0x25 0x23) reg (bitwise-and n 0xFE) (= dev 0x22))
-            )
+        ((= cmd 0x01) (let ((n (bitwise-and (bufget-u8 uart-buf 3) 0xFE)))
+            (if (and (> n 1) (<= n 64) (app-read-ok n)) {
+                (set 'app-reply-time (systime))
+                (xm-send (if (= dev 0x22) 0x25 0x23) reg n (= dev 0x22))
+            })
         ))
         ((= cmd 0x03) (if (!= dev 0x22)
             (app-write reg (if (> len 3)
