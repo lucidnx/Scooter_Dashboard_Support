@@ -251,15 +251,15 @@ Item {
     }
 
     // Calibration wizard state (light compensation sampling). One guided
-    // button per channel walks through 4 steps (off-rel, off-full, on-rel,
-    // on-full); each step is a "get ready" prep window (light set, user gets
-    // into position) followed by a hold-and-average measurement window - so
-    // sampling never starts before the lever has actually settled.
+    // button per channel walks through two held lever positions (released,
+    // then full press). At each position the light is toggled off/on/off/on
+    // and sampled each time, so the light-off and light-on readings are a
+    // paired measurement from the identical lever position.
     property string calibRunning: "" // "" / "thr" / "brk" - which channel is active
-    property string calibStage: "idle" // "idle" / "prep" / "measure" / "release"
-    property string calibStepLabel: "off-rel"
+    property string calibStage: "idle" // "idle" / "prep" / "settle" / "measure" / "release"
+    property string calibPhaseLabel: "rel" // "rel" / "full" - lever position being sampled
+    property string calibProgress: "" // "n/total" samples taken, shown while measuring
     readonly property real calibPrepDuration: 3.0 // must match scooter_support.lisp calib-prep-duration
-    readonly property real calibMeasureDuration: 3.0 // must match calib-measure-duration
     readonly property real calibReleaseDuration: 3.0 // must match calib-release-duration
     property real calibRemaining: 0
     property string calibStatusThr: "Not calibrated"
@@ -272,13 +272,14 @@ Item {
             return ch === "thr" ? "Calibrate Throttle" : "Calibrate Brake"
         var subject = ch === "thr" ? "throttle" : "brake"
         if (calibStage === "release") return "Release " + subject + ", ending."
-        if (calibStage === "measure") return "Measuring... " + calibRemaining.toFixed(1) + "s"
+        // the light toggles several times per position, each far too short for
+        // a useful countdown - show sample progress across the run instead
+        if (calibStage === "settle" || calibStage === "measure")
+            return "Measuring... " + calibProgress
         // prep
-        var base
-        if (calibStepLabel === "off-rel") base = "Keep " + subject + " released"
-        else if (calibStepLabel === "off-full") base = "Press " + subject + " to maximum"
-        else if (calibStepLabel === "on-rel") base = "Release " + subject
-        else base = "Press " + subject + " to maximum" // on-full
+        var base = (calibPhaseLabel === "full")
+            ? "Press " + subject + " to maximum"
+            : "Keep " + subject + " released"
         return base + " " + calibRemaining.toFixed(1) + "s"
     }
 
@@ -286,7 +287,7 @@ Item {
         if (calibRunning !== "") return
         calibRunning = ch
         calibStage = "prep"
-        calibStepLabel = "off-rel"
+        calibPhaseLabel = "rel"
         calibRemaining = calibPrepDuration
         sendCode(ch === "thr" ? "(calib-start-thr)" : "(calib-start-brk)")
     }
@@ -313,7 +314,8 @@ Item {
     function convertSpeedFields(toMiles) {
         var factor = toMiles ? mphFactor : (1 / mphFactor)
         var fs = [ecoSpeed, driveSpeed, sportSpeed, secretEcoSpeed, secretDriveSpeed,
-            secretSportSpeed, minSpeed, buttonSpeed, cruiseDeviation, alarmSpeedThreshold]
+            secretSportSpeed, minSpeed, buttonSpeed, cruiseDeviation, cruiseMinSpeed,
+            cruiseMaxSpeed, alarmSpeedThreshold]
         for (var i = 0; i < fs.length; i++) {
             var n = Number.parseFloat(fs[i].text.replace(",", "."))
             if (Number.isFinite(n)) {
@@ -429,6 +431,8 @@ Item {
         queueCode("(save-cruise-settings "
             + readReal(cruiseDelay, 1)
             + " " + readSpeed(cruiseDeviation, 1)
+            + " " + readSpeed(cruiseMinSpeed, 1)
+            + " " + readSpeed(cruiseMaxSpeed, 1)
             + ")")
 
         queueCode("(save-alarm-settings "
@@ -541,6 +545,8 @@ Item {
         } else if (parts[0] === "cruise") {
             setReal(cruiseDelay, parts[2], 1)
             setSpeed(cruiseDeviation, parts[3], 1)
+            setSpeed(cruiseMinSpeed, parts[4], 1)
+            setSpeed(cruiseMaxSpeed, parts[5], 1)
         } else if (parts[0] === "alarm") {
             alarmTone.checked = parseBoolToken(parts[1])
             setSpeed(alarmSpeedThreshold, parts[2], 1)
@@ -1311,6 +1317,18 @@ Item {
                                 TextField { id: cruiseDeviation; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
                             }
 
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Label { text: "Min activation speed (" + (useMph.checked ? "mph" : "km/h") + ")"; Layout.fillWidth: true }
+                                TextField { id: cruiseMinSpeed; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Label { text: "Max activation speed (" + (useMph.checked ? "mph" : "km/h") + ")"; Layout.fillWidth: true }
+                                TextField { id: cruiseMaxSpeed; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                            }
+
                             Label {
                                 text: "Cruise activates after holding a steady speed with the throttle for the set delay, then engages when you release the throttle. Any throttle or brake input cancels it instantly. Requires \"Cruise Control\" enabled (not inverted) under App Settings -> ADC -> Buttons, and Software ADC on."
                                 opacity: 0.6
@@ -1382,14 +1400,16 @@ Item {
             }
 
             if (message.startsWith("calib-stage ")) {
-                // ["calib-stage", "prep"/"measure", stepLabel] during a step, or
+                // ["calib-stage", "prep"/"settle"/"measure", phaseLabel] mid-run,
+                // the sampling stages also carry [n, total]; or
                 // ["calib-stage", "release"/"idle", channel] for the tail end
                 var sp = message.split(" ")
                 var stage = sp[1]
-                if (stage === "prep" || stage === "measure") {
+                if (stage === "prep" || stage === "settle" || stage === "measure") {
                     root.calibStage = stage
-                    root.calibStepLabel = sp[2]
-                    root.calibRemaining = (stage === "prep") ? root.calibPrepDuration : root.calibMeasureDuration
+                    root.calibPhaseLabel = sp[2]
+                    if (stage === "prep") root.calibRemaining = root.calibPrepDuration
+                    else root.calibProgress = sp[3] + "/" + sp[4]
                 } else if (stage === "release") {
                     root.calibStage = "release"
                     root.calibRemaining = root.calibReleaseDuration

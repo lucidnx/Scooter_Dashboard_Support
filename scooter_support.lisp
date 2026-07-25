@@ -107,6 +107,8 @@
 (def cruise-enabled false)
 (def cruise-delay 5.0) ; seconds of steady speed to activate
 (def cruise-deviation 1.0) ; km/h window counted as "steady"
+(def cruise-min-speed 5.0) ; km/h - cruise can only activate at or above this
+(def cruise-max-speed 100.0) ; km/h - cruise can only activate at or below this
 
 ; -> Code starts here (DO NOT CHANGE ANYTHING BELOW THIS LINE IF YOU DON'T KNOW WHAT YOU ARE DOING)
 
@@ -178,34 +180,31 @@
 (def dash-brk-raw 0) ; raw dash brake byte, tracked in adc-input
 
 ; Light-compensation calibration wizard state.
-; One guided auto-sequence per channel, walking through 4 static hold-and-
-; average samples (off-rel, off-full, on-rel, on-full): each step gives a
-; "get ready" prep window (light set, user gets into position) before the
-; measurement window starts, so the lever is already settled when sampling
-; begins. A steady hold + averaging rejects sample noise far better than a
-; moving sweep.
-(def calib-stage 'idle) ; 'idle / 'prep / 'measure
-(def calib-step 0) ; 0=off-rel, 1=off-full, 2=on-rel, 3=on-full
+; Two lever positions per channel (released, then full press). At EACH held
+; position the light is toggled off/on/off/on and sampled every time, so the
+; light-off and light-on readings are a paired measurement taken at the very
+; same lever position - the lever is never re-positioned between an off and
+; its matching on, which was the dominant error in the old 4-step version.
+; Alternating several times also averages out slow drift (pack sag, thermal),
+; and a settle window after each toggle skips the headlight inrush transient.
+(def calib-stage 'idle) ; 'idle / 'prep / 'settle / 'measure / 'release
+(def calib-phase 0) ; 0 = lever released, 1 = lever at full press
+(def calib-slot 0) ; index into the off/on/off/on toggle sequence
+(def calib-slots 4) ; toggles per position - even, so off and on get equal weight
 (def calib-channel 'thr) ; 'thr or 'brk - which raw signal to sample
 (def calib-since (systime))
-(def calib-prep-duration 3.0) ; time to get into position before measuring
-(def calib-measure-duration 3.0) ; hold-and-average window
+(def calib-prep-duration 3.0) ; time to get into position before sampling
+(def calib-settle-duration 0.5) ; after a light toggle, before sampling
+(def calib-sample-duration 0.5) ; averaging window per light state
 (def calib-release-duration 3.0) ; grace window after the last step to let go
                                   ; of the lever before real output resumes
-(def calib-sum 0.0)
-(def calib-cnt 0)
-(def thr-off-rel-v 0.0) (def thr-off-rel-ok false)
-(def thr-off-full-v 0.0) (def thr-off-full-ok false)
-(def thr-on-rel-v 0.0) (def thr-on-rel-ok false)
-(def thr-on-full-v 0.0) (def thr-on-full-ok false)
-(def brk-off-rel-v 0.0) (def brk-off-rel-ok false)
-(def brk-off-full-v 0.0) (def brk-off-full-ok false)
-(def brk-on-rel-v 0.0) (def brk-on-rel-ok false)
-(def brk-on-full-v 0.0) (def brk-on-full-ok false)
+(def calib-off-sum 0.0) (def calib-off-cnt 0)
+(def calib-on-sum 0.0) (def calib-on-cnt 0)
+(def calib-off-rel 0.0) (def calib-on-rel 0.0) ; released-position averages
 
 @const-start
 
-(def settings-version 309i32)
+(def settings-version 310i32)
 
 ; Persistent settings: (label . (eeprom-offset type))
 (def eeprom-addrs '(
@@ -286,6 +285,8 @@
     (cruise-enabled        . (74 b))
     (cruise-delay          . (75 f))
     (cruise-deviation      . (76 f))
+    (cruise-min-speed      . (82 f))
+    (cruise-max-speed      . (83 f))
     (secret-exit-on-lock   . (77 b))
     (light-offset-thr      . (78 f))
     (light-offset-brk      . (79 f))
@@ -333,6 +334,13 @@
 ; (raw wasn't shifted by a constant volts - it scaled non-linearly with lever
 ; position). A flat offset from v308 would be WRONG under the new formula
 ; (sign-inverted at points), so it's reset here - recalibrate with Sample.
+(defun write-v310-defaults () ; settings added in v310
+    {
+        (write-setting 'cruise-min-speed 5.0)
+        (write-setting 'cruise-max-speed 100.0)
+    }
+)
+
 (defun write-v309-defaults ()
     {
         (write-setting 'light-offset-thr 0.0)
@@ -410,6 +418,7 @@
         (write-v307-defaults)
         (write-v308-defaults)
         (write-v309-defaults)
+        (write-v310-defaults)
         (write-setting 'secret-presses 1)
         (write-setting 'secret-combo 0)
         (write-setting 'secret-requires-lock false)
@@ -481,6 +490,7 @@
                     (write-v307-defaults)
                     (write-v308-defaults)
                     (write-v309-defaults)
+                    (write-v310-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 302i32) {
@@ -491,6 +501,7 @@
                     (write-v307-defaults)
                     (write-v308-defaults)
                     (write-v309-defaults)
+                    (write-v310-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 303i32) {
@@ -500,6 +511,7 @@
                     (write-v307-defaults)
                     (write-v308-defaults)
                     (write-v309-defaults)
+                    (write-v310-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 304i32) {
@@ -508,6 +520,7 @@
                     (write-v307-defaults)
                     (write-v308-defaults)
                     (write-v309-defaults)
+                    (write-v310-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 305i32) {
@@ -515,21 +528,29 @@
                     (write-v307-defaults)
                     (write-v308-defaults)
                     (write-v309-defaults)
+                    (write-v310-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 306i32) {
                     (write-v307-defaults)
                     (write-v308-defaults)
                     (write-v309-defaults)
+                    (write-v310-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 307i32) {
                     (write-v308-defaults)
                     (write-v309-defaults)
+                    (write-v310-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 308i32) {
                     (write-v309-defaults)
+                    (write-v310-defaults)
+                    (write-setting 'ver-code settings-version)
+                })
+                ((eq ver 309i32) {
+                    (write-v310-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 (t (restore-defaults))
@@ -614,6 +635,8 @@
         (set 'cruise-enabled (read-setting 'cruise-enabled))
         (set 'cruise-delay (read-setting 'cruise-delay))
         (set 'cruise-deviation (read-setting 'cruise-deviation))
+        (set 'cruise-min-speed (read-setting 'cruise-min-speed))
+        (set 'cruise-max-speed (read-setting 'cruise-max-speed))
 
         (var m (read-setting 'model))
         (if (not (valid-model m)) {
@@ -773,10 +796,12 @@
     }
 )
 
-(defun save-cruise-settings (delay deviation)
+(defun save-cruise-settings (delay deviation min-speed max-speed)
     { ; enable is toggled live from the Control tab (ctrl-cruise), not here
         (write-setting 'cruise-delay delay)
         (write-setting 'cruise-deviation deviation)
+        (write-setting 'cruise-min-speed min-speed)
+        (write-setting 'cruise-max-speed max-speed)
     }
 )
 
@@ -1042,7 +1067,9 @@
             "cruise "
             (if (read-setting 'cruise-enabled) "true " "false ")
             (str-from-n (read-setting 'cruise-delay) "%.1f ")
-            (str-from-n (read-setting 'cruise-deviation) "%.1f")
+            (str-from-n (read-setting 'cruise-deviation) "%.1f ")
+            (str-from-n (read-setting 'cruise-min-speed) "%.1f ")
+            (str-from-n (read-setting 'cruise-max-speed) "%.1f")
         ))
         (sleep 0.05)
         (send-data (str-merge
@@ -1069,16 +1096,29 @@
 ; ---- Light-compensation calibration wizard ----
 ; The headlight sags throttle/brake readings non-linearly across the lever
 ; range (not a flat volts shift), so calibration fits an affine correction
-; corrected = (raw - offset) / gain, from 4 static hold-and-average samples
-; per channel: released and full-press, each with the light off and on.
-; A moving sweep (tried first) was too noisy/order-sensitive; a steady hold
-; averaged over the window rejects sample jitter far better.
+; corrected = (raw - offset) / gain, from two held lever positions per
+; channel (released and full press). At each position the light is toggled
+; off/on/off/on and sampled each time: the off/on pair therefore comes from
+; the identical lever position, so the only variable is the light itself.
 
-(defun calib-reset-accum() { (set 'calib-sum 0.0) (set 'calib-cnt 0) })
+(defun calib-reset-accum()
+    {
+        (set 'calib-off-sum 0.0) (set 'calib-off-cnt 0)
+        (set 'calib-on-sum 0.0) (set 'calib-on-cnt 0)
+    }
+)
+
+(defun calib-slot-light(slot) (= (mod slot 2) 1)) ; off, on, off, on...
 
 (defun calib-add(val)
-    { (set 'calib-sum (+ calib-sum val)) (set 'calib-cnt (+ calib-cnt 1)) }
+    (if (calib-slot-light calib-slot)
+        { (set 'calib-on-sum (+ calib-on-sum val)) (set 'calib-on-cnt (+ calib-on-cnt 1)) }
+        { (set 'calib-off-sum (+ calib-off-sum val)) (set 'calib-off-cnt (+ calib-off-cnt 1)) }
+    )
 )
+
+(defun calib-off-avg() (if (> calib-off-cnt 0) (/ calib-off-sum calib-off-cnt) 0.0))
+(defun calib-on-avg() (if (> calib-on-cnt 0) (/ calib-on-sum calib-on-cnt) 0.0))
 
 ; Two-point fit from the released/full-press averages, inverted for runtime
 ; use: corrected = (on_measured - offset) / gain
@@ -1105,73 +1145,82 @@
     }
 )
 
-(defun calib-step-label(step)
-    (cond ((= step 0) "off-rel") ((= step 1) "off-full") ((= step 2) "on-rel") (t "on-full"))
-)
+(defun calib-phase-label(phase) (if (= phase 0) "rel" "full"))
 
-(defun calib-phase-light(step) (>= step 2)) ; steps 0,1 = light off; 2,3 = light on
+; 1-based sample number across the whole run, for the UI progress readout
+(defun calib-slot-index() (+ (* calib-phase calib-slots) calib-slot 1))
+(defun calib-slot-total() (* calib-slots 2))
 
-; Store this step's average into the right persistent var for the channel.
-(defun calib-store-step(ch step avg)
-    (if (eq ch 'thr)
-        (cond
-            ((= step 0) { (set 'thr-off-rel-v avg) (set 'thr-off-rel-ok true) })
-            ((= step 1) { (set 'thr-off-full-v avg) (set 'thr-off-full-ok true) })
-            ((= step 2) { (set 'thr-on-rel-v avg) (set 'thr-on-rel-ok true) })
-            (t          { (set 'thr-on-full-v avg) (set 'thr-on-full-ok true) })
-        )
-        (cond
-            ((= step 0) { (set 'brk-off-rel-v avg) (set 'brk-off-rel-ok true) })
-            ((= step 1) { (set 'brk-off-full-v avg) (set 'brk-off-full-ok true) })
-            ((= step 2) { (set 'brk-on-rel-v avg) (set 'brk-on-rel-ok true) })
-            (t          { (set 'brk-on-full-v avg) (set 'brk-on-full-ok true) })
-        )
-    )
+(defun calib-slot-progress()
+    (str-merge (str-from-n (calib-slot-index) "%d") " " (str-from-n (calib-slot-total) "%d"))
 )
 
 (defun calib-can-start() (and (not off) (<= (abs (get-speed)) 1.0)))
 
-(defun calib-begin-prep(step)
+; Ask for a lever position and give the user time to get there. The light is
+; forced off during prep so every position starts from the same known state.
+(defun calib-begin-prep(phase)
     {
-        (set 'calib-step step)
-        (set 'light (calib-phase-light step))
+        (set 'calib-phase phase)
+        (set 'calib-slot 0)
+        (set 'light false)
+        (calib-reset-accum)
         (set 'calib-stage 'prep)
         (set 'calib-since (systime))
-        (send-data (str-merge "calib-stage prep " (calib-step-label step)))
+        (send-data (str-merge "calib-stage prep " (calib-phase-label phase)))
     }
 )
 
-(defun calib-begin-measure()
+; Set the light for this slot, then wait out the inrush before sampling.
+(defun calib-begin-settle()
+    {
+        (set 'light (calib-slot-light calib-slot))
+        (set 'calib-stage 'settle)
+        (set 'calib-since (systime))
+        (send-data (str-merge "calib-stage settle " (calib-phase-label calib-phase) " " (calib-slot-progress)))
+    }
+)
+
+(defun calib-begin-sample()
     {
         (set 'calib-stage 'measure)
-        (calib-reset-accum)
         (set 'calib-since (systime))
-        (send-data (str-merge "calib-stage measure " (calib-step-label calib-step)))
+        (send-data (str-merge "calib-stage measure " (calib-phase-label calib-phase) " " (calib-slot-progress)))
     }
 )
 
-(defun calib-finish-step()
+; One light state sampled. Advance through the off/on/off/on sequence; when
+; the position is done, either move to the full-press position or finish.
+(defun calib-finish-slot()
     {
-        (var avg (if (> calib-cnt 0) (/ calib-sum calib-cnt) 0.0))
-        (var ch calib-channel)
-        (var st calib-step)
-        (calib-store-step ch st avg)
-        (send-data (str-merge "calib-progress " (if (eq ch 'thr) "thr " "brk ") (calib-step-label st) " " (str-from-n avg "%.3f")))
-        (if (< st 3)
-            (calib-begin-prep (+ st 1)) ; next step
-            { ; all 4 steps done - compute and send the result immediately, then
-              ; hold output disengaged a bit longer so the lever (held fully
-              ; pressed for the last step) can be released before real
-              ; throttle/brake control resumes - avoids a surprise full-power
-              ; launch the instant the sequence ends
-                (set 'light false) ; last step ran with the light on - leave it clean afterward
-                (if (eq ch 'thr)
-                    (calib-finish-regression "thr" thr-off-rel-v thr-off-full-v thr-on-rel-v thr-on-full-v)
-                    (calib-finish-regression "brk" brk-off-rel-v brk-off-full-v brk-on-rel-v brk-on-full-v)
+        (set 'calib-slot (+ calib-slot 1))
+        (if (< calib-slot calib-slots)
+            (calib-begin-settle) ; next light state, same lever position
+            {
+                (var off-avg (calib-off-avg))
+                (var on-avg (calib-on-avg))
+                (var ch calib-channel)
+                (send-data (str-merge "calib-progress " (if (eq ch 'thr) "thr " "brk ")
+                    (calib-phase-label calib-phase) " "
+                    (str-from-n off-avg "%.3f ") (str-from-n on-avg "%.3f")))
+                (if (= calib-phase 0)
+                    { ; released position done - keep it, ask for full press
+                        (set 'calib-off-rel off-avg)
+                        (set 'calib-on-rel on-avg)
+                        (calib-begin-prep 1)
+                    }
+                    { ; both positions done - compute and send the result now, then
+                      ; hold output disengaged a bit longer so the lever (still held
+                      ; fully pressed) can be released before real throttle/brake
+                      ; control resumes - avoids a surprise full-power launch
+                        (set 'light false)
+                        (calib-finish-regression (if (eq ch 'thr) "thr" "brk")
+                            calib-off-rel off-avg calib-on-rel on-avg)
+                        (set 'calib-stage 'release)
+                        (set 'calib-since (systime))
+                        (send-data (str-merge "calib-stage release " (if (eq ch 'thr) "thr" "brk")))
+                    }
                 )
-                (set 'calib-stage 'release)
-                (set 'calib-since (systime))
-                (send-data (str-merge "calib-stage release " (if (eq ch 'thr) "thr" "brk")))
             }
         )
     }
@@ -1181,7 +1230,7 @@
     (if (calib-can-start)
         {
             (set 'calib-channel channel)
-            (calib-begin-prep 0) ; step 0: off-rel
+            (calib-begin-prep 0) ; start at the released position
         }
         (send-data "calib-refused")
     )
@@ -1242,11 +1291,14 @@
             }
             (cond
                 ((eq calib-stage 'prep)
-                    (if (> (secs-since calib-since) calib-prep-duration) (calib-begin-measure))
+                    (if (> (secs-since calib-since) calib-prep-duration) (calib-begin-settle))
+                )
+                ((eq calib-stage 'settle) ; light just toggled - let it stabilise
+                    (if (> (secs-since calib-since) calib-settle-duration) (calib-begin-sample))
                 )
                 ((eq calib-stage 'measure)
-                    (if (> (secs-since calib-since) calib-measure-duration)
-                        (calib-finish-step)
+                    (if (> (secs-since calib-since) calib-sample-duration)
+                        (calib-finish-slot)
                         (calib-add (if (eq calib-channel 'thr) thr-raw-v brk-raw-v))
                     )
                 )
@@ -1328,7 +1380,7 @@
                         (set 'cruise-ref speed-kmh)
                         (set 'cruise-since (systime))
                     }
-                    (if (and (not cruise-blocked) (> speed-kmh 5))
+                    (if (and (not cruise-blocked) (>= speed-kmh cruise-min-speed) (<= speed-kmh cruise-max-speed))
                         {
                             (if (> (abs (- speed-kmh cruise-ref)) cruise-deviation) {
                                 (set 'cruise-ref speed-kmh)

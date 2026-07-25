@@ -55,6 +55,27 @@ VESC firmware 7.00, available at https://vesc-project.com/
 **Updating:** just install the new package over the old one - your settings are kept and
 migrated automatically. To go back to defaults, use the **Reset** button in the UI.
 
+## What's new in 3.0
+
+- **Light compensation is now a real calibration.** The headlight sags the throttle/brake
+  signal *non-linearly*, so a single offset was never enough - 3.0 fits an affine
+  correction (offset + gain) with a guided wizard that measures it for you, light off vs
+  on, at the same held lever position. Old flat-offset values can't be converted and are
+  reset on upgrade: **re-run the calibration after updating**.
+- **Cruise control reworked.** It now only presses and releases the VESC's own cruise
+  button - no speed logic of its own. Throttle or brake cancels it instantly and your live
+  lever takes over in the same moment, and a new **min/max activation speed** window
+  controls when it may engage. It no longer cancels on speed dips, which fixes random
+  disengaging on rough roads and with traction control enabled.
+- **Cruise moved to the Control tab** as a live toggle button (between Light and Secret).
+- **Lever thresholds now come from VESC Tool.** The old *Min Throttle ADC* / *Min Brake ADC*
+  fields are gone; gestures, brake light and cruise cancel all use your configured
+  **ADC start voltage** instead, so there's one less thing to tune and it matches what the
+  motor actually does.
+- **Current %** is entered as a percentage and hard capped at 100%, and **Overmodulation**
+  is floored at 1.0 - neither can be set to a value that overdrives the motor.
+- **mph** now converts every speed-related settings field, not just the dashboard readout.
+
 ## Required VESC configuration
 
 The package feeds the throttle and brake from the dashboard into the VESC's ADC app, so a
@@ -75,12 +96,28 @@ few controller settings must be set (in VESC Tool, not the package UI):
 - **App Settings -> General -> App to Use = `No App`** - a running ADC app on the slave
   fights the master's commands and causes stuttering.
 
+**Lever detection (throttle/brake "pressed"):**
+
+- **App Settings -> ADC -> Mapping -> `ADC1 Start voltage` / `ADC2 Start voltage`** define
+  where the levers start responding. The package reuses exactly these values to decide when
+  a lever counts as pressed - for gestures, the brake light and cruise cancel - so there is
+  no separate deadband to configure. Map your levers properly in VESC Tool and everything
+  else follows.
+
 **For cruise control (optional):**
 
 - **App Settings -> ADC -> Buttons -> enable `Cruise Control`** (leave it *not* inverted).
   The package uses the VESC's built-in cruise button, so this must be on.
 
-After changing controller settings, write the configuration to each unit.
+**For the rear / brake light (optional):**
+
+- **App Settings -> General -> enable `Servo Output`**. The light is driven as PWM on the
+  SERVO/PPM pin, and that pin stays dead until this is enabled - the package can look
+  correctly configured and still produce no light without it.
+- Make sure **App to Use** is not `PPM` (or `PPM and UART`), which would claim the same pin
+  as an input. With `ADC` (as above) the pin is free to drive the light.
+
+After changing controller settings, write the configuration to each unit and power-cycle.
 
 ## Models
 
@@ -113,6 +150,8 @@ Lock, mode switching, headlight and secret mode activation are all **fully remap
   alone after holding the combination for half a second (no button press at all)
 - **Locked**: restrict a gesture so it only works while the scooter is locked
   (e.g. secret mode only unlockable in locked state)
+- A lever counts as held once it passes its **ADC start voltage** from VESC Tool (with
+  light compensation applied), so there is no separate deadband to tune
 - Gestures only react at standstill (configurable button-active speed in Setup)
 - Turning the scooter on (single press while off) always works, regardless of the mapping
 
@@ -124,11 +163,17 @@ Lock, mode switching, headlight and secret mode activation are all **fully remap
 ### Cruise control (experimental)
 - Hold a steady speed with the throttle for the configured delay (default 5 s, deviation
   window configurable); release the throttle and the scooter keeps that speed
-- Built on the VESC's native cruise function, so **any throttle or brake input overrides
-  it instantly** at firmware level; a large speed drop or a stop cancels it too
+- **Min / max activation speed**: cruise only arms inside this speed window, so it can't
+  engage while crawling or above a speed you don't want it at (defaults 5 - 100 km/h)
+- Built on the VESC's native cruise function - the package only presses and releases the
+  VESC's own cruise button and never runs a speed loop of its own
+- **Cancels on any throttle or brake press** past that channel's ADC start voltage, and
+  your live lever position takes over the same instant - no need to release and press
+  again to accelerate or brake. Cruise does *not* cancel on speed alone, so traction
+  control or a bumpy road can't drop it unexpectedly
 - Off by default - **toggle it live from the Control tab** (button between Light and
-  Secret), tune the delay/deviation in Setup. Requires the ADC Cruise Control button
-  enabled (see above). Use with care.
+  Secret), tune delay, deviation and the speed window in Setup. Requires the ADC Cruise
+  Control button enabled (see above). Use with care.
 
 ### Remote control (Control tab)
 - Live dashboard in the app: **speed, battery %, voltage, watts, amps, Wh/km and estimated
@@ -146,12 +191,20 @@ Lock, mode switching, headlight and secret mode activation are all **fully remap
 - **Light compensation**: the headlight sags throttle/brake voltage non-linearly across
   the lever range (not by a fixed amount), so this applies an affine correction
   (offset + gain) rather than a flat offset. A guided **calibration wizard** in Setup
-  does this automatically: one button per channel walks through 4 steps (released and
-  full press, with the light off then on), each with a short "get ready" countdown
-  before a hold-and-average measurement. The motor stays disengaged for the whole
-  sequence, so pressing the levers fully never moves the scooter - no stand needed -
-  and output stays disengaged briefly after the last step so the lever can be released
-  before normal control resumes. Values can also be entered directly.
+  does this automatically - one button per channel, two held lever positions:
+  1. *"Keep throttle released"* (3 s to get into position), then the light is toggled
+     **off / on / off / on** and sampled at each state, showing `Measuring... n/8`
+  2. *"Press throttle to maximum"* (3 s), then the same off/on/off/on sampling again
+
+  Because the light-off and light-on readings at each position come from the **same
+  uninterrupted hold**, the lever is never repositioned between a pair - the only thing
+  that changes is the light. Alternating twice per position averages out slow drift
+  (pack sag, thermal), and a short settle after each toggle skips the headlight inrush.
+
+  The motor stays disengaged for the whole sequence, so pressing the levers fully never
+  moves the scooter - **no stand needed** - and output stays disengaged for a few seconds
+  after the last measurement so the lever can be released before normal control resumes.
+  Values can also be entered directly.
 - **mph display**: dash speed and all speed-related settings switchable between km/h and
   mph (stored internally as km/h; rounded properly for the dash)
 - Motor start speed (kick-start) and temperature warning icon with configurable thresholds
@@ -186,8 +239,16 @@ Lock, mode switching, headlight and secret mode activation are all **fully remap
 ### Rear / brake light (optional)
 
 The rear light is driven from the **servo/PPM pin** through an N-channel MOSFET
-(PWM at 200 Hz - dim tail light, full brightness brake light). Enable it in the
-**Setup** tab. Wiring by [Zodiak1993](https://github.com/Zodiak1993/vesc_m365_dash).
+(PWM at 200 Hz - dim tail light, full brightness brake light).
+Wiring by [Zodiak1993](https://github.com/Zodiak1993/vesc_m365_dash).
+
+Three things must all be set or the light stays dark:
+
+1. **VESC Tool -> App Settings -> General -> `Servo Output` = enabled** (the pin is dead
+   without it - see [Required VESC configuration](#required-vesc-configuration))
+2. **Setup tab -> `Rear light output`** - the master switch for the feature
+3. **Setup tab -> `Always ON Tail light`** - only if you want the tail light lit
+   independently of the headlight (otherwise it follows the headlight)
 
 Power the LED strip from a source that can supply it (see the 5V note above) - a
 higher-current light should run from a step-down module off the battery, not the
