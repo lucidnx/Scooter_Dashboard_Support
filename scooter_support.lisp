@@ -1590,20 +1590,16 @@
 
 (def app-ver 0x0700) ; 7.0.0 - above every stock version, marks this as a VESC
 
-; Apps parse the serial instead of just displaying it: the first three
-; characters select the product series and the year, week and unit fields must
-; be digits, so it has to keep the stock shape or the scooter is rejected
-; outright. Firmware version 7.0.0 is the VESC marker instead. The last four
-; digits come from the controller UUID so each unit still reads differently.
+; "VESC" plus ten digits derived from the controller UUID, so a VESC is
+; identifiable at a glance and every unit reads differently. Together with
+; firmware version 7.0.0 this is what an app keys off to detect the package.
 (defun app-build-serial ()
     (let ((n 0))
         {
             (trap (loopforeach b (sysinfo 'uuid) (setq n (+ (* n 31) b))))
-            (var tail (str-from-n (mod (bitwise-and n 0x7FFFFFFF) 10000) "%04d"))
-            (var s (if (= model 1)
-                (str-merge "16133/0000" tail) ; Xiaomi M365 shape
-                (str-merge "N4GSD24010" tail) ; Ninebot G30 shape
-            ))
+            (var lo (mod (bitwise-and n 0x7FFFFFFF) 100000))
+            (var hi (mod (bitwise-and (shr n 7) 0x7FFFFFFF) 100000))
+            (var s (str-merge "VESC" (str-from-n hi "%05d") (str-from-n lo "%05d")))
             (looprange i 0 14 (bufset-u8 app-serial i (bufget-u8 s i)))
         }
     )
@@ -1850,8 +1846,8 @@
         ((= reg 0x32) (to-i cur-batt))
         ((= reg 0x33) (app-amp-ca))
         ((= reg 0x34) (app-volt-cv))
-        ((= reg 0x35) (+ (bitwise-and (+ (to-i cur-fet) 20) 0xFF) ; both temps +20
-                         (shl (bitwise-and (+ (to-i cur-mot) 20) 0xFF) 8)))
+        ((= reg 0x35) (let ((tc (bitwise-and (+ (to-i cur-fet) 20) 0xFF))) ; both sensors +20
+                          (+ tc (shl tc 8))))
         ((= reg 0x3b) 100) ; health
         ((and (>= reg 0x40) (< reg 0x4a)) (app-cell-mv))
         (t 0)
