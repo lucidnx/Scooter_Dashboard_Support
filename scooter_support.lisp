@@ -167,6 +167,7 @@
 
 ; app protocol state - buffers are built in main, they must stay out of flash
 (def app-boot-time (systime))
+(def app-debug false) ; (set 'app-debug true) in the VESC Tool Lisp console to trace app frames
 
 ; rear light state
 (def pwm-started false)
@@ -1606,6 +1607,17 @@
     })
 )
 
+(defun app-log (len) ; src>dst cmd reg len first-payload-byte
+    (print (str-merge "app "
+        (str-from-n (bufget-u8 uart-buf 0) "%02x>")
+        (str-from-n (bufget-u8 uart-buf 1) "%02x c")
+        (str-from-n (bufget-u8 uart-buf 2) "%02x r")
+        (str-from-n (bufget-u8 uart-buf 3) "%02x l")
+        (str-from-n len "%d ")
+        (if (> len 0) (str-from-n (bufget-u8 uart-buf 4) "%02x") "-")
+    ))
+)
+
 (defun app-word (buf idx) ; register pair out of a byte string, little endian
     (+ (bufget-u8 buf (* idx 2)) (shl (bufget-u8 buf (+ (* idx 2) 1)) 8))
 )
@@ -1737,13 +1749,18 @@
     )
 )
 
-(defun nb-app-frame (src cmd reg)
+(defun nb-app-frame (src cmd reg len)
     (cond
-        ((= cmd 0x01) (let ((n (bufget-u8 uart-buf 4)))
-            (if (and (> n 1) (<= n 32)) (nb-send src 0x01 reg (bitwise-and n 0xFE)))
+        ; a read carries the wanted byte count as its only payload byte; some
+        ; requests omit it entirely, in which case one register is meant
+        ((= cmd 0x01) (let ((n (if (> len 0) (bufget-u8 uart-buf 4) 2)))
+            (if (or (< n 2) (> n 32)) (setq n 2))
+            (nb-send src 0x01 reg (bitwise-and n 0xFE))
         ))
         ((or (= cmd 0x02) (= cmd 0x03)) {
-            (app-write reg (+ (bufget-u8 uart-buf 4) (shl (bufget-u8 uart-buf 5) 8)))
+            (if (> len 0)
+                (app-write reg (+ (bufget-u8 uart-buf 4) (shl (bufget-u8 uart-buf 5) 8)))
+            )
             (nb-send src 0x05 reg 1)
         })
     )
@@ -1839,7 +1856,7 @@
                         {
                             (var len (bufget-u8 uart-buf 2))
                             (var crc len)
-                            (if (and (> len 0) (< len 59)) ; len+6 must fit the 64 byte buffer
+                            (if (< len 59) ; len+6 must fit the 64 byte buffer, len 0 is a valid read
                                 {
                                     (uart-read-bytes uart-buf (+ len 6) 0) ;read remaining 6 bytes + payload, overwrite buffer
 
@@ -1855,11 +1872,20 @@
                                                     (if (= code 0x64) ; dash reply only on 0x64
                                                         (update-dash uart-buf)
                                                     )
-                                                    ; app frames come from 0x3d-0x3f via the BLE module
-                                                    (let ((src (bufget-u8 uart-buf 0)))
-                                                        (if (and (>= src 0x3d) (<= src 0x3f) (= (bufget-u8 uart-buf 1) 0x20))
-                                                            (nb-app-frame src code (bufget-u8 uart-buf 3))
-                                                        )
+                                                    ; App register access, whatever address the BLE
+                                                    ; module relays it under - the dash only ever
+                                                    ; sends us 0x64/0x65, so the command is the
+                                                    ; reliable discriminator, not the source.
+                                                    (if (= (bufget-u8 uart-buf 1) 0x20)
+                                                        {
+                                                            ; log anything that is not dash traffic
+                                                            (if (and app-debug (!= code 0x64) (!= code 0x65))
+                                                                (app-log len)
+                                                            )
+                                                            (if (or (= code 0x01) (= code 0x02) (= code 0x03))
+                                                                (nb-app-frame (bufget-u8 uart-buf 0) code (bufget-u8 uart-buf 3) len)
+                                                            )
+                                                        }
                                                     )
                                                 }
                                             )
