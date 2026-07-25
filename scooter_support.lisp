@@ -1816,6 +1816,7 @@
         ((and (>= reg 0x10) (< reg 0x17)) (app-word app-serial (- reg 0x10)))
         ((= reg 0x17) app-ver)
         ((= reg 0x18) (app-cap-mah))
+        ((= reg 0x20) 0x3021) ; 7 bit year from 2000, 4 bit month, 5 bit day
         ((= reg 0x31) (app-clamp16 (* (get-batt) (app-cap-mah))))
         ((= reg 0x32) (to-i cur-batt))
         ((= reg 0x33) (app-amp-ca))
