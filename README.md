@@ -191,8 +191,10 @@ hardware or wiring is needed.
 
 - **Live data**: speed, battery %, voltage, current, power, temperature, odometer, trip
   distance and time, average speed, estimated range, error and alarm codes
-- **Controls from the app**: lock / unlock, headlight, cruise control, speed mode
-  (Eco / Drive / Sport), secret mode, buzzer, and "find my scooter"
+- **Controls from the app**: lock / unlock, rear light, cruise control, speed mode
+  (Eco / Drive / Sport), secret mode, buzzer, and "find my scooter". The app's
+  *Back light* switch toggles the always-on tail light (needs the rear light output
+  enabled in Setup)
 - **Battery data**: on Xiaomi the BMS is emulated too, so the app's battery screen is
   populated - pack voltage and current from the VESC (CAN-combined), and per-cell voltage
   derived from pack voltage ÷ series count when no VESC BMS is present

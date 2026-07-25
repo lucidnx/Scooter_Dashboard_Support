@@ -1670,7 +1670,11 @@
             (set 'cruise-enabled (!= val 0))
             (write-setting 'cruise-enabled cruise-enabled)
         })
-        ((or (= reg 0x7d) (= reg 0x90)) (set 'light (!= val 0)))
+        ((= reg 0x7d) {
+            (set 'auto-taillight (!= val 0))
+            (write-setting 'auto-taillight auto-taillight)
+        })
+        ((= reg 0x90) (set 'light (!= val 0)))
         ((= reg 0x7e) (if (!= val 0) (set 'feedback 3))) ; find my scooter
         ((or (= reg 0x91) (= reg 0x92)) {
             (set 'alarm-tone (!= val 0))
@@ -1710,7 +1714,8 @@
         ((= reg 0x7a) (if unlock 1 0))
         ((= reg 0x7b) 0) ; KERS - VESC does not use Xiaomi-style regen levels
         ((= reg 0x7c) (if cruise-enabled 1 0))
-        ((or (= reg 0x7d) (= reg 0x90)) (if light 1 0))
+        ((= reg 0x7d) (if auto-taillight 2 0)) ; the app writes 2 for on
+        ((= reg 0x90) (if light 1 0))
         ((or (= reg 0x91) (= reg 0x92)) (if alarm-tone 1 0))
         ((= reg 0xb0) (get-fault))
         ((= reg 0xb1) (if (> alarm 0) 9 0))
@@ -1794,7 +1799,7 @@
         ((= reg 0x7a) (if unlock 1 0))
         ((= reg 0x7b) 0) ; KERS reported as off
         ((= reg 0x7c) (if cruise-enabled 1 0))
-        ((= reg 0x7d) (if light 2 0))
+        ((= reg 0x7d) (if auto-taillight 2 0))
         ((= reg 0xb0) (get-fault))
         ((= reg 0xb4) (to-i cur-batt))
         ((or (= reg 0xb5) (= reg 0xb6)) (app-clamp16 (* (abs cur-speed-kmh) 1000)))
