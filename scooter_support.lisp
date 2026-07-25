@@ -178,9 +178,6 @@
 
 ; app protocol state - buffers are built in main, they must stay out of flash
 (def app-boot-time (systime))
-; (set 'app-debug true) in the VESC Tool Lisp console to trace control
-; writes and errors - reads are answered continuously and are not logged
-(def app-debug false)
 
 ; rear light state
 (def pwm-started false)
@@ -1619,17 +1616,6 @@
     })
 )
 
-(defun app-log (len) ; src>dst cmd reg len first-payload-byte
-    (print (str-merge "app "
-        (str-from-n (bufget-u8 uart-buf 0) "%02x>")
-        (str-from-n (bufget-u8 uart-buf 1) "%02x c")
-        (str-from-n (bufget-u8 uart-buf 2) "%02x r")
-        (str-from-n (bufget-u8 uart-buf 3) "%02x l")
-        (str-from-n len "%d ")
-        (if (> len 0) (str-from-n (bufget-u8 uart-buf 4) "%02x") "-")
-    ))
-)
-
 (defun app-word (buf idx) ; register pair out of a byte string, little endian
     (+ (bufget-u8 buf (* idx 2)) (shl (bufget-u8 buf (+ (* idx 2) 1)) 8))
 )
@@ -1761,9 +1747,6 @@
     (let ((buf (array-create (+ n 9))) (crc 0))
         {
             (trap {
-            (if (and app-debug (= cmd 0x05)) ; only acknowledgements, reads are constant
-                (print (str-merge "tx r" (str-from-n reg "%02x n") (str-from-n n "%d")))
-            )
             (bufset-u16 buf 0 0x5aa5)
             (bufset-u8 buf 2 n)
             (bufset-u8 buf 3 from)
@@ -1897,7 +1880,7 @@
 
 (defun read-frames-g30()
     (loopwhile t {
-        (var e (trap ; a parse error must not kill the reader thread
+        (trap ; a parse error must not kill the reader thread
             (loopwhile t
                 {
                     (uart-read-bytes uart-buf 3 0)
@@ -1921,23 +1904,13 @@
                                                     (if (= code 0x64) ; dash reply only on 0x64
                                                         (update-dash uart-buf)
                                                     )
-                                                    ; App register access, whatever address the BLE
-                                                    ; module relays it under - the dash only ever
-                                                    ; sends us 0x64/0x65, so the command is the
-                                                    ; reliable discriminator, not the source.
-                                                    (if (or (= (bufget-u8 uart-buf 1) 0x20) (= (bufget-u8 uart-buf 1) 0x22))
-                                                        {
-                                                            ; reads and the dash's own 0x61 chatter are
-                                                            ; constant and carry nothing worth seeing
-                                                            (if (and app-debug (or (= code 0x02) (= code 0x03)))
-                                                                (app-log len)
-                                                            )
-                                                            (if (or (= code 0x01) (= code 0x02) (= code 0x03))
-                                                                (let ((r (trap (nb-app-frame (bufget-u8 uart-buf 1) (bufget-u8 uart-buf 0) code (bufget-u8 uart-buf 3) len))))
-                                                                    (if (and app-debug (eq (car r) 'exit-error)) (print r))
-                                                                )
-                                                            )
-                                                        }
+                                                    ; App register access, addressed to the ESC or to
+                                                    ; the emulated BMS. The dash only ever sends
+                                                    ; 0x64/0x65, so the command is the reliable
+                                                    ; discriminator, not the source address.
+                                                    (if (and (or (= (bufget-u8 uart-buf 1) 0x20) (= (bufget-u8 uart-buf 1) 0x22))
+                                                             (or (= code 0x01) (= code 0x02) (= code 0x03)))
+                                                        (trap (nb-app-frame (bufget-u8 uart-buf 1) (bufget-u8 uart-buf 0) code (bufget-u8 uart-buf 3) len))
                                                     )
                                                 }
                                             )
@@ -1949,15 +1922,14 @@
                     )
                 }
             )
-        ))
-        (if app-debug (print e))
+        )
         (sleep 0.1) ; only reached after an error
     })
 )
 
 (defun read-frames-m365()
     (loopwhile t {
-        (var e (trap ; a parse error must not kill the reader thread
+        (trap ; a parse error must not kill the reader thread
             (loopwhile t
                 {
                     (uart-read-bytes uart-buf 3 0)
@@ -1979,9 +1951,7 @@
                                             ; separates its frames from app register access
                                             (let ((cmd (bufget-u8 uart-buf 1)))
                                                 (if (or (= cmd 0x01) (= cmd 0x03))
-                                                    (let ((r (trap (xm-app-frame (bufget-u8 uart-buf 0) cmd (bufget-u8 uart-buf 2) len))))
-                                                        (if (and app-debug (eq (car r) 'exit-error)) (print r))
-                                                    )
+                                                    (trap (xm-app-frame (bufget-u8 uart-buf 0) cmd (bufget-u8 uart-buf 2) len))
                                                     (update-dash uart-buf) ; dash expects a reply on every frame
                                                 )
                                             )
@@ -1993,8 +1963,7 @@
                     )
                 }
             )
-        ))
-        (if app-debug (print e))
+        )
         (sleep 0.1) ; only reached after an error
     })
 )
