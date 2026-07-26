@@ -32,37 +32,77 @@ and is not a three-level setting.
 
 ## Current control mapping
 
-NineDash has no headlight, secret-mode or speed-mode controls, so the package currently
-borrows two controls that have no VESC meaning. This works, but the labels lie:
+NineDash has no headlight, secret-mode or speed-mode controls, so the package borrows
+three controls that have no VESC meaning. This works, but the labels lie:
 
 | your control | register | what it actually does |
 |---|---|---|
 | Recovery mode (KERS) | `0x7B` | **speed mode** — Weak = Eco, Medium = Drive, Strong = Sport |
-| Direct power control | `0x76` | **secret modes** on/off |
+| Walk / pedestrian mode | `0x77` | **secret modes** on/off |
+| Direct power control | `0x76` | **headlight** on/off |
 | Cruise mode | `0x7C` | cruise control on/off |
 | Back light | `0x7D` | tail light |
 | Lock | `0x70` / `0x71` | lock / unlock |
 
 All read back, so the switches show real state.
 
-## Requests, most useful first
+## The polling budget
 
-### 1. A slower polling mode
+**This is the important section.** It affects stock scooters too — it is not a VESC
+problem, it is a property of the bus.
 
-This is the big one, and it affects **stock scooters too** — it is not a VESC problem.
+The dash and the ESC share a **single half-duplex wire**. Whenever the ESC transmits, its
+receiver is switched off, and on VESC firmware it stays off slightly past the end of the
+frame. Any lever frame that arrives in that window is lost. The dash also runs a fixed
+transmission budget of about 10 ESC slots per second, and relaying app traffic takes those
+slots from the `0x65`/`0x61` frames that carry throttle and brake.
 
-Measured on a G30 dash, riding, with and without NineDash connected:
+So the cost of a poll is **one transmission**, not one byte. Big reads are cheap. Frequent
+reads are expensive.
 
-```
-app disconnected   lever frames 40/s   dash polls 10/s
-app connected      lever frames 10/s   dash polls 10/s   app requests 15.6/s
-```
+The package answers the app by packing the reply inside the dash reply it was going to send
+anyway. That is free. But it can only do that if the request arrives before the dash's own
+poll in that cycle — otherwise the reply needs a transmission of its own, and that is what
+costs throttle response.
 
-The dash works to a fixed transmission budget. When it relays app traffic it takes the
-slots from the `0x65`/`0x61` frames that carry throttle and brake, and the ESC's throttle
-update interval goes from 51 ms to 104 ms — with a 90th percentile of 308 ms. On a stock
-G30 that is masked by gentler throttle response; on a high-power VESC it is felt directly
-as lag.
+### Measured, three apps, same scooter, same firmware
+
+| app | requests/s | shortest gap | ESC transmissions/s | worst lever gap |
+|---|---|---|---|---|
+| *no app connected* | — | — | **9.9** | — |
+| Segway Ninebot (official) | 3.4 | 102 ms | **9.7** | **55 ms** |
+| m365 Tools | 5.2 | 102 ms | **10.2** | 105 ms |
+| NineDash | 10.5 – 11.7 | 50 ms | **14.7 – 15.4** | 104 ms |
+
+The first two are free — the ESC transmits no more often than with no app at all, and the
+rider feels nothing. NineDash adds about **5 extra transmissions per second**, roughly 50%
+over baseline, and that is felt directly as throttle and brake lag on a high-power VESC.
+
+It is not about data volume. m365 Tools moves **more** bytes than NineDash — 83 B/s against
+71 B/s — in half the transactions, and is smooth. The official Segway app reads only small
+2-byte registers, one at a time, and is smoother still. The single variable that separates
+them is how often they transmit.
+
+### Suggested limits
+
+These come straight from what the two well-behaved apps already do:
+
+- **≥ 100 ms between consecutive requests.** That is two dash cycles (a cycle is 51 ms).
+  Both good apps sit at 102 ms minimum and never go below it. NineDash currently sits at
+  50 ms — one request every single cycle.
+- **One request in flight.** Send the next only after the previous reply arrives. The
+  official Segway app is strictly request → reply → wait a cycle → next.
+- **Never two requests inside one 51 ms cycle.** In the captures NineDash sent 55 of 673
+  requests within 20 ms of the previous one. Each back-to-back pair forces a second reply
+  in a cycle that only had room for one.
+- **≤ 5 requests/s sustained.** This is the number that keeps total ESC transmissions at
+  or under ~10/s, which is the baseline with no app at all.
+- **Tolerate unanswered requests.** The package already drops bulk reads while the levers
+  are active — 29–42% of m365 Tools' requests go unanswered and the user sees nothing
+  wrong, because the app simply re-asks. Please do not treat a missing reply as an error
+  or retry it immediately.
+
+### Where NineDash's requests currently go
 
 Four registers account for 12.8 of the 15.6 requests per second:
 
@@ -73,23 +113,31 @@ Four registers account for 12.8 of the 15.6 requests per second:
 | ESC `0xDA` | 3.2 Hz | unknown |
 | BMS `0x35` | 2.9 Hz | temperatures |
 
-Dropping to roughly 4 requests/s would return most of the lever bandwidth. A "reduce
-polling while riding" option would help every user on every controller.
+Two ways to get under the limits, both proven on this hardware:
 
-### 2. A headlight toggle on `0x7A`
+**Batch them.** m365 Tools reads `0xB0` (28 B), `0x25` (48 B), `0x1A` (24 B), `0x72` (32 B)
+and BMS `0x30` (24 B) as bulk blocks at about 1 Hz each and gets everything in 5.2
+requests/s. The package answers all of these.
 
-`0x7A` is marked **Reserved** in the Ninebot ES protocol document, so it cannot collide
-with stock semantics. Same shape as your Back light switch — `cmd 0x03`, one payload byte,
-`0` off and non-zero on — and readable at the same address for the state.
+**Or just slow down.** The official Segway app keeps the same small single-register reads
+NineDash uses and simply paces them at 104 ms, and it is the cleanest of the three. Pacing
+alone is enough — batching is an optimisation on top.
 
-The package already implements it, so it works the moment a control writes there.
+A "reduce polling while riding" option would help every user on every controller.
 
-**Please read the next section before adding it.**
+## Other notes
 
-### 3. Something in the app reacts to the headlight
+### A headlight toggle on `0x7A`
 
-On this setup, **changing the headlight state ends the BLE session**, within one dash cycle,
-regardless of how it is triggered. Confirmed four ways:
+Beyond the borrowed `0x76` mapping above, `0x7A` is marked **Reserved** in the Ninebot ES
+protocol document, so it is free for a properly labelled headlight switch. Same shape as
+your Back light switch — `cmd 0x03`, one payload byte, `0` off and non-zero on — and
+readable at the same address for the state. The package implements it already.
+
+### Something reacts to the headlight
+
+On this setup, **changing the headlight state has been observed to end the BLE session**,
+within one dash cycle, regardless of how it is triggered. Confirmed four ways:
 
 - app writes `0x7B` mapped to the headlight → disconnect
 - app writes `0x7D` mapped to the headlight → disconnect
@@ -102,12 +150,13 @@ keeps answering the dash at 10/s and lever frames return to 40/s the moment the 
 The bus capture shows a completely clean exchange right up to the silence.
 
 The only thing that changes on the wire is bit 2 of the dash frame payload (`20>21 cmd 0x64`),
-which carries the headlight state. Does the app react to that bit? A stock G30 does not
-behave this way, which is why we suspect something app-side rather than protocol-side.
+which carries the headlight state. Does the app react to that bit?
 
-Until this is understood, a headlight control would disconnect on first use.
+All of these observations predate the timing work described above, when replies were
+sometimes hundreds of milliseconds late, so a plain app-side timeout has not been ruled
+out. The headlight now sits on `0x76` (Direct power control), so it can be re-tested.
 
-### 4. Two smaller things
+### Two smaller things
 
 **`0xDA`** is polled at 3.2 Hz — your third most frequent register — and is undocumented in
 every protocol reference we can find. The package returns zeros. What is it?

@@ -191,8 +191,8 @@ hardware or wiring is needed.
 
 - **Live data**: speed, battery %, voltage, current, power, temperature, odometer, trip
   distance and time, average speed, estimated range, error and alarm codes
-- **Controls from the app**: lock / unlock, rear light, cruise control, speed mode
-  (Eco / Drive / Sport), secret mode, buzzer, and "find my scooter". The app's
+- **Controls from the app**: lock / unlock, headlight, rear light, cruise control, speed
+  mode (Eco / Drive / Sport), secret mode, buzzer, and "find my scooter". The app's
   *Back light* switch toggles the always-on tail light (needs the rear light output
   enabled in Setup)
 - **Battery data**: on Xiaomi the BMS is emulated too, so the app's battery screen is
@@ -204,12 +204,9 @@ hardware or wiring is needed.
 - Reports firmware version **7.0.0** and a serial number of `VESC` + ten digits derived
   from your controller's UUID, so app authors can detect a VESC and adapt (e.g. hide
   unsupported functions) - see [notes for the NineDash developer](docs/ninedash.md)
-- NineDash has no headlight, secret or speed-mode controls, so two of its controls are
-  borrowed: **Recovery mode (KERS)** selects the speed mode (Weak/Medium/Strong =
-  Eco/Drive/Sport) and **Direct power control** toggles secret modes
-- **Known issue:** toggling the headlight ends the app's BLE session, however it is
-  switched - including from the scooter's own button. The cause is not yet understood,
-  so the headlight is deliberately not exposed to the app
+- Apps have no headlight, secret or speed-mode controls, so three of theirs are borrowed:
+  **Recovery mode (KERS)** selects the speed mode (Weak/Medium/Strong = Eco/Drive/Sport),
+  **Walk mode** toggles secret modes, and **Direct power control** toggles the headlight
 - Lock and unlock are only accepted at standstill, as on a stock scooter
 - **Shutdown is deliberately ignored**: it would cut power to the dashboard itself. The
   command is acknowledged so the app doesn't hang, but nothing happens
@@ -219,10 +216,21 @@ hardware or wiring is needed.
 the dash, its BLE module and the controller. Every time the controller transmits, the VESC
 firmware switches its receiver off and hands the job of switching it back on to a
 background worker without waiting for it - so lever frames arriving in that window are
-lost. Measured on a G30: the worst gap before a throttle update is applied is 51 ms with
-no app connected, and rises with one connected. It is intermittent rather than constant,
-and it is a firmware limitation rather than something the package can fix. If you want the
-crispest throttle, turn **Phone app support** off in General and use the app when parked.
+lost. How much this matters depends entirely on **how often the app polls**, not on how
+much data it asks for. Measured on a G30 while riding:
+
+| app | requests/s | controller transmissions/s |
+|---|---|---|
+| none | - | 9.9 |
+| Segway Ninebot (official) | 3.4 | 9.7 |
+| m365 Tools | 5.2 | 10.2 |
+| NineDash | 10.5 - 11.7 | 14.7 - 15.4 |
+
+Apps that pace their requests at least 100 ms apart cost nothing at all - throttle feels
+exactly as it does with no app. NineDash currently polls every dash cycle and that is felt
+as occasional throttle and brake lag. If it affects you, turn **Phone app support** off in
+General and use the app when parked. The full analysis is in
+[notes for the NineDash developer](docs/ninedash.md).
 
 ### Comfort
 - **Auto headlight**: turn the headlight on automatically at power on
