@@ -183,16 +183,9 @@
 (def app-reply-time (systime))
 ; worst time spent handling one frame, in ms - this is our own cost, unlike a
 ; gap between frames which also counts the dash simply being quiet
-(def rx-lever 0)    ; lever frames seen
-(def rx-hz 0.0)     ; lever frames per second the dash is actually sending
-(def rx-hz-last 0)
-(def rx-hz-time (systime))
-(def proc-ms 0.0)   ; any frame
-(def proc-ms-app 0.0) ; app register frames only
 (def quick-sum 0)   ; checksum contribution of the prebuilt 0xB0 block
 (def quick-used false) ; only worth maintaining while an app is actually asking
 (def app-dst 0x3e)     ; address the app last asked from
-(def rx-app 0)         ; app requests received, answered or not
 (def app-enable true)  ; (set 'app-enable false) to ignore the app entirely
 ; Below this speed the app is answered freely; above it each class of register
 ; gets its own interval, because answering keeps the app polling back to back
@@ -202,7 +195,6 @@
 (def app-iv-ctrl 0.5) ; mode, cruise, light, lock state
 (def app-iv-bulk 2.0) ; the 0xB0 block and anything else large
 (def app-iv-slow 5.0) ; battery pack data, identity, everything else
-(def proc-ms-move 0.0) ; worst handler time while actually moving
 (def cur-cell-mv 0) ; one division, not fifteen per cell read
 
 ; rear light state
@@ -1523,7 +1515,6 @@
         )
 
         (trap (build-dash-frame))
-        (trap (rx-rate-update))
         (trap (app-cache-update))
         (trap (handle-taillight))
         (handle-lock (abs current-speed))
@@ -1657,14 +1648,6 @@
 ; One bulk read asks for 26 registers at once, so nothing below may query CAN
 ; or read the config - the reply path has to stay cheap, same as the dash
 ; frame. Everything expensive is sampled once per cycle in app-cache-update.
-(defun rx-rate-update ()
-    (if (> (secs-since rx-hz-time) 1.0) {
-        (set 'rx-hz (/ (- rx-lever rx-hz-last) (secs-since rx-hz-time)))
-        (set 'rx-hz-last rx-lever)
-        (set 'rx-hz-time (systime))
-    })
-)
-
 (defun app-cache-update ()
     (if (> (secs-since app-cache-time) 0.2) {
         (set 'app-cache-time (systime))
@@ -1924,7 +1907,6 @@
         ((= cmd 0x01) (let ((n (if (> len 0) (bufget-u8 uart-buf 4) 2))) {
             (if (or (< n 2) (> n 64)) (setq n 2))
             (setq n (bitwise-and n 0xFE))
-            (set 'rx-app (+ rx-app 1))
             (if (!= src app-dst) (set 'app-dst src))
             (set 'quick-used true)
             (cond
@@ -2070,30 +2052,17 @@
                                     (setq crc (bitwise-xor crc 0xFFFF))
                                     (if (= (bufget-u16 uart-buf (+ len 4))
                                            (bitwise-and (+ (shr crc 8) (shl crc 8)) 65535))
-                                        {
-                                            (var t0 (systime))
-                                            (cond
-                                                ((= code 0x65) {
-                                                    (set 'rx-lever (+ rx-lever 1))
+                                        (cond
+                                                ((= code 0x65)
                                                     (if (and software-adc (>= len 3)) ; frame must carry the lever bytes
                                                         (adc-input uart-buf)
                                                     )
-                                                })
+                                                )
                                                 ((= code 0x64) (update-dash uart-buf))
-                                                (t {
-                                                    (if app-enable
-                                                        (trap (nb-app-frame dst (bufget-u8 uart-buf 0) code (bufget-u8 uart-buf 3) len))
-                                                    )
-                                                    (var ma (* (secs-since t0) 1000))
-                                                    (if (> ma proc-ms-app) (set 'proc-ms-app ma))
-                                                })
-                                            )
-                                            (var m (* (secs-since t0) 1000))
-                                            (if (> m proc-ms) (set 'proc-ms m))
-                                            (if (and (> (abs cur-speed-kmh) 1.0) (> m proc-ms-move))
-                                                (set 'proc-ms-move m)
-                                            )
-                                        }
+                                                (t (if app-enable
+                                                    (trap (nb-app-frame dst (bufget-u8 uart-buf 0) code (bufget-u8 uart-buf 3) len))
+                                                ))
+                                        )
                                     )
                                 }
                             )
@@ -2616,9 +2585,6 @@
             (def app-f-b4 (array-create 15))
             (def app-f-7b (array-create 15))
             (def app-times (array-create 16)) ; last reply time per register class
-            (set 'proc-ms 0.0)
-            (set 'proc-ms-app 0.0)
-            (set 'proc-ms-move 0.0)
             (set 'cur-cells (let ((n (conf-get 'si-battery-cells))) (if (> n 0) n 10)))
             (set 'cur-cap (app-clamp16 (* (conf-get 'si-battery-ah) 1000)))
             (app-build-serial)
