@@ -183,7 +183,10 @@
 (def app-reply-time (systime))
 ; worst time spent handling one frame, in ms - this is our own cost, unlike a
 ; gap between frames which also counts the dash simply being quiet
-(def rx-lever 0)    ; lever frames seen - sample twice to get the dash's rate
+(def rx-lever 0)    ; lever frames seen
+(def rx-hz 0.0)     ; lever frames per second the dash is actually sending
+(def rx-hz-last 0)
+(def rx-hz-time (systime))
 (def proc-ms 0.0)   ; any frame
 (def proc-ms-app 0.0) ; app register frames only
 (def quick-sum 0)   ; checksum contribution of the prebuilt 0xB0 block
@@ -1517,13 +1520,15 @@
             )
         )
 
+        (trap (build-dash-frame))
+        (trap (rx-rate-update))
         (trap (app-cache-update))
         (trap (handle-taillight))
         (handle-lock (abs current-speed))
     }
 )
 
-(defun update-dash(buffer) ; Frame 0x64
+(defun build-dash-frame () ; contents of the 0x64 reply
     {
         (var current-speed (abs cur-speed-kmh))
         (var disp-speed (+ (if use-mph (* current-speed 0.621371) current-speed) 0.5)) ; rounded for the dash
@@ -1595,10 +1600,10 @@
         (bufset-u8 tx-frame crc-end crcout)
         (bufset-u8 tx-frame (+ crc-end 1) (shr crcout 8))
 
-        ; write
-        (uart-write tx-frame)
     }
 )
+
+(defun update-dash(buffer) (uart-write tx-frame)) ; already composed
 
 ; -> App protocol (NineDash, m365 Dashboard)
 ; The dash BLE module bridges app frames onto this same half-duplex bus, so
@@ -1650,6 +1655,14 @@
 ; One bulk read asks for 26 registers at once, so nothing below may query CAN
 ; or read the config - the reply path has to stay cheap, same as the dash
 ; frame. Everything expensive is sampled once per cycle in app-cache-update.
+(defun rx-rate-update ()
+    (if (> (secs-since rx-hz-time) 1.0) {
+        (set 'rx-hz (/ (- rx-lever rx-hz-last) (secs-since rx-hz-time)))
+        (set 'rx-hz-last rx-lever)
+        (set 'rx-hz-time (systime))
+    })
+)
+
 (defun app-cache-update ()
     (if (> (secs-since app-cache-time) 0.2) {
         (set 'app-cache-time (systime))
