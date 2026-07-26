@@ -199,7 +199,6 @@
 ; and the cell voltage read alone is over one a second. Those are diagnostics,
 ; not riding data, so they wait until the levers are released.
 (def levers-active false)
-(def app-kers 0) ; which KERS position the app last picked, so it stays put
 (def thr-start 0.3)
 (def brk-start 0.3)
 ; In half duplex the firmware switches the receiver off for the whole of every
@@ -1807,18 +1806,7 @@
                 (build-app-frame app-f-7b 0x7b 6)
                 (set 'app-todo (bitwise-or app-todo 2))
             })))
-        ; the app's KERS selector drives the headlight: weak off, medium or strong on
-        ((= reg 0x7b) {
-            (set 'app-kers val)
-            (set 'light (!= val 0))
-            (build-app-frame app-f-7b 0x7b 6) ; readback must agree at once
-        })
         ((= reg 0x90) (set 'light (!= val 0)))
-        ((= reg 0x76) (let ((u (!= val 0))) ; "direct power control" drives secret modes
-            (if (not (eq u unlock)) {
-                (set 'unlock u)
-                (set 'app-todo (bitwise-or app-todo 16))
-            })))
         ((= reg 0x7e) (if (!= val 0) (set 'feedback 3))) ; find my scooter
         ((or (= reg 0x91) (= reg 0x92)) (let ((v (!= val 0)))
             (if (not (eq v alarm-tone)) {
@@ -1879,9 +1867,7 @@
         (cond
             ((= reg 0x1a) app-ver)
             ((= reg 0x75) (app-workmode))
-            ; report the position the app chose, so medium does not snap to strong
-            ((= reg 0x7b) (if light (if (= app-kers 0) 2 app-kers) 0))
-            ((= reg 0x76) (if unlock 1 0))
+            ((= reg 0x7b) 0) ; KERS - VESC has no Xiaomi-style regen levels
             ((= reg 0x7c) (if cruise-enabled 1 0))
             ((= reg 0x7d) (if auto-taillight 2 0)) ; the app writes 2 for on
             ((or (= reg 0x24) (= reg 0x25)) (app-range-10m))
@@ -2013,8 +1999,7 @@
         ((= reg 0x67) app-ver)
         ((= reg 0x75) (if (= speedmode 2) 1 0))
         ((= reg 0x7a) (if unlock 1 0))
-        ((= reg 0x7b) (if light (if (= app-kers 0) 2 app-kers) 0))
-        ((= reg 0x76) (if unlock 1 0))
+        ((= reg 0x7b) 0)
         ((= reg 0x7c) (if cruise-enabled 1 0))
         ((= reg 0x7d) (if auto-taillight 2 0))
         ((= reg 0xb0) (get-fault))
