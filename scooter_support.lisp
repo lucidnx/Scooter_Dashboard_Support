@@ -1313,8 +1313,15 @@
         ; The dash serves the app out of its own transmission budget, so lever
         ; frames arrive four times slower while an app is connected. Track the
         ; real rate so the watchdog below scales with it instead of firing.
+        ; widen immediately when the dash slows, narrow slowly when it speeds up,
+        ; so connecting an app cannot trip the watchdog before the average catches up
         (let ((gap (secs-since last-rx)))
-            (if (< gap 1.0) (set 'rx-gap-avg (+ (* 0.9 rx-gap-avg) (* 0.1 gap))))
+            (if (< gap 1.0)
+                (if (> gap rx-gap-avg)
+                    (set 'rx-gap-avg gap)
+                    (set 'rx-gap-avg (+ (* 0.98 rx-gap-avg) (* 0.02 gap)))
+                )
+            )
         )
         (set 'last-rx (systime)) ; feed the dash link watchdog
 
