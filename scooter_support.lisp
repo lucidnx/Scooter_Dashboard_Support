@@ -210,6 +210,18 @@
 (def todo-ms 0.0)  ; worst time in app-run-todo   (flash writes, apply-mode, CAN)
 (def cache-ms 0.0) ; worst time in app-cache-update (conf-get, sysinfo, frame builds)
 (def feat-ms 0.0)  ; worst time in the whole button loop pass
+(def tx-ms 0.0)    ; worst time inside a single uart-write
+
+; every transmission goes through here so its cost is visible
+(defun tx (buf)
+    (let ((t0 (systime)))
+        {
+            (tx buf)
+            (var m (* (secs-since t0) 1000))
+            (if (> m tx-ms) (set 'tx-ms m))
+        }
+    )
+)
 ; Lever detection for the deferral above works off the raw dash bytes against a
 ; learned resting value, not the corrected voltage against the ADC start point -
 ; the correction shifts with the headlight and the start point can sit below the
@@ -1678,7 +1690,7 @@
     }
 )
 
-(defun update-dash(buffer) (uart-write tx-frame)) ; already composed
+(defun update-dash(buffer) (tx tx-frame)) ; already composed
 
 ; -> App protocol (NineDash, m365 Dashboard)
 ; The dash BLE module bridges app frames onto this same half-duplex bus, so
@@ -2009,7 +2021,7 @@
             (setq crc (bitwise-xor crc 0xFFFF))
             (bufset-u8 buf (+ n 7) (bitwise-and crc 0xFF))
             (bufset-u8 buf (+ n 8) (bitwise-and (shr crc 8) 0xFF))
-            (uart-write buf)
+            (tx buf)
             })
             (free buf)
         }
@@ -2034,17 +2046,17 @@
                 nil
                 (if (= dev 0x20)
                     (cond
-                        ((and (= reg 0xb4) (= n 6)) (uart-write app-f-b4))
+                        ((and (= reg 0xb4) (= n 6)) (tx app-f-b4))
                         ((and (= reg 0xb0) (= n 52)) {
                             (set 'b0-wanted true)
-                            (uart-write app-f-b0)
+                            (tx app-f-b0)
                         })
-                        ((and (= reg 0x7b) (= n 6)) (uart-write app-f-7b))
-                        ((and (= reg 0x1a) (= n 2)) (uart-write app-f-1a))
-                        ((and (= reg 0x25) (= n 2)) (uart-write app-f-25))
-                        ((and (= reg 0x3b) (= n 2)) (uart-write app-f-3b))
-                        ((and (= reg 0x75) (= n 2)) (uart-write app-f-75))
-                        ((and (= reg 0xda) (= n 12)) (uart-write app-f-da))
+                        ((and (= reg 0x7b) (= n 6)) (tx app-f-7b))
+                        ((and (= reg 0x1a) (= n 2)) (tx app-f-1a))
+                        ((and (= reg 0x25) (= n 2)) (tx app-f-25))
+                        ((and (= reg 0x3b) (= n 2)) (tx app-f-3b))
+                        ((and (= reg 0x75) (= n 2)) (tx app-f-75))
+                        ((and (= reg 0xda) (= n 12)) (tx app-f-da))
                         (t (nb-send dev src 0x04 reg n false))
                     )
                     (nb-send dev src 0x04 reg n true)
@@ -2130,7 +2142,7 @@
             (setq crc (bitwise-xor crc 0xFFFF))
             (bufset-u8 buf (+ n 6) (bitwise-and crc 0xFF))
             (bufset-u8 buf (+ n 7) (bitwise-and (shr crc 8) 0xFF))
-            (uart-write buf)
+            (tx buf)
             })
             (free buf)
         }
