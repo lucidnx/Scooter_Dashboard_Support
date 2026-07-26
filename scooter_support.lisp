@@ -1957,8 +1957,9 @@
                                         (cond
                                             ((= code 0x65) {
                                                 (var now (systime))
-                                                (if (> (- now rx-last) rx-gap-max)
-                                                    (set 'rx-gap-max (- now rx-last))
+                                                (var gap (- now rx-last))
+                                                (if (and (> gap rx-gap-max) (< gap 10000))
+                                                    (set 'rx-gap-max gap)
                                                 )
                                                 (set 'rx-last now)
                                                 (if (and software-adc (>= len 3)) ; frame must carry the lever bytes
@@ -2485,6 +2486,8 @@
             ; app protocol identity - mutable, so it is built here and not in flash
             (def app-serial (array-create 14))
             (def app-pin-buf (array-create 6))
+            (set 'rx-last (systime))
+            (set 'rx-gap-max 0)
             (set 'cur-cells (let ((n (conf-get 'si-battery-cells))) (if (> n 0) n 10)))
             (set 'cur-cap (app-clamp16 (* (conf-get 'si-battery-ah) 1000)))
             (app-build-serial)
