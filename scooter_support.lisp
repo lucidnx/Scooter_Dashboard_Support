@@ -188,6 +188,14 @@
 (def quick-sum 0)   ; checksum contribution of the prebuilt 0xB0 block
 (def quick-used false) ; only worth maintaining while an app is actually asking
 (def app-enable true)  ; (set 'app-enable false) to ignore the app entirely
+; Below this speed the app is answered freely; above it each class of register
+; gets its own interval, because answering keeps the app polling back to back
+; and that leaves the dash too little of the bus for its lever frames.
+(def app-idle-speed 3.0)
+(def app-iv-live 0.1) ; speed, battery, average speed
+(def app-iv-ctrl 0.5) ; mode, cruise, light, lock state
+(def app-iv-bulk 2.0) ; the 0xB0 block and anything else large
+(def app-iv-slow 5.0) ; battery pack data, identity, everything else
 (def proc-ms-move 0.0) ; worst handler time while actually moving
 (def cur-cell-mv 0) ; one division, not fifteen per cell read
 
@@ -1663,11 +1671,32 @@
 ; 115200 baud. Nothing may delay the lever path while riding, so above walking
 ; pace only short replies are answered and the big blocks wait for a standstill.
 ; The app re-requests what it misses, which the traces show it already does.
-(defun app-read-ok (n)
-    (if (> (abs cur-speed-kmh) 1.0)
-        (and (<= n 8) (> (secs-since app-reply-time) 0.2))
-        (> (secs-since app-reply-time) 0.1)
+(defun app-class (dev reg n)
+    (cond
+        ((= dev 0x22) 3)
+        ((> n 16) 2)
+        ((and (>= reg 0xb4) (<= reg 0xb6)) 0)
+        ((or (= reg 0x75) (= reg 0x1d) (and (>= reg 0x7b) (<= reg 0x7d))) 1)
+        (t 3)
     )
+)
+
+(defun app-iv (c)
+    (cond ((= c 0) app-iv-live) ((= c 1) app-iv-ctrl) ((= c 2) app-iv-bulk) (t app-iv-slow))
+)
+
+(defunret app-read-ok (dev reg n)
+    {
+        (if (<= (abs cur-speed-kmh) app-idle-speed)
+            (return (> (secs-since app-reply-time) 0.05))
+        )
+        (var c (app-class dev reg n))
+        (if (< (secs-since (bufget-i32 app-times (* c 4))) (app-iv c))
+            (return false)
+        )
+        (bufset-i32 app-times (* c 4) (systime))
+        true
+    }
 )
 
 (defun app-speed-01 () (app-clamp16 (* (abs cur-speed-kmh) 10))) ; 0.1 km/h
@@ -1851,7 +1880,7 @@
         ((= cmd 0x01) (let ((n (if (> len 0) (bufget-u8 uart-buf 4) 2))) {
             (if (or (< n 2) (> n 64)) (setq n 2))
             (setq n (bitwise-and n 0xFE))
-            (if (app-read-ok n) {
+            (if (app-read-ok dev reg n) {
                 (set 'app-reply-time (systime))
                 (nb-send dev src 0x04 reg n (= dev 0x22))
             })
@@ -1944,7 +1973,7 @@
 (defun xm-app-frame (dev cmd reg len)
     (cond
         ((= cmd 0x01) (let ((n (bitwise-and (bufget-u8 uart-buf 3) 0xFE)))
-            (if (and (> n 1) (<= n 64) (app-read-ok n)) {
+            (if (and (> n 1) (<= n 64) (app-read-ok dev reg n)) {
                 (set 'app-reply-time (systime))
                 (xm-send (if (= dev 0x22) 0x25 0x23) reg n (= dev 0x22))
             })
@@ -2530,6 +2559,7 @@
             (def app-serial (array-create 14))
             (def app-pin-buf (array-create 6))
             (def quick-buf (array-create 52))
+            (def app-times (array-create 16)) ; last reply time per register class
             (set 'proc-ms 0.0)
             (set 'proc-ms-app 0.0)
             (set 'proc-ms-move 0.0)
