@@ -186,6 +186,13 @@
 (def quick-sum 0)   ; checksum contribution of the prebuilt 0xB0 block
 (def quick-used false) ; only worth maintaining while an app is actually asking
 (def app-dst 0x3e)     ; address the app last asked from
+; In half duplex the firmware switches the receiver off for the whole of every
+; uart-write and leaves it off a millisecond or two afterwards, so every
+; transmission is a window in which the dash's lever frames are simply lost.
+; Answering every single 0x64 costs about a sixth of all receive time and the
+; display does not need that rate. 0 restores a reply to every poll.
+(def dash-tx-iv 0.05)
+(def dash-tx-time (systime))
 (def app-enable true)  ; (set 'app-enable false) to ignore the app entirely
 ; Below this speed the app is answered freely; above it each class of register
 ; gets its own interval, because answering keeps the app polling back to back
@@ -2058,7 +2065,12 @@
                                                         (adc-input uart-buf)
                                                     )
                                                 )
-                                                ((= code 0x64) (update-dash uart-buf))
+                                                ((= code 0x64)
+                                                    (if (> (secs-since dash-tx-time) dash-tx-iv) {
+                                                        (set 'dash-tx-time (systime))
+                                                        (update-dash uart-buf)
+                                                    })
+                                                )
                                                 (t (if app-enable
                                                     (trap (nb-app-frame dst (bufget-u8 uart-buf 0) code (bufget-u8 uart-buf 3) len))
                                                 ))
