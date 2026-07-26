@@ -182,6 +182,7 @@
 (def app-boot-time (systime))
 (def app-cache-time (systime))
 (def app-slow-time (systime))
+(def app-slow-step 0)
 (def cur-wh-tot 0.0)
 (def app-reply-time (systime))
 (def app-t-live (systime))
@@ -1734,24 +1735,33 @@
             (build-app-frame app-f-b4 0xb4 6)
             (build-app-frame app-f-7b 0x7b 6)
         })
-        ; Every two seconds: range, odometer, runtime and the pack figures.
-        ; These crawl, and conf-get and sysinfo are expensive enough that doing
-        ; them at the loop rate was starving the thread that reads the levers.
-        (if (> (secs-since app-slow-time) 2.0) {
+        ; The slow figures - range, odometer, runtime, pack capacity - crawl, and
+        ; conf-get and sysinfo are expensive. They run one group per tick rather
+        ; than all together, so no single pass can hold the evaluator for long.
+        (if (> (secs-since app-slow-time) 0.5) {
             (set 'app-slow-time (systime))
-            (set 'cur-wh-tot (* 0.85 (conf-get 'si-battery-ah) (* 3.7 (conf-get 'si-battery-cells))))
-            (set 'cur-range (send-state-range))
-            (set 'cur-trip (to-i (get-dist-abs)))
-            (set 'cur-odo (app-sysinfo 'odometer))
-            (set 'cur-runtime (app-sysinfo 'runtime))
-            (set 'cur-maxkmh (send-state-maxkmh))
-            (build-app-frame app-f-25 0x25 2)
-            (build-app-frame app-f-3b 0x3b 2)
-            (build-app-frame app-f-75 0x75 2)
-            (if b0-wanted {
-                (set 'b0-wanted false)
-                (build-app-frame app-f-b0 0xb0 52)
-            })
+            (cond
+                ((= app-slow-step 0) {
+                    (set 'cur-wh-tot (* 0.85 (conf-get 'si-battery-ah) (* 3.7 (conf-get 'si-battery-cells))))
+                    (set 'cur-range (send-state-range))
+                    (set 'cur-trip (to-i (get-dist-abs)))
+                })
+                ((= app-slow-step 1) {
+                    (set 'cur-odo (app-sysinfo 'odometer))
+                    (set 'cur-runtime (app-sysinfo 'runtime))
+                    (set 'cur-maxkmh (send-state-maxkmh))
+                })
+                ((= app-slow-step 2) {
+                    (build-app-frame app-f-25 0x25 2)
+                    (build-app-frame app-f-3b 0x3b 2)
+                    (build-app-frame app-f-75 0x75 2)
+                })
+                (t (if b0-wanted {
+                    (set 'b0-wanted false)
+                    (build-app-frame app-f-b0 0xb0 52)
+                }))
+            )
+            (set 'app-slow-step (mod (+ app-slow-step 1) 4))
         })
     }
 )
