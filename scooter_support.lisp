@@ -186,6 +186,8 @@
 (def proc-ms 0.0)   ; any frame
 (def proc-ms-app 0.0) ; app register frames only
 (def quick-sum 0)   ; checksum contribution of the prebuilt 0xB0 block
+(def quick-dirty true) ; rebuild the block on the next request, not every cycle
+(def proc-ms-move 0.0) ; worst handler time while actually moving
 (def cur-cell-mv 0) ; one division, not fifteen per cell read
 
 ; rear light state
@@ -1651,18 +1653,7 @@
         (set 'cur-mot (get-temp-mot))
         (set 'cur-maxkmh (send-state-maxkmh))
         (set 'cur-cell-mv (app-clamp16 (/ (* cur-vin 1000) cur-cells)))
-        ; The app fetches 0xB0..0xC9 as one 52 byte read. Built here it costs the
-        ; button loop a few ms; built in the reader it stalled the lever frames.
-        (var sum 0)
-        (looprange i 0 26 {
-            (var w (nb-word (+ 0xb0 i)))
-            (var lo (bitwise-and w 0xFF))
-            (var hi (bitwise-and (shr w 8) 0xFF))
-            (bufset-u8 quick-buf (* i 2) lo)
-            (bufset-u8 quick-buf (+ (* i 2) 1) hi)
-            (setq sum (+ sum lo hi))
-        })
-        (set 'quick-sum sum)
+        (set 'quick-dirty true)
     })
 )
 
@@ -1686,6 +1677,26 @@
 (defun app-range-10m () (app-clamp16 (* cur-range 100)))
 (defun app-fet-01 () (app-clamp16 (* cur-fet 10)))
 (defun app-cell-mv () cur-cell-mv)
+
+; The app fetches 0xB0..0xC9 as a single 52 byte read. Assembling that is 26
+; register lookups and 104 buffer operations, so it is done once per cache
+; cycle and only when something actually asks for it.
+(defun build-quick ()
+    (let ((sum 0))
+        {
+            (looprange i 0 26 {
+                (var w (nb-word (+ 0xb0 i)))
+                (var lo (bitwise-and w 0xFF))
+                (var hi (bitwise-and (shr w 8) 0xFF))
+                (bufset-u8 quick-buf (* i 2) lo)
+                (bufset-u8 quick-buf (+ (* i 2) 1) hi)
+                (setq sum (+ sum lo hi))
+            })
+            (set 'quick-sum sum)
+            (set 'quick-dirty false)
+        }
+    )
+)
 (defun app-cap-mah () cur-cap)
 
 ; NB_INF_BOOL: bit0 speed limited, bit1 locked, bit2 buzzer, bit11 activated
@@ -1809,6 +1820,7 @@
                 }
                 (if (and (not bms) (= reg 0xb0) (= n 52)) ; the app's bulk read, prebuilt
                     {
+                        (if quick-dirty (build-quick))
                         (bufcpy buf 7 quick-buf 0 52)
                         (setq crc (+ crc quick-sum))
                     }
@@ -1994,6 +2006,9 @@
                                             )
                                             (var m (* (secs-since t0) 1000))
                                             (if (> m proc-ms) (set 'proc-ms m))
+                                            (if (and (> (abs cur-speed-kmh) 1.0) (> m proc-ms-move))
+                                                (set 'proc-ms-move m)
+                                            )
                                         }
                                     )
                                 }
@@ -2515,6 +2530,7 @@
             (def quick-buf (array-create 52))
             (set 'proc-ms 0.0)
             (set 'proc-ms-app 0.0)
+            (set 'proc-ms-move 0.0)
             (set 'cur-cells (let ((n (conf-get 'si-battery-cells))) (if (> n 0) n 10)))
             (set 'cur-cap (app-clamp16 (* (conf-get 'si-battery-ah) 1000)))
             (app-build-serial)
