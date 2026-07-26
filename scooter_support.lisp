@@ -206,6 +206,7 @@
 ; worst gap between lever frames as we actually process them, in ms. The wire
 ; says they arrive every 30 ms; if this is much larger we are being starved.
 (def adc-dt 0)
+(def adc-dt2 0) ; second worst, so one outlier does not hide the rest
 (def adc-last (systime))
 (def adc-seen false) ; the first frame after boot has no valid interval
 (def todo-ms 0)  ; worst time in app-run-todo   (flash writes, apply-mode, CAN)
@@ -220,6 +221,10 @@
 ; test whether the lever path is waiting on it. Lock, cruise, mode changes and
 ; the output cut-off all stop working while it is off - stand use only.
 (def feat-enable true)
+; the reader's outer trap has swallowed every error since the tracing was
+; removed - keep the last one and a count so they are visible again
+(def rx-err nil)
+(def rx-errs 0)
 
 ; every transmission goes through here so its cost is visible
 (defun tx (frame)
@@ -1373,7 +1378,12 @@
         )
         (if adc-seen
             (let ((dt (- (systime) adc-last)))
-                (if (and (> dt adc-dt) (< dt 2000)) (set 'adc-dt dt))
+                (if (< dt 30000)
+                    (if (> dt adc-dt)
+                        { (set 'adc-dt2 adc-dt) (set 'adc-dt dt) }
+                        (if (> dt adc-dt2) (set 'adc-dt2 dt))
+                    )
+                )
             )
             (set 'adc-seen true)
         )
@@ -2210,7 +2220,7 @@
 
 (defun read-frames-g30()
     (loopwhile t {
-        (trap ; a parse error must not kill the reader thread
+        (var e (trap ; a parse error must not kill the reader thread
             (loopwhile t
                 {
                     (uart-read-bytes uart-buf 3 0)
@@ -2278,7 +2288,9 @@
                     )
                 }
             )
-        )
+        ))
+        (set 'rx-errs (+ rx-errs 1))
+        (set 'rx-err e)
         (sleep 0.005) ; only reached after an error
     })
 )
@@ -2810,6 +2822,8 @@
             (set 'adc-last (systime))
             (set 'adc-seen false)
             (set 'adc-dt 0)
+            (set 'adc-dt2 0)
+            (set 'rx-errs 0)
             (set 'last-rx (systime))
             (set 'app-cache-time (systime))
             (set 'app-slow-time (systime))
