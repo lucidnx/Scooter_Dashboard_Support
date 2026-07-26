@@ -223,6 +223,7 @@
 (def feat-enable true)
 ; the reader's outer trap has swallowed every error since the tracing was
 ; removed - keep the last one and a count so they are visible again
+(def rd-ms 0)  ; worst time blocked inside uart-read-bytes waiting for data
 (def rx-err nil)
 (def rx-errs 0)
 
@@ -2223,7 +2224,13 @@
         (var e (trap ; a parse error must not kill the reader thread
             (loopwhile t
                 {
-                    (uart-read-bytes uart-buf 3 0)
+                    (let ((rt0 (systime)))
+                        {
+                            (uart-read-bytes uart-buf 3 0)
+                            (var rm (- (systime) rt0))
+                            (if (> rm rd-ms) (set 'rd-ms rm))
+                        }
+                    )
                     ; slide a byte at a time until the header lines up - a three
                     ; byte window can stay misaligned and drop every lever frame
                     (loopwhile (!= (bufget-u16 uart-buf 0) 0x5aa5) {
@@ -2300,7 +2307,13 @@
         (trap ; a parse error must not kill the reader thread
             (loopwhile t
                 {
-                    (uart-read-bytes uart-buf 3 0)
+                    (let ((rt0 (systime)))
+                        {
+                            (uart-read-bytes uart-buf 3 0)
+                            (var rm (- (systime) rt0))
+                            (if (> rm rd-ms) (set 'rd-ms rm))
+                        }
+                    )
                     ; slide a byte at a time until the header lines up - a three
                     ; byte window can stay misaligned and drop every lever frame
                     (loopwhile (!= (bufget-u16 uart-buf 0) 0x55aa) {
@@ -2824,6 +2837,7 @@
             (set 'adc-dt 0)
             (set 'adc-dt2 0)
             (set 'rx-errs 0)
+            (set 'rd-ms 0)
             (set 'last-rx (systime))
             (set 'app-cache-time (systime))
             (set 'app-slow-time (systime))
