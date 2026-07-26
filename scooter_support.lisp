@@ -200,6 +200,10 @@
 ; and the cell voltage read alone is over one a second. Those are diagnostics,
 ; not riding data, so they wait until the levers are released.
 (def levers-active false)
+; worst gap between lever frames as we actually process them, in ms. The wire
+; says they arrive every 30 ms; if this is much larger we are being starved.
+(def adc-dt 0.0)
+(def adc-last (systime))
 ; Lever detection for the deferral above works off the raw dash bytes against a
 ; learned resting value, not the corrected voltage against the ADC start point -
 ; the correction shifts with the headlight and the start point can sit below the
@@ -1340,6 +1344,10 @@
                 )
             )
         )
+        (let ((dt (* (secs-since adc-last) 1000)))
+            (if (and (> dt adc-dt) (< dt 2000)) (set 'adc-dt dt))
+        )
+        (set 'adc-last (systime))
         (set 'last-rx (systime)) ; feed the dash link watchdog
 
         (set 'dash-thr-raw (bufget-u8 uart-buf thr-idx)) ; raw physical throttle (before override)
