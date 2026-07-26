@@ -150,6 +150,7 @@
 
 ; dash link watchdog: last time a throttle frame was received
 (def last-rx (systime))
+(def rx-gap-avg 0.05) ; running average gap between lever frames
 
 ; lever-only gesture state (gestures configured with 0 presses)
 (def lever-state 0)
@@ -1309,6 +1310,12 @@
 
 (defun adc-input(buffer) ; Frame 0x65
     {
+        ; The dash serves the app out of its own transmission budget, so lever
+        ; frames arrive four times slower while an app is connected. Track the
+        ; real rate so the watchdog below scales with it instead of firing.
+        (let ((gap (secs-since last-rx)))
+            (if (< gap 1.0) (set 'rx-gap-avg (+ (* 0.9 rx-gap-avg) (* 0.1 gap))))
+        )
         (set 'last-rx (systime)) ; feed the dash link watchdog
 
         (set 'dash-thr-raw (bufget-u8 uart-buf thr-idx)) ; raw physical throttle (before override)
@@ -1496,8 +1503,13 @@
         (var current-speed cur-speed-kmh)
 
         ; Dash link watchdog: release the ADC overrides when throttle frames stop
-        ; coming, otherwise the last (possibly full) throttle value stays applied
-        (if (and software-adc (> (secs-since last-rx) 0.5))
+        ; coming, otherwise the last (possibly full) throttle value stays applied.
+        ; Scaled to the measured frame rate - a fixed half second fires by itself
+        ; once an app is connected and the dash drops to ten frames a second.
+        (var wd (* 8 rx-gap-avg))
+        (if (< wd 0.5) (setq wd 0.5))
+        (if (> wd 1.5) (setq wd 1.5))
+        (if (and software-adc (> (secs-since last-rx) wd))
             {
                 (app-adc-override 0 0)
                 (app-adc-override 1 0)
