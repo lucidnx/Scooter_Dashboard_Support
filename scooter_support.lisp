@@ -216,6 +216,10 @@
 (def cru-ms 0)   ; handle-cruise
 (def dsh-ms 0)   ; build-dash-frame
 (def lck-ms 0)   ; handle-lock, which reaches the gyro over CAN when locked
+; DIAGNOSTIC: (set 'feat-enable false) stops the button loop doing anything, to
+; test whether the lever path is waiting on it. Lock, cruise, mode changes and
+; the output cut-off all stop working while it is off - stand use only.
+(def feat-enable true)
 
 ; every transmission goes through here so its cost is visible
 (defun tx (frame)
@@ -1545,8 +1549,9 @@
     )
 )
 
-(defun handle-features()
+(defunret handle-features()
     {
+        (if (not feat-enable) (return nil))
         (var feat-t0 (systime))
         (var spd-t0 (systime))
         (set 'cur-speed-kmh (* (get-lowest-speed) 3.6))
