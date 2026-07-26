@@ -1673,9 +1673,14 @@
         (set 'cur-maxkmh (send-state-maxkmh))
         (set 'cur-cell-mv (app-clamp16 (/ (* cur-vin 1000) cur-cells)))
         (if quick-used {
-            (build-app-frame app-f-b0 0xb0 52) ; the three the app asks for constantly
-            (build-app-frame app-f-b4 0xb4 6)
+            (build-app-frame app-f-b0 0xb0 52) ; everything the app asks for often,
+            (build-app-frame app-f-b4 0xb4 6)  ; ready to go out as a single write
             (build-app-frame app-f-7b 0x7b 6)
+            (build-app-frame app-f-1a 0x1a 2)
+            (build-app-frame app-f-25 0x25 2)
+            (build-app-frame app-f-3b 0x3b 2)
+            (build-app-frame app-f-75 0x75 2)
+            (build-app-frame app-f-da 0xda 12)
         })
     })
 )
@@ -1892,23 +1897,22 @@
             (setq n (bitwise-and n 0xFE))
             (if (!= src app-dst) (set 'app-dst src))
             (set 'quick-used true)
-            (if (> (abs cur-speed-kmh) app-idle-speed)
-                ; riding - answer only what the dashboard shows, and pace it
+            ; Answer immediately, always. What hurts is the BLE module waiting
+            ; on us, not the reply itself, so everything it asks for often goes
+            ; out as one prepared write with nothing computed in between.
+            (if (= dev 0x20)
                 (cond
-                    ((and (= dev 0x20) (= reg 0xb4) (= n 6)
-                          (> (secs-since app-t-live) app-iv-live))
-                        { (set 'app-t-live (systime)) (uart-write app-f-b4) })
-                    ((and (= dev 0x20) (= reg 0xb0) (= n 52)
-                          (> (secs-since app-t-bulk) app-iv-bulk))
-                        { (set 'app-t-bulk (systime)) (uart-write app-f-b0) })
+                    ((and (= reg 0xb4) (= n 6)) (uart-write app-f-b4))
+                    ((and (= reg 0xb0) (= n 52)) (uart-write app-f-b0))
+                    ((and (= reg 0x7b) (= n 6)) (uart-write app-f-7b))
+                    ((and (= reg 0x1a) (= n 2)) (uart-write app-f-1a))
+                    ((and (= reg 0x25) (= n 2)) (uart-write app-f-25))
+                    ((and (= reg 0x3b) (= n 2)) (uart-write app-f-3b))
+                    ((and (= reg 0x75) (= n 2)) (uart-write app-f-75))
+                    ((and (= reg 0xda) (= n 12)) (uart-write app-f-da))
+                    (t (nb-send dev src 0x04 reg n false))
                 )
-                ; stopped - answer everything
-                (cond
-                    ((and (= dev 0x20) (= reg 0xb0) (= n 52)) (uart-write app-f-b0))
-                    ((and (= dev 0x20) (= reg 0xb4) (= n 6)) (uart-write app-f-b4))
-                    ((and (= dev 0x20) (= reg 0x7b) (= n 6)) (uart-write app-f-7b))
-                    (t (nb-send dev src 0x04 reg n (= dev 0x22)))
-                )
+                (nb-send dev src 0x04 reg n true)
             )
         }))
         ((or (= cmd 0x02) (= cmd 0x03)) {
@@ -2578,6 +2582,11 @@
             (def app-f-b0 (array-create 61)) ; prepared replies, sent as-is
             (def app-f-b4 (array-create 15))
             (def app-f-7b (array-create 15))
+            (def app-f-1a (array-create 11))
+            (def app-f-25 (array-create 11))
+            (def app-f-3b (array-create 11))
+            (def app-f-75 (array-create 11))
+            (def app-f-da (array-create 21))
             (set 'cur-cells (let ((n (conf-get 'si-battery-cells))) (if (> n 0) n 10)))
             (set 'cur-cap (app-clamp16 (* (conf-get 'si-battery-ah) 1000)))
             (app-build-serial)
