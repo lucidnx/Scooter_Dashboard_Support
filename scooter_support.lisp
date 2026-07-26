@@ -213,10 +213,10 @@
 (def tx-ms 0.0)    ; worst time inside a single uart-write
 
 ; every transmission goes through here so its cost is visible
-(defun tx (buf)
+(defun tx (frame)
     (let ((t0 (systime)))
         {
-            (tx buf)
+            (uart-write frame)
             (var m (* (secs-since t0) 1000))
             (if (> m tx-ms) (set 'tx-ms m))
         }
