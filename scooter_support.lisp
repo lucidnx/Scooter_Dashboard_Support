@@ -1798,17 +1798,20 @@
         ((= reg 0x7c) (let ((v (!= val 0)))
             (if (not (eq v cruise-enabled)) {
                 (set 'cruise-enabled v)
+                (build-app-frame app-f-7b 0x7b 6)
                 (set 'app-todo (bitwise-or app-todo 1))
             })))
         ((= reg 0x7d) (let ((v (!= val 0)))
             (if (not (eq v auto-taillight)) {
                 (set 'auto-taillight v)
+                (build-app-frame app-f-7b 0x7b 6)
                 (set 'app-todo (bitwise-or app-todo 2))
             })))
         ; the app's KERS selector drives the headlight: weak off, medium or strong on
         ((= reg 0x7b) {
             (set 'app-kers val)
             (set 'light (!= val 0))
+            (build-app-frame app-f-7b 0x7b 6) ; readback must agree at once
         })
         ((= reg 0x90) (set 'light (!= val 0)))
         ((= reg 0x76) (let ((u (!= val 0))) ; "direct power control" drives secret modes
