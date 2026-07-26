@@ -134,10 +134,10 @@ protocol document, so it is free for a properly labelled headlight switch. Same 
 your Back light switch — `cmd 0x03`, one payload byte, `0` off and non-zero on — and
 readable at the same address for the state. The package implements it already.
 
-### Something reacts to the headlight
+### Something in NineDash reacts to the headlight
 
-On this setup, **changing the headlight state has been observed to end the BLE session**,
-within one dash cycle, regardless of how it is triggered. Confirmed four ways:
+On this setup, **changing the headlight state has been observed to end NineDash's BLE
+session**, within one dash cycle, regardless of how it is triggered. Confirmed four ways:
 
 - app writes `0x7B` mapped to the headlight → disconnect
 - app writes `0x7D` mapped to the headlight → disconnect
@@ -152,9 +152,13 @@ The bus capture shows a completely clean exchange right up to the silence.
 The only thing that changes on the wire is bit 2 of the dash frame payload (`20>21 cmd 0x64`),
 which carries the headlight state. Does the app react to that bit?
 
-All of these observations predate the timing work described above, when replies were
-sometimes hundreds of milliseconds late, so a plain app-side timeout has not been ruled
-out. The headlight now sits on `0x76` (Direct power control), so it can be re-tested.
+**The official Segway app and m365 Tools do not disconnect** when the headlight is toggled
+on the same scooter and the same firmware, which is what points at something app-side.
+
+One caveat: all four observations above predate the timing work described earlier, when
+replies were sometimes hundreds of milliseconds late — and NineDash was the app driving
+the bus into that state, so a plain timeout has not been fully ruled out either. The
+headlight now sits on `0x76` (Direct power control) and can be re-tested directly.
 
 ### Two smaller things
 
