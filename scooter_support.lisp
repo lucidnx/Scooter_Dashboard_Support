@@ -185,6 +185,8 @@
 ; gap between frames which also counts the dash simply being quiet
 (def proc-ms 0.0)   ; any frame
 (def proc-ms-app 0.0) ; app register frames only
+(def quick-sum 0)   ; checksum contribution of the prebuilt 0xB0 block
+(def cur-cell-mv 0) ; one division, not fifteen per cell read
 
 ; rear light state
 (def pwm-started false)
@@ -1648,6 +1650,19 @@
         (set 'cur-fet (get-temp-fet))
         (set 'cur-mot (get-temp-mot))
         (set 'cur-maxkmh (send-state-maxkmh))
+        (set 'cur-cell-mv (app-clamp16 (/ (* cur-vin 1000) cur-cells)))
+        ; The app fetches 0xB0..0xC9 as one 52 byte read. Built here it costs the
+        ; button loop a few ms; built in the reader it stalled the lever frames.
+        (var sum 0)
+        (looprange i 0 26 {
+            (var w (nb-word (+ 0xb0 i)))
+            (var lo (bitwise-and w 0xFF))
+            (var hi (bitwise-and (shr w 8) 0xFF))
+            (bufset-u8 quick-buf (* i 2) lo)
+            (bufset-u8 quick-buf (+ (* i 2) 1) hi)
+            (setq sum (+ sum lo hi))
+        })
+        (set 'quick-sum sum)
     })
 )
 
@@ -1670,7 +1685,7 @@
 (defun app-watts () (app-clamp16 (* cur-vin cur-amps)))
 (defun app-range-10m () (app-clamp16 (* cur-range 100)))
 (defun app-fet-01 () (app-clamp16 (* cur-fet 10)))
-(defun app-cell-mv () (app-clamp16 (/ (* cur-vin 1000) cur-cells)))
+(defun app-cell-mv () cur-cell-mv)
 (defun app-cap-mah () cur-cap)
 
 ; NB_INF_BOOL: bit0 speed limited, bit1 locked, bit2 buzzer, bit11 activated
@@ -1792,14 +1807,20 @@
                     (bufset-u8 buf 7 1) ; write ack payload
                     (setq crc (+ crc 1))
                 }
-                (looprange i 0 (/ n 2) {
-                    (var w (if bms (xm-bms-word (+ reg i)) (nb-word (+ reg i))))
-                    (var lo (bitwise-and w 0xFF))
-                    (var hi (bitwise-and (shr w 8) 0xFF))
-                    (bufset-u8 buf (+ 7 (* i 2)) lo)
-                    (bufset-u8 buf (+ 8 (* i 2)) hi)
-                    (setq crc (+ crc lo hi))
-                })
+                (if (and (not bms) (= reg 0xb0) (= n 52)) ; the app's bulk read, prebuilt
+                    {
+                        (bufcpy buf 7 quick-buf 0 52)
+                        (setq crc (+ crc quick-sum))
+                    }
+                    (looprange i 0 (/ n 2) {
+                        (var w (if bms (xm-bms-word (+ reg i)) (nb-word (+ reg i))))
+                        (var lo (bitwise-and w 0xFF))
+                        (var hi (bitwise-and (shr w 8) 0xFF))
+                        (bufset-u8 buf (+ 7 (* i 2)) lo)
+                        (bufset-u8 buf (+ 8 (* i 2)) hi)
+                        (setq crc (+ crc lo hi))
+                    })
+                )
             )
             (setq crc (bitwise-xor crc 0xFFFF))
             (bufset-u8 buf (+ n 7) (bitwise-and crc 0xFF))
@@ -2491,6 +2512,7 @@
             ; app protocol identity - mutable, so it is built here and not in flash
             (def app-serial (array-create 14))
             (def app-pin-buf (array-create 6))
+            (def quick-buf (array-create 52))
             (set 'proc-ms 0.0)
             (set 'proc-ms-app 0.0)
             (set 'cur-cells (let ((n (conf-get 'si-battery-cells))) (if (> n 0) n 10)))
