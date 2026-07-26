@@ -195,6 +195,12 @@
 ; and the app repeats every write several times. Writes only record what
 ; changed; the button loop carries it out.
 (def app-todo 0) ; 1 cruise, 2 taillight, 4 buzzer, 8 pin, 16 apply-mode, 32 lock
+; A reply of 20 bytes or more holds the line long enough to lose a lever frame,
+; and the cell voltage read alone is over one a second. Those are diagnostics,
+; not riding data, so they wait until the levers are released.
+(def levers-active false)
+(def thr-start 0.3)
+(def brk-start 0.3)
 ; In half duplex the firmware switches the receiver off for the whole of every
 ; uart-write and leaves it off a millisecond or two afterwards, so every
 ; transmission is a window in which the dash's lever frames are simply lost.
@@ -1340,6 +1346,7 @@
         ; gain=1/offset=0 (uncalibrated default) makes this a no-op.
         (var throttle (if light (/ (- thr-raw-v light-offset-thr) light-gain-thr) thr-raw-v))
         (var brake (if light (/ (- brk-raw-v light-offset-brk) light-gain-brk) brk-raw-v))
+        (set 'levers-active (or (> throttle thr-start) (> brake brk-start)))
 
         (if (< throttle 0.0) (setq throttle 0.0))
         (if (> throttle 3.3) (setq throttle 3.3))
@@ -1797,7 +1804,12 @@
                 (set 'auto-taillight v)
                 (set 'app-todo (bitwise-or app-todo 2))
             })))
-        ((= reg 0x90) (set 'light (!= val 0)))
+        ((or (= reg 0x76) (= reg 0x90)) (set 'light (!= val 0))) ; 0x76 is the app's "direct power control"
+        ((= reg 0x7b) (let ((u (!= val 0))) ; the app's KERS selector drives secret modes
+            (if (not (eq u unlock)) {
+                (set 'unlock u)
+                (set 'app-todo (bitwise-or app-todo 16))
+            })))
         ((= reg 0x7e) (if (!= val 0) (set 'feedback 3))) ; find my scooter
         ((or (= reg 0x91) (= reg 0x92)) (let ((v (!= val 0)))
             (if (not (eq v alarm-tone)) {
@@ -1858,7 +1870,8 @@
         (cond
             ((= reg 0x1a) app-ver)
             ((= reg 0x75) (app-workmode))
-            ((= reg 0x7b) 0) ; KERS - VESC does not use Xiaomi-style regen levels
+            ((= reg 0x7b) (if unlock 2 0)) ; KERS selector shows secret modes
+            ((= reg 0x76) (if light 1 0))  ; direct power control shows the headlight
             ((= reg 0x7c) (if cruise-enabled 1 0))
             ((= reg 0x7d) (if auto-taillight 2 0)) ; the app writes 2 for on
             ((or (= reg 0x24) (= reg 0x25)) (app-range-10m))
@@ -1942,22 +1955,27 @@
             (setq n (bitwise-and n 0xFE))
             (if (!= src app-dst) (set 'app-dst src))
             (set 'quick-used true)
-            ; Answer immediately, always. What hurts is the BLE module waiting
-            ; on us, not the reply itself, so everything it asks for often goes
-            ; out as one prepared write with nothing computed in between.
-            (if (= dev 0x20)
-                (cond
-                    ((and (= reg 0xb4) (= n 6)) (uart-write app-f-b4))
-                    ((and (= reg 0xb0) (= n 52)) (uart-write app-f-b0))
-                    ((and (= reg 0x7b) (= n 6)) (uart-write app-f-7b))
-                    ((and (= reg 0x1a) (= n 2)) (uart-write app-f-1a))
-                    ((and (= reg 0x25) (= n 2)) (uart-write app-f-25))
-                    ((and (= reg 0x3b) (= n 2)) (uart-write app-f-3b))
-                    ((and (= reg 0x75) (= n 2)) (uart-write app-f-75))
-                    ((and (= reg 0xda) (= n 12)) (uart-write app-f-da))
-                    (t (nb-send dev src 0x04 reg n false))
+            ; Everything the dashboard shows is short and is answered at once
+            ; from a prepared frame, so nothing is computed while the module
+            ; waits. A reply of 20 bytes or more - cell voltages, the bulk
+            ; block - holds the line long enough to lose a lever frame, so
+            ; those wait until the levers are released.
+            (if (and (>= n 20) levers-active)
+                nil
+                (if (= dev 0x20)
+                    (cond
+                        ((and (= reg 0xb4) (= n 6)) (uart-write app-f-b4))
+                        ((and (= reg 0xb0) (= n 52)) (uart-write app-f-b0))
+                        ((and (= reg 0x7b) (= n 6)) (uart-write app-f-7b))
+                        ((and (= reg 0x1a) (= n 2)) (uart-write app-f-1a))
+                        ((and (= reg 0x25) (= n 2)) (uart-write app-f-25))
+                        ((and (= reg 0x3b) (= n 2)) (uart-write app-f-3b))
+                        ((and (= reg 0x75) (= n 2)) (uart-write app-f-75))
+                        ((and (= reg 0xda) (= n 12)) (uart-write app-f-da))
+                        (t (nb-send dev src 0x04 reg n false))
+                    )
+                    (nb-send dev src 0x04 reg n true)
                 )
-                (nb-send dev src 0x04 reg n true)
             )
         }))
         ((or (= cmd 0x02) (= cmd 0x03)) {
@@ -1985,7 +2003,8 @@
         ((= reg 0x67) app-ver)
         ((= reg 0x75) (if (= speedmode 2) 1 0))
         ((= reg 0x7a) (if unlock 1 0))
-        ((= reg 0x7b) 0) ; KERS reported as off
+        ((= reg 0x7b) (if unlock 2 0))
+        ((= reg 0x76) (if light 1 0))
         ((= reg 0x7c) (if cruise-enabled 1 0))
         ((= reg 0x7d) (if auto-taillight 2 0))
         ((= reg 0xb0) (get-fault))
@@ -2648,6 +2667,8 @@
             (def app-f-3b (array-create 11))
             (def app-f-75 (array-create 11))
             (def app-f-da (array-create 21))
+            (set 'thr-start (conf-get 'adc-v1-start))
+            (set 'brk-start (conf-get 'adc-v2-start))
             (set 'cur-cells (let ((n (conf-get 'si-battery-cells))) (if (> n 0) n 10)))
             (set 'cur-cap (app-clamp16 (* (conf-get 'si-battery-ah) 1000)))
             (app-build-serial)
