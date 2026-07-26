@@ -181,6 +181,8 @@
 ; app protocol state - buffers are built in main, they must stay out of flash
 (def app-boot-time (systime))
 (def app-cache-time (systime))
+(def app-slow-time (systime))
+(def cur-wh-tot 0.0)
 (def app-reply-time (systime))
 (def app-t-live (systime))
 (def app-t-bulk (systime))
@@ -1032,7 +1034,7 @@
 (defun batt-wh-tot ()
         ; Li-ion assumed (scooter default, si-battery-type isn't a valid
         ; conf-get param in fw 7.0). Matches VESC Tool: 0.85 usable * 3.7 V/cell
-        (* 0.85 (conf-get 'si-battery-ah) (* 3.7 (conf-get 'si-battery-cells)))
+        cur-wh-tot
 )
 
 (defun send-state-range () {
@@ -1720,26 +1722,29 @@
 ; or read the config - the reply path has to stay cheap, same as the dash
 ; frame. Everything expensive is sampled once per cycle in app-cache-update.
 (defun app-cache-update ()
-    (if (> (secs-since app-cache-time) 0.2) {
-        (set 'app-cache-time (systime))
-        (set 'cur-vin (get-vin))
-        (set 'cur-amps (setup-current-in))
-        (set 'cur-range (send-state-range))
-        (set 'cur-trip (to-i (get-dist-abs)))
-        (set 'cur-odo (app-sysinfo 'odometer))
-        (set 'cur-runtime (app-sysinfo 'runtime))
-        (set 'cur-fet (get-temp-fet))
-        (set 'cur-mot (get-temp-mot))
-        (set 'cur-maxkmh (send-state-maxkmh))
-        (set 'cur-cell-mv (app-clamp16 (/ (* cur-vin 1000) cur-cells)))
-        (if quick-used {
-            ; Only what actually changes, and the 52 byte block only when it has
-            ; been asked for - it is 26 register lookups and the app wants it
-            ; roughly once every seven seconds. Rebuilding all of these every
-            ; cycle cost more evaluator time than answering the app does, and
-            ; the lever path shares that evaluator.
+    {
+        ; Five times a second: only what genuinely moves that fast.
+        (if (> (secs-since app-cache-time) 0.2) {
+            (set 'app-cache-time (systime))
+            (set 'cur-vin (get-vin))
+            (set 'cur-amps (setup-current-in))
+            (set 'cur-fet (get-temp-fet))
+            (set 'cur-mot (get-temp-mot))
+            (set 'cur-cell-mv (app-clamp16 (/ (* cur-vin 1000) cur-cells)))
             (build-app-frame app-f-b4 0xb4 6)
             (build-app-frame app-f-7b 0x7b 6)
+        })
+        ; Every two seconds: range, odometer, runtime and the pack figures.
+        ; These crawl, and conf-get and sysinfo are expensive enough that doing
+        ; them at the loop rate was starving the thread that reads the levers.
+        (if (> (secs-since app-slow-time) 2.0) {
+            (set 'app-slow-time (systime))
+            (set 'cur-wh-tot (* 0.85 (conf-get 'si-battery-ah) (* 3.7 (conf-get 'si-battery-cells))))
+            (set 'cur-range (send-state-range))
+            (set 'cur-trip (to-i (get-dist-abs)))
+            (set 'cur-odo (app-sysinfo 'odometer))
+            (set 'cur-runtime (app-sysinfo 'runtime))
+            (set 'cur-maxkmh (send-state-maxkmh))
             (build-app-frame app-f-25 0x25 2)
             (build-app-frame app-f-3b 0x3b 2)
             (build-app-frame app-f-75 0x75 2)
@@ -1748,7 +1753,7 @@
                 (build-app-frame app-f-b0 0xb0 52)
             })
         })
-    })
+    }
 )
 
 ; The dash's throttle and brake frames share this bus and this thread, and a
@@ -2726,6 +2731,7 @@
             (def app-f-75 (array-create 11))
             (def app-f-da (array-create 21))
             (set 'cur-cells (let ((n (conf-get 'si-battery-cells))) (if (> n 0) n 10)))
+            (set 'cur-wh-tot (* 0.85 (conf-get 'si-battery-ah) (* 3.7 (conf-get 'si-battery-cells))))
             (set 'cur-cap (app-clamp16 (* (conf-get 'si-battery-ah) 1000)))
             (app-build-serial)
             (app-build-pin)
