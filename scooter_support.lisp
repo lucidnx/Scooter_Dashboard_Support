@@ -191,6 +191,8 @@
 (def proc-ms-app 0.0) ; app register frames only
 (def quick-sum 0)   ; checksum contribution of the prebuilt 0xB0 block
 (def quick-used false) ; only worth maintaining while an app is actually asking
+(def app-dst 0x3e)     ; address the app last asked from
+(def rx-app 0)         ; app requests received, answered or not
 (def app-enable true)  ; (set 'app-enable false) to ignore the app entirely
 ; Below this speed the app is answered freely; above it each class of register
 ; gets its own interval, because answering keeps the app polling back to back
@@ -1676,7 +1678,11 @@
         (set 'cur-mot (get-temp-mot))
         (set 'cur-maxkmh (send-state-maxkmh))
         (set 'cur-cell-mv (app-clamp16 (/ (* cur-vin 1000) cur-cells)))
-        (if quick-used (build-quick))
+        (if quick-used {
+            (build-app-frame app-f-b0 0xb0 52) ; the three the app asks for constantly
+            (build-app-frame app-f-b4 0xb4 6)
+            (build-app-frame app-f-7b 0x7b 6)
+        })
     })
 )
 
@@ -1725,6 +1731,30 @@
 ; The app fetches 0xB0..0xC9 as a single 52 byte read. Assembling that is 26
 ; register lookups and 104 buffer operations, so it is done once per cache
 ; cycle and only when something actually asks for it.
+(defun build-app-frame (buf reg n)
+    (let ((crc (+ n 0x20 app-dst 0x04 reg)))
+        {
+            (bufset-u16 buf 0 0x5aa5)
+            (bufset-u8 buf 2 n)
+            (bufset-u8 buf 3 0x20)
+            (bufset-u8 buf 4 app-dst)
+            (bufset-u8 buf 5 0x04)
+            (bufset-u8 buf 6 reg)
+            (looprange i 0 (/ n 2) {
+                (var w (nb-word (+ reg i)))
+                (var lo (bitwise-and w 0xFF))
+                (var hi (bitwise-and (shr w 8) 0xFF))
+                (bufset-u8 buf (+ 7 (* i 2)) lo)
+                (bufset-u8 buf (+ 8 (* i 2)) hi)
+                (setq crc (+ crc lo hi))
+            })
+            (setq crc (bitwise-xor crc 0xFFFF))
+            (bufset-u8 buf (+ n 7) (bitwise-and crc 0xFF))
+            (bufset-u8 buf (+ n 8) (bitwise-and (shr crc 8) 0xFF))
+        }
+    )
+)
+
 (defun build-quick ()
     (let ((sum 0))
         {
@@ -1863,7 +1893,7 @@
                 }
                 (if (and (not bms) (= reg 0xb0) (= n 52)) ; the app's bulk read, prebuilt
                     {
-                        (if (not quick-used) { (set 'quick-used true) (build-quick) })
+                        (build-quick)
                         (bufcpy buf 7 quick-buf 0 52)
                         (setq crc (+ crc quick-sum))
                     }
@@ -1894,10 +1924,18 @@
         ((= cmd 0x01) (let ((n (if (> len 0) (bufget-u8 uart-buf 4) 2))) {
             (if (or (< n 2) (> n 64)) (setq n 2))
             (setq n (bitwise-and n 0xFE))
-            (if (app-read-ok dev reg n) {
-                (set 'app-reply-time (systime))
-                (nb-send dev src 0x04 reg n (= dev 0x22))
-            })
+            (set 'rx-app (+ rx-app 1))
+            (if (!= src app-dst) (set 'app-dst src))
+            (set 'quick-used true)
+            (cond
+                ((and (= dev 0x20) (= reg 0xb0) (= n 52)) (uart-write app-f-b0))
+                ((and (= dev 0x20) (= reg 0xb4) (= n 6)) (uart-write app-f-b4))
+                ((and (= dev 0x20) (= reg 0x7b) (= n 6)) (uart-write app-f-7b))
+                ((app-read-ok dev reg n) {
+                    (set 'app-reply-time (systime))
+                    (nb-send dev src 0x04 reg n (= dev 0x22))
+                })
+            )
         }))
         ((or (= cmd 0x02) (= cmd 0x03)) {
             (if (and (> len 0) (!= dev 0x22))
@@ -2574,6 +2612,9 @@
             (def app-serial (array-create 14))
             (def app-pin-buf (array-create 6))
             (def quick-buf (array-create 52))
+            (def app-f-b0 (array-create 61)) ; prepared replies, sent as-is
+            (def app-f-b4 (array-create 15))
+            (def app-f-7b (array-create 15))
             (def app-times (array-create 16)) ; last reply time per register class
             (set 'proc-ms 0.0)
             (set 'proc-ms-app 0.0)
