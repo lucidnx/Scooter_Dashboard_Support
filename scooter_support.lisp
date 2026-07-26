@@ -207,6 +207,7 @@
 ; says they arrive every 30 ms; if this is much larger we are being starved.
 (def adc-dt 0.0)
 (def adc-last (systime))
+(def adc-seen false) ; the first frame after boot has no valid interval
 (def todo-ms 0.0)  ; worst time in app-run-todo   (flash writes, apply-mode, CAN)
 (def cache-ms 0.0) ; worst time in app-cache-update (conf-get, sysinfo, frame builds)
 (def feat-ms 0.0)  ; worst time in the whole button loop pass
@@ -1362,8 +1363,11 @@
                 )
             )
         )
-        (let ((dt (* (secs-since adc-last) 1000)))
-            (if (and (> dt adc-dt) (< dt 2000)) (set 'adc-dt dt))
+        (if adc-seen
+            (let ((dt (* (secs-since adc-last) 1000)))
+                (if (and (> dt adc-dt) (< dt 2000)) (set 'adc-dt dt))
+            )
+            (set 'adc-seen true)
         )
         (set 'adc-last (systime))
         (set 'last-rx (systime)) ; feed the dash link watchdog
@@ -2755,6 +2759,21 @@
             (set 'cur-cells (let ((n (conf-get 'si-battery-cells))) (if (> n 0) n 10)))
             (set 'cur-wh-tot (* 0.85 (conf-get 'si-battery-ah) (* 3.7 (conf-get 'si-battery-cells))))
             (set 'cur-cap (app-clamp16 (* (conf-get 'si-battery-ah) 1000)))
+            ; timestamps captured at load are frozen into the image - reset them
+            ; here or the first measurement after a boot compares against a
+            ; reference from whenever the image was written
+            (set 'adc-last (systime))
+            (set 'adc-seen false)
+            (set 'adc-dt 0.0)
+            (set 'last-rx (systime))
+            (set 'app-cache-time (systime))
+            (set 'app-slow-time (systime))
+            (set 'app-reply-time (systime))
+            (set 'dash-tx-time (systime))
+            (set 'feat-ms 0.0)
+            (set 'cache-ms 0.0)
+            (set 'todo-ms 0.0)
+            (set 'tx-ms 0.0)
             (app-build-serial)
             (app-build-pin)
             (build-app-frame app-f-1a 0x1a 2) ; constant, built once
