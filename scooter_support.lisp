@@ -1750,6 +1750,8 @@
             (set 'cur-cell-mv (app-clamp16 (/ (* cur-vin 1000) cur-cells)))
             (build-app-frame app-f-b4 0xb4 6)
             (build-app-frame app-f-7b 0x7b 6)
+            (build-app-frame-from app-f-33 0x22 0x33 4 true)
+            (build-app-frame-from app-f-35 0x22 0x35 2 true)
         })
         ; The slow figures - range, odometer, runtime, pack capacity - crawl, and
         ; conf-get and sysinfo are expensive. They run one group per tick rather
@@ -1768,6 +1770,8 @@
                     (set 'cur-maxkmh (send-state-maxkmh))
                 })
                 ((= app-slow-step 2) {
+                    (build-app-frame-from app-f-31 0x22 0x31 2 true)
+                    (build-app-frame-from app-f-40 0x22 0x40 30 true)
                     (build-app-frame app-f-25 0x25 2)
                     (build-app-frame app-f-3b 0x3b 2)
                     (build-app-frame app-f-75 0x75 2)
@@ -1799,17 +1803,17 @@
 ; The app fetches 0xB0..0xC9 as a single 52 byte read. Assembling that is 26
 ; register lookups and 104 buffer operations, so it is done once per cache
 ; cycle and only when something actually asks for it.
-(defun build-app-frame (buf reg n)
-    (let ((crc (+ n 0x20 app-dst 0x04 reg)))
+(defun build-app-frame-from (buf from reg n bms)
+    (let ((crc (+ n from app-dst 0x04 reg)))
         {
             (bufset-u16 buf 0 0x5aa5)
             (bufset-u8 buf 2 n)
-            (bufset-u8 buf 3 0x20)
+            (bufset-u8 buf 3 from)
             (bufset-u8 buf 4 app-dst)
             (bufset-u8 buf 5 0x04)
             (bufset-u8 buf 6 reg)
             (looprange i 0 (/ n 2) {
-                (var w (nb-word (+ reg i)))
+                (var w (if bms (xm-bms-word (+ reg i)) (nb-word (+ reg i))))
                 (var lo (bitwise-and w 0xFF))
                 (var hi (bitwise-and (shr w 8) 0xFF))
                 (bufset-u8 buf (+ 7 (* i 2)) lo)
@@ -1822,6 +1826,8 @@
         }
     )
 )
+
+(defun build-app-frame (buf reg n) (build-app-frame-from buf 0x20 reg n false))
 
 (defun build-quick ()
     (let ((sum 0))
@@ -2063,7 +2069,13 @@
                         ((and (= reg 0xda) (= n 12)) (tx app-f-da))
                         (t (nb-send dev src 0x04 reg n false))
                     )
-                    (nb-send dev src 0x04 reg n true)
+                    (cond
+                        ((and (= reg 0x33) (= n 4)) (tx app-f-33))
+                        ((and (= reg 0x35) (= n 2)) (tx app-f-35))
+                        ((and (= reg 0x31) (= n 2)) (tx app-f-31))
+                        ((and (= reg 0x40) (= n 30)) (tx app-f-40))
+                        (t (nb-send dev src 0x04 reg n true))
+                    )
                 )
             )
         }))
@@ -2756,6 +2768,10 @@
             (def app-f-3b (array-create 11))
             (def app-f-75 (array-create 11))
             (def app-f-da (array-create 21))
+            (def app-f-33 (array-create 13)) ; the BMS reads, also prepared
+            (def app-f-35 (array-create 11))
+            (def app-f-31 (array-create 11))
+            (def app-f-40 (array-create 39))
             (set 'cur-cells (let ((n (conf-get 'si-battery-cells))) (if (> n 0) n 10)))
             (set 'cur-wh-tot (* 0.85 (conf-get 'si-battery-ah) (* 3.7 (conf-get 'si-battery-cells))))
             (set 'cur-cap (app-clamp16 (* (conf-get 'si-battery-ah) 1000)))
