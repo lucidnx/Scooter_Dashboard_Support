@@ -1664,14 +1664,6 @@
     )
 )
 
-(defun app-set-pin (val)
-    (if (and (>= val 0) (<= val 999999)) {
-        (set 'app-pin val)
-        (write-setting 'app-pin val)
-        (app-build-pin)
-    })
-)
-
 (defun app-word (buf idx) ; register pair out of a byte string, little endian
     (+ (bufget-u8 buf (* idx 2)) (shl (bufget-u8 buf (+ (* idx 2) 1)) 8))
 )
