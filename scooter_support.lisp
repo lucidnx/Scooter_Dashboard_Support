@@ -1789,10 +1789,13 @@
                 (set 'speedmode m)
                 (set 'app-todo (bitwise-or app-todo 16))
             })))
-        ((= reg 0x7a) (let ((u (!= val 0))) ; VESC extension - secret modes
-            (if (not (eq u unlock)) {
-                (set 'unlock u)
-                (set 'app-todo (bitwise-or app-todo 16))
+        ; 0x7A is Reserved in the Ninebot protocol, so it is free for a proper
+        ; headlight switch. Note that changing the headlight ends the BLE
+        ; session on this hardware whatever triggers it - see docs/ninedash.md
+        ((= reg 0x7a) (let ((v (!= val 0)))
+            (if (not (eq v light)) {
+                (set 'light v)
+                (build-app-frame app-f-7b 0x7b 6)
             })))
         ((= reg 0x7c) (let ((v (!= val 0)))
             (if (not (eq v cruise-enabled)) {
@@ -1907,7 +1910,7 @@
             ((= reg 0x65) (app-speed-01))
             ((or (= reg 0x66) (= reg 0x67) (= reg 0x68)) app-ver)
             ((or (= reg 0x72) (= reg 0x73) (= reg 0x74)) (app-clamp16 (* cur-maxkmh 10)))
-            ((= reg 0x7a) (if unlock 1 0))
+            ((= reg 0x7a) (if light 1 0))
             ((= reg 0x90) (if light 1 0))
             ((or (= reg 0x91) (= reg 0x92)) (if alarm-tone 1 0))
             (t 0)
@@ -2013,7 +2016,7 @@
         ((= reg 0x3e) (app-fet-01))
         ((= reg 0x67) app-ver)
         ((= reg 0x75) (if (= speedmode 2) 1 0))
-        ((= reg 0x7a) (if unlock 1 0))
+        ((= reg 0x7a) (if light 1 0))
         ((= reg 0x7b) (cond ((= speedmode 1) 1) ((= speedmode 4) 2) (t 0)))
         ((= reg 0x76) (if unlock 1 0))
         ((= reg 0x7c) (if cruise-enabled 1 0))

@@ -201,7 +201,13 @@ hardware or wiring is needed.
 - **App pairing PIN**: set your own 6-digit code in Setup
 - Reports firmware version **7.0.0** and a serial number of `VESC` + ten digits derived
   from your controller's UUID, so app authors can detect a VESC and adapt (e.g. hide
-  unsupported functions)
+  unsupported functions) - see [notes for the NineDash developer](docs/ninedash.md)
+- NineDash has no headlight, secret or speed-mode controls, so two of its controls are
+  borrowed: **Recovery mode (KERS)** selects the speed mode (Weak/Medium/Strong =
+  Eco/Drive/Sport) and **Direct power control** toggles secret modes
+- **Known issue:** toggling the headlight ends the app's BLE session, however it is
+  switched - including from the scooter's own button. The cause is not yet understood,
+  so the headlight is deliberately not exposed to the app
 - Lock and unlock are only accepted at standstill, as on a stock scooter
 - **Shutdown is deliberately ignored**: it would cut power to the dashboard itself. The
   command is acknowledged so the app doesn't hang, but nothing happens
