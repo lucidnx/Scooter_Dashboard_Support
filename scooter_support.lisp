@@ -204,6 +204,9 @@
 ; says they arrive every 30 ms; if this is much larger we are being starved.
 (def adc-dt 0.0)
 (def adc-last (systime))
+(def todo-ms 0.0)  ; worst time in app-run-todo   (flash writes, apply-mode, CAN)
+(def cache-ms 0.0) ; worst time in app-cache-update (conf-get, sysinfo, frame builds)
+(def feat-ms 0.0)  ; worst time in the whole button loop pass
 ; Lever detection for the deferral above works off the raw dash bytes against a
 ; learned resting value, not the corrected voltage against the ADC start point -
 ; the correction shifts with the headlight and the start point can sit below the
@@ -1521,6 +1524,7 @@
 
 (defun handle-features()
     {
+        (var feat-t0 (systime))
         (set 'cur-speed-kmh (* (get-lowest-speed) 3.6))
 
         ; battery %: BMS reads can throw if no BMS is present - keep them from
@@ -1574,10 +1578,25 @@
         )
 
         (trap (build-dash-frame))
-        (trap (app-run-todo))
-        (trap (app-cache-update))
+        (let ((t0 (systime)))
+            {
+                (trap (app-run-todo))
+                (var m (* (secs-since t0) 1000))
+                (if (> m todo-ms) (set 'todo-ms m))
+            }
+        )
+        (let ((t0 (systime)))
+            {
+                (trap (app-cache-update))
+                (var m (* (secs-since t0) 1000))
+                (if (> m cache-ms) (set 'cache-ms m))
+            }
+        )
         (trap (handle-taillight))
         (handle-lock (abs current-speed))
+        (let ((m (* (secs-since feat-t0) 1000)))
+            (if (> m feat-ms) (set 'feat-ms m))
+        )
     }
 )
 
