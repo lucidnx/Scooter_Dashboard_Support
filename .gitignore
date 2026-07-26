@@ -2,3 +2,6 @@ vesc_scooter_support.vescpkg
 vesc_tool
 tools/
 .DS_Store
+# diagnostic captures and tools, not part of the package
+*.log
+bus_sniff.py

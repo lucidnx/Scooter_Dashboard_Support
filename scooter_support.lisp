@@ -2070,12 +2070,20 @@
                                                         (adc-input uart-buf)
                                                     )
                                                 )
-                                                ((= code 0x64)
+                                                ((= code 0x64) {
+                                                    ; 0x64 carries throttle and brake at the same
+                                                    ; offsets as 0x65. The dash halves its 0x65 rate
+                                                    ; while serving an app but keeps sending 0x64, so
+                                                    ; ignoring these threw away half the lever data
+                                                    ; exactly when it was scarce.
+                                                    (if (and software-adc (>= len 7))
+                                                        (adc-input uart-buf)
+                                                    )
                                                     (if (> (secs-since dash-tx-time) dash-tx-iv) {
                                                         (set 'dash-tx-time (systime))
                                                         (update-dash uart-buf)
                                                     })
-                                                )
+                                                })
                                                 (t (if app-enable
                                                     (trap (nb-app-frame dst (bufget-u8 uart-buf 0) code (bufget-u8 uart-buf 3) len))
                                                 ))
