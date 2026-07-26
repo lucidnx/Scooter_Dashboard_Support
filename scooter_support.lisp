@@ -188,6 +188,7 @@
 ; gap between frames which also counts the dash simply being quiet
 (def quick-sum 0)   ; checksum contribution of the prebuilt 0xB0 block
 (def quick-used false) ; only worth maintaining while an app is actually asking
+(def b0-wanted false)  ; the 52 byte block is 26 lookups - only rebuild it when asked
 (def app-dst 0x3e)     ; address the app last asked from
 ; Control writes must not do slow work in the reader thread: a mode change
 ; means conf-set plus CAN round trips with retries, and persisting a setting
@@ -1705,14 +1706,20 @@
         (set 'cur-maxkmh (send-state-maxkmh))
         (set 'cur-cell-mv (app-clamp16 (/ (* cur-vin 1000) cur-cells)))
         (if quick-used {
-            (build-app-frame app-f-b0 0xb0 52) ; everything the app asks for often,
-            (build-app-frame app-f-b4 0xb4 6)  ; ready to go out as a single write
+            ; Only what actually changes, and the 52 byte block only when it has
+            ; been asked for - it is 26 register lookups and the app wants it
+            ; roughly once every seven seconds. Rebuilding all of these every
+            ; cycle cost more evaluator time than answering the app does, and
+            ; the lever path shares that evaluator.
+            (build-app-frame app-f-b4 0xb4 6)
             (build-app-frame app-f-7b 0x7b 6)
-            (build-app-frame app-f-1a 0x1a 2)
             (build-app-frame app-f-25 0x25 2)
             (build-app-frame app-f-3b 0x3b 2)
             (build-app-frame app-f-75 0x75 2)
-            (build-app-frame app-f-da 0xda 12)
+            (if b0-wanted {
+                (set 'b0-wanted false)
+                (build-app-frame app-f-b0 0xb0 52)
+            })
         })
     })
 )
@@ -1986,7 +1993,10 @@
                 (if (= dev 0x20)
                     (cond
                         ((and (= reg 0xb4) (= n 6)) (uart-write app-f-b4))
-                        ((and (= reg 0xb0) (= n 52)) (uart-write app-f-b0))
+                        ((and (= reg 0xb0) (= n 52)) {
+                            (set 'b0-wanted true)
+                            (uart-write app-f-b0)
+                        })
                         ((and (= reg 0x7b) (= n 6)) (uart-write app-f-7b))
                         ((and (= reg 0x1a) (= n 2)) (uart-write app-f-1a))
                         ((and (= reg 0x25) (= n 2)) (uart-write app-f-25))
@@ -2692,6 +2702,8 @@
             (set 'cur-cap (app-clamp16 (* (conf-get 'si-battery-ah) 1000)))
             (app-build-serial)
             (app-build-pin)
+            (build-app-frame app-f-1a 0x1a 2) ; constant, built once
+            (build-app-frame app-f-da 0xda 12)
             (set 'app-boot-time (systime))
 
             (if (= model 1) {
