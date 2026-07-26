@@ -224,6 +224,17 @@
 ; the reader's outer trap has swallowed every error since the tracing was
 ; removed - keep the last one and a count so they are visible again
 (def rd-ms 0)  ; worst time blocked inside uart-read-bytes waiting for data
+; uart-write switches the receiver off and hands the job of switching it back on
+; to a shared worker thread without waiting for it, so the deaf window lasts
+; until that worker runs - measured at up to 470 ms while the bus was carrying
+; frames every 30 ms. Transmitting again before it recovers extends the window.
+; So an app answer rides along inside the next dash answer: framing is by header
+; and length, not by transmission, and this halves the number of writes.
+(def app-pend false)
+(def pend-dev 0)
+(def pend-src 0)
+(def pend-reg 0)
+(def pend-n 0)
 (def rx-err nil)
 (def rx-errs 0)
 
@@ -1843,6 +1854,58 @@
 ; The app fetches 0xB0..0xC9 as a single 52 byte read. Assembling that is 26
 ; register lookups and 104 buffer operations, so it is done once per cache
 ; cycle and only when something actually asks for it.
+(defunret app-pend-buf ()
+    {
+        (if (= pend-dev 0x22)
+            (return (cond
+                ((and (= pend-reg 0x33) (= pend-n 4)) app-f-33)
+                ((and (= pend-reg 0x35) (= pend-n 2)) app-f-35)
+                ((and (= pend-reg 0x31) (= pend-n 2)) app-f-31)
+                ((and (= pend-reg 0x40) (= pend-n 30)) app-f-40)
+                (t nil)
+            ))
+        )
+        (cond
+            ((and (= pend-reg 0xb4) (= pend-n 6)) app-f-b4)
+            ((and (= pend-reg 0xb0) (= pend-n 52)) app-f-b0)
+            ((and (= pend-reg 0x7b) (= pend-n 6)) app-f-7b)
+            ((and (= pend-reg 0x1a) (= pend-n 2)) app-f-1a)
+            ((and (= pend-reg 0x25) (= pend-n 2)) app-f-25)
+            ((and (= pend-reg 0x3b) (= pend-n 2)) app-f-3b)
+            ((and (= pend-reg 0x75) (= pend-n 2)) app-f-75)
+            ((and (= pend-reg 0xda) (= pend-n 12)) app-f-da)
+            (t nil)
+        )
+    }
+)
+
+; one buffer per total length that can occur - never resized, never allocated
+(defun combo-buf (al)
+    (cond ((= al 11) combo26) ((= al 13) combo28) ((= al 15) combo30)
+          ((= al 21) combo36) ((= al 39) combo54) ((= al 61) combo76) (t nil))
+)
+
+(defun send-dash-and-app ()
+    (let ((ab (app-pend-buf)))
+        {
+            (set 'app-pend false)
+            (if (eq ab nil)
+                { (tx tx-frame) (nb-send pend-dev pend-src 0x04 pend-reg pend-n (= pend-dev 0x22)) }
+                (let ((cb (combo-buf (buflen ab))) (dl (buflen tx-frame)))
+                    (if (eq cb nil)
+                        { (tx tx-frame) (tx ab) }
+                        {
+                            (bufcpy cb 0 tx-frame 0 dl)
+                            (bufcpy cb dl ab 0 (buflen ab))
+                            (tx cb)
+                        }
+                    )
+                )
+            )
+        }
+    )
+)
+
 (defun build-app-frame-from (buf from reg n bms)
     (let ((crc (+ n from app-dst 0x04 reg)))
         {
@@ -2087,37 +2150,14 @@
             (setq n (bitwise-and n 0xFE))
             (if (!= src app-dst) (set 'app-dst src))
             (set 'quick-used true)
-            ; Everything the dashboard shows is short and is answered at once
-            ; from a prepared frame, so nothing is computed while the module
-            ; waits. A reply of 20 bytes or more - cell voltages, the bulk
-            ; block - holds the line long enough to lose a lever frame, so
-            ; those wait until the levers are released.
-            (if (and (>= n 20) levers-active)
-                nil
-                (if (= dev 0x20)
-                    (cond
-                        ((and (= reg 0xb4) (= n 6)) (tx app-f-b4))
-                        ((and (= reg 0xb0) (= n 52)) {
-                            (set 'b0-wanted true)
-                            (tx app-f-b0)
-                        })
-                        ((and (= reg 0x7b) (= n 6)) (tx app-f-7b))
-                        ((and (= reg 0x1a) (= n 2)) (tx app-f-1a))
-                        ((and (= reg 0x25) (= n 2)) (tx app-f-25))
-                        ((and (= reg 0x3b) (= n 2)) (tx app-f-3b))
-                        ((and (= reg 0x75) (= n 2)) (tx app-f-75))
-                        ((and (= reg 0xda) (= n 12)) (tx app-f-da))
-                        (t (nb-send dev src 0x04 reg n false))
-                    )
-                    (cond
-                        ((and (= reg 0x33) (= n 4)) (tx app-f-33))
-                        ((and (= reg 0x35) (= n 2)) (tx app-f-35))
-                        ((and (= reg 0x31) (= n 2)) (tx app-f-31))
-                        ((and (= reg 0x40) (= n 30)) (tx app-f-40))
-                        (t (nb-send dev src 0x04 reg n true))
-                    )
-                )
-            )
+            (if (and (= reg 0xb0) (= n 52)) (set 'b0-wanted true))
+            ; held for the next dash answer; one arriving while another waits is
+            ; dropped and the app re-asks, which is cheaper than a transmission
+            (if (and (not app-pend) (not (and (>= n 20) levers-active))) {
+                (set 'pend-dev dev) (set 'pend-src src)
+                (set 'pend-reg reg) (set 'pend-n n)
+                (set 'app-pend true)
+            })
         }))
         ((or (= cmd 0x02) (= cmd 0x03)) {
             (if (and (> len 0) (!= dev 0x22))
@@ -2281,7 +2321,10 @@
                                                     )
                                                     (if (> (secs-since dash-tx-time) dash-tx-iv) {
                                                         (set 'dash-tx-time (systime))
-                                                        (update-dash uart-buf)
+                                                        (if app-pend
+                                                            (send-dash-and-app)
+                                                            (update-dash uart-buf)
+                                                        )
                                                     })
                                                 })
                                                 (t (if app-enable
@@ -2826,6 +2869,12 @@
             (def app-f-35 (array-create 11))
             (def app-f-31 (array-create 11))
             (def app-f-40 (array-create 39))
+            (def combo26 (array-create 26)) ; dash answer plus each app answer size
+            (def combo28 (array-create 28))
+            (def combo30 (array-create 30))
+            (def combo36 (array-create 36))
+            (def combo54 (array-create 54))
+            (def combo76 (array-create 76))
             (set 'cur-cells (let ((n (conf-get 'si-battery-cells))) (if (> n 0) n 10)))
             (set 'cur-wh-tot (* 0.85 (conf-get 'si-battery-ah) (* 3.7 (conf-get 'si-battery-cells))))
             (set 'cur-cap (app-clamp16 (* (conf-get 'si-battery-ah) 1000)))
