@@ -1712,6 +1712,42 @@
 ; The app fetches 0xB0..0xC9 as a single 52 byte read. Assembling that is 26
 ; register lookups and 104 buffer operations, so it is done once per cache
 ; cycle and only when something actually asks for it.
+; Framing is by header and length, not by transmission, so the dash answer and
+; a waiting app answer go out as one write - one driver penalty instead of two.
+(defunret app-pend-buf ()
+    {
+        (if (!= pend-dev 0x20) (return nil))
+        (cond
+            ((and (= pend-reg 0xb4) (= pend-n 6)) app-f-b4)
+            ((and (= pend-reg 0xb0) (= pend-n 52)) app-f-b0)
+            ((and (= pend-reg 0x7b) (= pend-n 6)) app-f-7b)
+            ((and (= pend-reg 0x1a) (= pend-n 2)) app-f-1a)
+            ((and (= pend-reg 0x25) (= pend-n 2)) app-f-25)
+            ((and (= pend-reg 0x3b) (= pend-n 2)) app-f-3b)
+            ((and (= pend-reg 0x75) (= pend-n 2)) app-f-75)
+            ((and (= pend-reg 0xda) (= pend-n 12)) app-f-da)
+            (t nil)
+        )
+    }
+)
+
+(defun send-dash-and-app ()
+    (let ((ab (app-pend-buf)))
+        (if (eq ab nil)
+            { (uart-write tx-frame) (app-flush) } ; not a prepared one, two writes
+            {
+                (var dl (buflen tx-frame))
+                (var al (buflen ab))
+                (set 'combo (buf-resize combo nil (+ dl al)))
+                (bufcpy combo 0 tx-frame 0 dl)
+                (bufcpy combo dl ab 0 al)
+                (uart-write combo)
+                (set 'app-pend false)
+            }
+        )
+    )
+)
+
 (defun app-flush ()
     {
         (set 'app-pend false)
@@ -2069,11 +2105,13 @@
                                                     )
                                                 )
                                                 ((= code 0x64) {
-                                                    (if (> (secs-since dash-tx-time) dash-tx-iv) {
-                                                        (set 'dash-tx-time (systime))
-                                                        (update-dash uart-buf)
-                                                    })
-                                                    (if app-pend (app-flush)) ; dash is still waiting here
+                                                    (var due (> (secs-since dash-tx-time) dash-tx-iv))
+                                                    (if due (set 'dash-tx-time (systime)))
+                                                    (cond
+                                                        ((and due app-pend) (send-dash-and-app))
+                                                        (due (update-dash uart-buf))
+                                                        (app-pend (app-flush))
+                                                    )
                                                 })
                                                 (t (if app-enable
                                                     (trap (nb-app-frame dst (bufget-u8 uart-buf 0) code (bufget-u8 uart-buf 3) len))
@@ -2605,6 +2643,7 @@
             (def app-f-3b (array-create 11))
             (def app-f-75 (array-create 11))
             (def app-f-da (array-create 21))
+            (def combo (array-create 80)) ; dash answer plus an app answer, one write
             (set 'cur-cells (let ((n (conf-get 'si-battery-cells))) (if (> n 0) n 10)))
             (set 'cur-cap (app-clamp16 (* (conf-get 'si-battery-ah) 1000)))
             (app-build-serial)
