@@ -205,20 +205,20 @@
 (def levers-active false)
 ; worst gap between lever frames as we actually process them, in ms. The wire
 ; says they arrive every 30 ms; if this is much larger we are being starved.
-(def adc-dt 0.0)
+(def adc-dt 0)
 (def adc-last (systime))
 (def adc-seen false) ; the first frame after boot has no valid interval
-(def todo-ms 0.0)  ; worst time in app-run-todo   (flash writes, apply-mode, CAN)
-(def cache-ms 0.0) ; worst time in app-cache-update (conf-get, sysinfo, frame builds)
-(def feat-ms 0.0)  ; worst time in the whole button loop pass
-(def tx-ms 0.0)    ; worst time inside a single uart-write
+(def todo-ms 0)  ; worst time in app-run-todo   (flash writes, apply-mode, CAN)
+(def cache-ms 0) ; worst time in app-cache-update (conf-get, sysinfo, frame builds)
+(def feat-ms 0)  ; worst time in the whole button loop pass
+(def tx-ms 0)    ; worst time inside a single uart-write
 
 ; every transmission goes through here so its cost is visible
 (defun tx (frame)
     (let ((t0 (systime)))
         {
             (uart-write frame)
-            (var m (* (secs-since t0) 1000))
+            (var m (- (systime) t0))
             (if (> m tx-ms) (set 'tx-ms m))
         }
     )
@@ -1364,7 +1364,7 @@
             )
         )
         (if adc-seen
-            (let ((dt (* (secs-since adc-last) 1000)))
+            (let ((dt (- (systime) adc-last)))
                 (if (and (> dt adc-dt) (< dt 2000)) (set 'adc-dt dt))
             )
             (set 'adc-seen true)
@@ -1600,20 +1600,20 @@
         (let ((t0 (systime)))
             {
                 (trap (app-run-todo))
-                (var m (* (secs-since t0) 1000))
+                (var m (- (systime) t0))
                 (if (> m todo-ms) (set 'todo-ms m))
             }
         )
         (let ((t0 (systime)))
             {
                 (trap (app-cache-update))
-                (var m (* (secs-since t0) 1000))
+                (var m (- (systime) t0))
                 (if (> m cache-ms) (set 'cache-ms m))
             }
         )
         (trap (handle-taillight))
         (handle-lock (abs current-speed))
-        (let ((m (* (secs-since feat-t0) 1000)))
+        (let ((m (- (systime) feat-t0)))
             (if (> m feat-ms) (set 'feat-ms m))
         )
     }
@@ -2780,16 +2780,16 @@
             ; reference from whenever the image was written
             (set 'adc-last (systime))
             (set 'adc-seen false)
-            (set 'adc-dt 0.0)
+            (set 'adc-dt 0)
             (set 'last-rx (systime))
             (set 'app-cache-time (systime))
             (set 'app-slow-time (systime))
             (set 'app-reply-time (systime))
             (set 'dash-tx-time (systime))
-            (set 'feat-ms 0.0)
-            (set 'cache-ms 0.0)
-            (set 'todo-ms 0.0)
-            (set 'tx-ms 0.0)
+            (set 'feat-ms 0)
+            (set 'cache-ms 0)
+            (set 'todo-ms 0)
+            (set 'tx-ms 0)
             (app-build-serial)
             (app-build-pin)
             (build-app-frame app-f-1a 0x1a 2) ; constant, built once
