@@ -188,6 +188,16 @@
 (def quick-sum 0)   ; checksum contribution of the prebuilt 0xB0 block
 (def quick-used false) ; only worth maintaining while an app is actually asking
 (def app-dst 0x3e)     ; address the app last asked from
+; The dash allocates a window for our 0x64 answer and waits in it. An answer to
+; the app follows the module's schedule instead, so it can land on top of a
+; lever frame - and transmitting switches the receiver off, so that frame is
+; lost. App answers are therefore held and sent immediately after the dash
+; answer, inside the window the dash is already waiting through.
+(def app-pend false)
+(def pend-dev 0)
+(def pend-src 0)
+(def pend-reg 0)
+(def pend-n 0)
 ; In half duplex the firmware switches the receiver off for the whole of every
 ; uart-write and leaves it off a millisecond or two afterwards, so every
 ; transmission is a window in which the dash's lever frames are simply lost.
@@ -1702,6 +1712,26 @@
 ; The app fetches 0xB0..0xC9 as a single 52 byte read. Assembling that is 26
 ; register lookups and 104 buffer operations, so it is done once per cache
 ; cycle and only when something actually asks for it.
+(defun app-flush ()
+    {
+        (set 'app-pend false)
+        (if (= pend-dev 0x20)
+            (cond
+                ((and (= pend-reg 0xb4) (= pend-n 6)) (uart-write app-f-b4))
+                ((and (= pend-reg 0xb0) (= pend-n 52)) (uart-write app-f-b0))
+                ((and (= pend-reg 0x7b) (= pend-n 6)) (uart-write app-f-7b))
+                ((and (= pend-reg 0x1a) (= pend-n 2)) (uart-write app-f-1a))
+                ((and (= pend-reg 0x25) (= pend-n 2)) (uart-write app-f-25))
+                ((and (= pend-reg 0x3b) (= pend-n 2)) (uart-write app-f-3b))
+                ((and (= pend-reg 0x75) (= pend-n 2)) (uart-write app-f-75))
+                ((and (= pend-reg 0xda) (= pend-n 12)) (uart-write app-f-da))
+                (t (nb-send pend-dev pend-src 0x04 pend-reg pend-n false))
+            )
+            (nb-send pend-dev pend-src 0x04 pend-reg pend-n true)
+        )
+    }
+)
+
 (defun build-app-frame (buf reg n)
     (let ((crc (+ n 0x20 app-dst 0x04 reg)))
         {
@@ -1897,23 +1927,10 @@
             (setq n (bitwise-and n 0xFE))
             (if (!= src app-dst) (set 'app-dst src))
             (set 'quick-used true)
-            ; Answer immediately, always. What hurts is the BLE module waiting
-            ; on us, not the reply itself, so everything it asks for often goes
-            ; out as one prepared write with nothing computed in between.
-            (if (= dev 0x20)
-                (cond
-                    ((and (= reg 0xb4) (= n 6)) (uart-write app-f-b4))
-                    ((and (= reg 0xb0) (= n 52)) (uart-write app-f-b0))
-                    ((and (= reg 0x7b) (= n 6)) (uart-write app-f-7b))
-                    ((and (= reg 0x1a) (= n 2)) (uart-write app-f-1a))
-                    ((and (= reg 0x25) (= n 2)) (uart-write app-f-25))
-                    ((and (= reg 0x3b) (= n 2)) (uart-write app-f-3b))
-                    ((and (= reg 0x75) (= n 2)) (uart-write app-f-75))
-                    ((and (= reg 0xda) (= n 12)) (uart-write app-f-da))
-                    (t (nb-send dev src 0x04 reg n false))
-                )
-                (nb-send dev src 0x04 reg n true)
-            )
+            ; hold it for the dash's window rather than transmitting now
+            (set 'pend-dev dev) (set 'pend-src src)
+            (set 'pend-reg reg) (set 'pend-n n)
+            (set 'app-pend true)
         }))
         ((or (= cmd 0x02) (= cmd 0x03)) {
             (if (and (> len 0) (!= dev 0x22))
@@ -2051,12 +2068,13 @@
                                                         (adc-input uart-buf)
                                                     )
                                                 )
-                                                ((= code 0x64)
+                                                ((= code 0x64) {
                                                     (if (> (secs-since dash-tx-time) dash-tx-iv) {
                                                         (set 'dash-tx-time (systime))
                                                         (update-dash uart-buf)
                                                     })
-                                                )
+                                                    (if app-pend (app-flush)) ; dash is still waiting here
+                                                })
                                                 (t (if app-enable
                                                     (trap (nb-app-frame dst (bufget-u8 uart-buf 0) code (bufget-u8 uart-buf 3) len))
                                                 ))
