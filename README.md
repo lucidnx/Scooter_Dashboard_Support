@@ -199,6 +199,8 @@ hardware or wiring is needed.
   populated - pack voltage and current from the VESC (CAN-combined), and per-cell voltage
   derived from pack voltage ÷ series count when no VESC BMS is present
 - **App pairing PIN**: set your own 6-digit code in Setup
+- **Phone app support** can be turned off in General. Leave it on to use the app; turn it
+  off for the sharpest possible throttle response - see the note below
 - Reports firmware version **7.0.0** and a serial number of `VESC` + ten digits derived
   from your controller's UUID, so app authors can detect a VESC and adapt (e.g. hide
   unsupported functions) - see [notes for the NineDash developer](docs/ninedash.md)
@@ -212,6 +214,15 @@ hardware or wiring is needed.
 - **Shutdown is deliberately ignored**: it would cut power to the dashboard itself. The
   command is acknowledged so the app doesn't hang, but nothing happens
 - Regenerative braking level (KERS) is reported as off - VESC does not use Xiaomi's levels
+
+**Throttle response with an app connected.** The dashboard bus is a single wire shared by
+the dash, its BLE module and the controller. Every time the controller transmits, the VESC
+firmware switches its receiver off and hands the job of switching it back on to a
+background worker without waiting for it - so lever frames arriving in that window are
+lost. Measured on a G30: the worst gap before a throttle update is applied is 51 ms with
+no app connected, and rises with one connected. It is intermittent rather than constant,
+and it is a firmware limitation rather than something the package can fix. If you want the
+crispest throttle, turn **Phone app support** off in General and use the app when parked.
 
 ### Comfort
 - **Auto headlight**: turn the headlight on automatically at power on

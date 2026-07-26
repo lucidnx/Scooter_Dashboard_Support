@@ -205,25 +205,6 @@
 (def levers-active false)
 ; worst gap between lever frames as we actually process them, in ms. The wire
 ; says they arrive every 30 ms; if this is much larger we are being starved.
-(def adc-dt 0)
-(def adc-dt2 0) ; second worst, so one outlier does not hide the rest
-(def adc-last (systime))
-(def adc-seen false) ; the first frame after boot has no valid interval
-(def todo-ms 0)  ; worst time in app-run-todo   (flash writes, apply-mode, CAN)
-(def cache-ms 0) ; worst time in app-cache-update (conf-get, sysinfo, frame builds)
-(def feat-ms 0)  ; worst time in the whole button loop pass
-(def tx-ms 0)    ; worst time inside a single uart-write
-(def spd-ms 0)   ; get-lowest-speed and the battery read
-(def cru-ms 0)   ; handle-cruise
-(def dsh-ms 0)   ; build-dash-frame
-(def lck-ms 0)   ; handle-lock, which reaches the gyro over CAN when locked
-; DIAGNOSTIC: (set 'feat-enable false) stops the button loop doing anything, to
-; test whether the lever path is waiting on it. Lock, cruise, mode changes and
-; the output cut-off all stop working while it is off - stand use only.
-(def feat-enable true)
-; the reader's outer trap has swallowed every error since the tracing was
-; removed - keep the last one and a count so they are visible again
-(def rd-ms 0)  ; worst time blocked inside uart-read-bytes waiting for data
 ; uart-write switches the receiver off and hands the job of switching it back on
 ; to a shared worker thread without waiting for it, so the deaf window lasts
 ; until that worker runs - measured at up to 470 ms while the bus was carrying
@@ -235,19 +216,7 @@
 (def pend-src 0)
 (def pend-reg 0)
 (def pend-n 0)
-(def rx-err nil)
-(def rx-errs 0)
 
-; every transmission goes through here so its cost is visible
-(defun tx (frame)
-    (let ((t0 (systime)))
-        {
-            (uart-write frame)
-            (var m (- (systime) t0))
-            (if (> m tx-ms) (set 'tx-ms m))
-        }
-    )
-)
 ; Lever detection for the deferral above works off the raw dash bytes against a
 ; learned resting value, not the corrected voltage against the ADC start point -
 ; the correction shifts with the headlight and the start point can sit below the
@@ -261,7 +230,10 @@
 ; display does not need that rate. 0 restores a reply to every poll.
 (def dash-tx-iv 0.05)
 (def dash-tx-time (systime))
-(def app-enable true)  ; (set 'app-enable false) to ignore the app entirely
+; Answer third-party apps at all. Transmitting makes the receiver deaf for as
+; long as the firmware's worker takes to switch it back on, so a connected app
+; costs lever responsiveness - turn this off to ride with the sharpest throttle.
+(def app-enable true)
 ; Below this speed the app is answered freely; above it each class of register
 ; gets its own interval, because answering keeps the app polling back to back
 ; and that leaves the dash too little of the bus for its lever frames.
@@ -316,7 +288,7 @@
 
 @const-start
 
-(def settings-version 400i32)
+(def settings-version 401i32)
 
 ; Persistent settings: (label . (eeprom-offset type))
 (def eeprom-addrs '(
@@ -405,6 +377,7 @@
     (light-gain-thr        . (80 f))
     (light-gain-brk        . (81 f))
     (app-pin               . (84 i))
+    (app-enable            . (85 b))
 ))
 
 (def last-button-state false)
@@ -447,6 +420,10 @@
 ; (raw wasn't shifted by a constant volts - it scaled non-linearly with lever
 ; position). A flat offset from v308 would be WRONG under the new formula
 ; (sign-inverted at points), so it's reset here - recalibrate with Sample.
+(defun write-v401-defaults () ; settings added in v401
+    (write-setting 'app-enable true)
+)
+
 (defun write-v400-defaults () ; settings added in v400
     (write-setting 'app-pin 0)
 )
@@ -537,6 +514,7 @@
         (write-v309-defaults)
         (write-v310-defaults)
         (write-v400-defaults)
+        (write-v401-defaults)
         (write-setting 'secret-presses 1)
         (write-setting 'secret-combo 0)
         (write-setting 'secret-requires-lock false)
@@ -610,6 +588,7 @@
                     (write-v309-defaults)
                     (write-v310-defaults)
                     (write-v400-defaults)
+        (write-v401-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 302i32) {
@@ -622,6 +601,7 @@
                     (write-v309-defaults)
                     (write-v310-defaults)
                     (write-v400-defaults)
+        (write-v401-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 303i32) {
@@ -633,6 +613,7 @@
                     (write-v309-defaults)
                     (write-v310-defaults)
                     (write-v400-defaults)
+        (write-v401-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 304i32) {
@@ -643,6 +624,7 @@
                     (write-v309-defaults)
                     (write-v310-defaults)
                     (write-v400-defaults)
+        (write-v401-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 305i32) {
@@ -652,6 +634,7 @@
                     (write-v309-defaults)
                     (write-v310-defaults)
                     (write-v400-defaults)
+        (write-v401-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 306i32) {
@@ -660,6 +643,7 @@
                     (write-v309-defaults)
                     (write-v310-defaults)
                     (write-v400-defaults)
+        (write-v401-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 307i32) {
@@ -667,21 +651,25 @@
                     (write-v309-defaults)
                     (write-v310-defaults)
                     (write-v400-defaults)
+        (write-v401-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 308i32) {
                     (write-v309-defaults)
                     (write-v310-defaults)
                     (write-v400-defaults)
+        (write-v401-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 309i32) {
                     (write-v310-defaults)
                     (write-v400-defaults)
+        (write-v401-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 310i32) {
                     (write-v400-defaults)
+        (write-v401-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 (t (restore-defaults))
@@ -769,6 +757,7 @@
         (set 'cruise-min-speed (read-setting 'cruise-min-speed))
         (set 'cruise-max-speed (read-setting 'cruise-max-speed))
         (set 'app-pin (read-setting 'app-pin))
+        (set 'app-enable (read-setting 'app-enable))
 
         (var m (read-setting 'model))
         (if (not (valid-model m)) {
@@ -803,8 +792,9 @@
     }
 )
 
-(defun save-general-settings (adc show-batt show-batt-secret min-speed-kmh)
+(defun save-general-settings (adc show-batt show-batt-secret min-speed-kmh app)
     {
+        (write-setting 'app-enable app)
         (write-setting 'software-adc adc)
         (write-setting 'show-batt-in-idle show-batt)
         (write-setting 'show-batt-idle-secret show-batt-secret)
@@ -1112,7 +1102,8 @@
             (if (read-setting 'software-adc) "true " "false ")
             (if (read-setting 'show-batt-in-idle) "true " "false ")
             (if (read-setting 'show-batt-idle-secret) "true " "false ")
-            (str-from-n (read-setting 'min-speed-kmh) "%.1f")
+            (str-from-n (read-setting 'min-speed-kmh) "%.1f ")
+            (if (read-setting 'app-enable) "true" "false")
         ))
         (sleep 0.05)
         (send-data (str-merge
@@ -1388,18 +1379,6 @@
                 )
             )
         )
-        (if adc-seen
-            (let ((dt (- (systime) adc-last)))
-                (if (< dt 30000)
-                    (if (> dt adc-dt)
-                        { (set 'adc-dt2 adc-dt) (set 'adc-dt dt) }
-                        (if (> dt adc-dt2) (set 'adc-dt2 dt))
-                    )
-                )
-            )
-            (set 'adc-seen true)
-        )
-        (set 'adc-last (systime))
         (set 'last-rx (systime)) ; feed the dash link watchdog
 
         (set 'dash-thr-raw (bufget-u8 uart-buf thr-idx)) ; raw physical throttle (before override)
@@ -1571,11 +1550,8 @@
     )
 )
 
-(defunret handle-features()
+(defun handle-features()
     {
-        (if (not feat-enable) (return nil))
-        (var feat-t0 (systime))
-        (var spd-t0 (systime))
         (set 'cur-speed-kmh (* (get-lowest-speed) 3.6))
 
         ; battery %: BMS reads can throw if no BMS is present - keep them from
@@ -1591,7 +1567,6 @@
                 (set 'cur-batt (* (get-batt) 100))
             )
         )
-        (let ((m (- (systime) spd-t0))) (if (> m spd-ms) (set 'spd-ms m)))
         (var current-speed cur-speed-kmh)
 
         ; Dash link watchdog: release the ADC overrides when throttle frames stop
@@ -1609,13 +1584,7 @@
             }
         )
 
-        (let ((t0 (systime)))
-            {
-                (trap (handle-cruise current-speed)) ; experimental - never let it break the loop
-                (var m (- (systime) t0))
-                (if (> m cru-ms) (set 'cru-ms m))
-            }
-        )
+        (trap (handle-cruise current-speed)) ; experimental - never let it break the loop
 
         (if (or off lock (< current-speed min-speed))
             (if (not (app-is-output-disabled)) ; Disable output when scooter is turned off
@@ -1635,39 +1604,12 @@
             )
         )
 
-        (let ((t0 (systime)))
-            {
-                (trap (build-dash-frame))
-                (var m (- (systime) t0))
-                (if (> m dsh-ms) (set 'dsh-ms m))
-            }
-        )
-        (let ((t0 (systime)))
-            {
-                (trap (app-run-todo))
-                (var m (- (systime) t0))
-                (if (> m todo-ms) (set 'todo-ms m))
-            }
-        )
-        (let ((t0 (systime)))
-            {
-                (trap (app-cache-update))
-                (var m (- (systime) t0))
-                (if (> m cache-ms) (set 'cache-ms m))
-            }
-        )
+        (trap (build-dash-frame))
+        (trap (app-run-todo))
+        (trap (app-cache-update))
         (trap (handle-taillight))
-        (let ((t0 (systime)))
-            {
-                (handle-lock (abs current-speed))
-                (var m (- (systime) t0))
-                (if (> m lck-ms) (set 'lck-ms m))
+        (handle-lock (abs current-speed))
             }
-        )
-        (let ((m (- (systime) feat-t0)))
-            (if (> m feat-ms) (set 'feat-ms m))
-        )
-    }
 )
 
 (defun build-dash-frame () ; contents of the 0x64 reply
@@ -1745,7 +1687,7 @@
     }
 )
 
-(defun update-dash(buffer) (tx tx-frame)) ; already composed
+(defun update-dash(buffer) (uart-write tx-frame)) ; already composed
 
 ; -> App protocol (NineDash, m365 Dashboard)
 ; The dash BLE module bridges app frames onto this same half-duplex bus, so
@@ -1890,14 +1832,14 @@
         {
             (set 'app-pend false)
             (if (eq ab nil)
-                { (tx tx-frame) (nb-send pend-dev pend-src 0x04 pend-reg pend-n (= pend-dev 0x22)) }
+                { (uart-write tx-frame) (nb-send pend-dev pend-src 0x04 pend-reg pend-n (= pend-dev 0x22)) }
                 (let ((cb (combo-buf (buflen ab))) (dl (buflen tx-frame)))
                     (if (eq cb nil)
-                        { (tx tx-frame) (tx ab) }
+                        { (uart-write tx-frame) (uart-write ab) }
                         {
                             (bufcpy cb 0 tx-frame 0 dl)
                             (bufcpy cb dl ab 0 (buflen ab))
-                            (tx cb)
+                            (uart-write cb)
                         }
                     )
                 )
@@ -2134,7 +2076,7 @@
             (setq crc (bitwise-xor crc 0xFFFF))
             (bufset-u8 buf (+ n 7) (bitwise-and crc 0xFF))
             (bufset-u8 buf (+ n 8) (bitwise-and (shr crc 8) 0xFF))
-            (tx buf)
+            (uart-write buf)
             })
             (free buf)
         }
@@ -2238,7 +2180,7 @@
             (setq crc (bitwise-xor crc 0xFFFF))
             (bufset-u8 buf (+ n 6) (bitwise-and crc 0xFF))
             (bufset-u8 buf (+ n 7) (bitwise-and (shr crc 8) 0xFF))
-            (tx buf)
+            (uart-write buf)
             })
             (free buf)
         }
@@ -2261,16 +2203,10 @@
 
 (defun read-frames-g30()
     (loopwhile t {
-        (var e (trap ; a parse error must not kill the reader thread
+        (trap ; a parse error must not kill the reader thread
             (loopwhile t
                 {
-                    (let ((rt0 (systime)))
-                        {
-                            (uart-read-bytes uart-buf 3 0)
-                            (var rm (- (systime) rt0))
-                            (if (> rm rd-ms) (set 'rd-ms rm))
-                        }
-                    )
+                    (uart-read-bytes uart-buf 3 0)
                     ; slide a byte at a time until the header lines up - a three
                     ; byte window can stay misaligned and drop every lever frame
                     (loopwhile (!= (bufget-u16 uart-buf 0) 0x5aa5) {
@@ -2338,9 +2274,7 @@
                     )
                 }
             )
-        ))
-        (set 'rx-errs (+ rx-errs 1))
-        (set 'rx-err e)
+        )
         (sleep 0.005) ; only reached after an error
     })
 )
@@ -2350,13 +2284,7 @@
         (trap ; a parse error must not kill the reader thread
             (loopwhile t
                 {
-                    (let ((rt0 (systime)))
-                        {
-                            (uart-read-bytes uart-buf 3 0)
-                            (var rm (- (systime) rt0))
-                            (if (> rm rd-ms) (set 'rd-ms rm))
-                        }
-                    )
+                    (uart-read-bytes uart-buf 3 0)
                     ; slide a byte at a time until the header lines up - a three
                     ; byte window can stay misaligned and drop every lever frame
                     (loopwhile (!= (bufget-u16 uart-buf 0) 0x55aa) {
@@ -2881,25 +2809,11 @@
             ; timestamps captured at load are frozen into the image - reset them
             ; here or the first measurement after a boot compares against a
             ; reference from whenever the image was written
-            (set 'adc-last (systime))
-            (set 'adc-seen false)
-            (set 'adc-dt 0)
-            (set 'adc-dt2 0)
-            (set 'rx-errs 0)
-            (set 'rd-ms 0)
             (set 'last-rx (systime))
             (set 'app-cache-time (systime))
             (set 'app-slow-time (systime))
             (set 'app-reply-time (systime))
             (set 'dash-tx-time (systime))
-            (set 'feat-ms 0)
-            (set 'cache-ms 0)
-            (set 'todo-ms 0)
-            (set 'tx-ms 0)
-            (set 'spd-ms 0)
-            (set 'cru-ms 0)
-            (set 'dsh-ms 0)
-            (set 'lck-ms 0)
             (app-build-serial)
             (app-build-pin)
             (build-app-frame app-f-1a 0x1a 2) ; constant, built once

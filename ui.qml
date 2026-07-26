@@ -335,6 +335,7 @@ Item {
             + " " + boolAtom(showBatteryInIdle)
             + " " + boolAtom(showBatterySecret)
             + " " + readSpeed(minSpeed, 1)
+            + " " + boolAtom(appEnable)
             + ")")
 
         queueCode("(save-temp-settings "
@@ -467,6 +468,7 @@ Item {
             showBatteryInIdle.checked = parseBoolToken(parts[2])
             showBatterySecret.checked = parseBoolToken(parts[3])
             setSpeed(minSpeed, parts[4], 1)
+            appEnable.checked = parseBoolToken(parts[5])
         } else if (parts[0] === "temps") {
             setReal(tempWarningMotor, parts[1], 1)
             setReal(tempWarningFet, parts[2], 1)
@@ -1178,6 +1180,12 @@ Item {
                                 Layout.fillWidth: true
                                 Label { text: "Software ADC"; Layout.fillWidth: true }
                                 CheckBox { id: softwareAdc; text: "Enabled" }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Label { text: "Phone app support"; Layout.fillWidth: true }
+                                CheckBox { id: appEnable; text: "Enabled"; spacing: 4 }
                             }
 
                             Label { text: "Light Compensation"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 24 }
