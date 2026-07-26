@@ -212,6 +212,10 @@
 (def cache-ms 0) ; worst time in app-cache-update (conf-get, sysinfo, frame builds)
 (def feat-ms 0)  ; worst time in the whole button loop pass
 (def tx-ms 0)    ; worst time inside a single uart-write
+(def spd-ms 0)   ; get-lowest-speed and the battery read
+(def cru-ms 0)   ; handle-cruise
+(def dsh-ms 0)   ; build-dash-frame
+(def lck-ms 0)   ; handle-lock, which reaches the gyro over CAN when locked
 
 ; every transmission goes through here so its cost is visible
 (defun tx (frame)
@@ -1544,6 +1548,7 @@
 (defun handle-features()
     {
         (var feat-t0 (systime))
+        (var spd-t0 (systime))
         (set 'cur-speed-kmh (* (get-lowest-speed) 3.6))
 
         ; battery %: BMS reads can throw if no BMS is present - keep them from
@@ -1559,6 +1564,7 @@
                 (set 'cur-batt (* (get-batt) 100))
             )
         )
+        (let ((m (- (systime) spd-t0))) (if (> m spd-ms) (set 'spd-ms m)))
         (var current-speed cur-speed-kmh)
 
         ; Dash link watchdog: release the ADC overrides when throttle frames stop
@@ -1576,7 +1582,13 @@
             }
         )
 
-        (trap (handle-cruise current-speed)) ; experimental - never let it break the loop
+        (let ((t0 (systime)))
+            {
+                (trap (handle-cruise current-speed)) ; experimental - never let it break the loop
+                (var m (- (systime) t0))
+                (if (> m cru-ms) (set 'cru-ms m))
+            }
+        )
 
         (if (or off lock (< current-speed min-speed))
             (if (not (app-is-output-disabled)) ; Disable output when scooter is turned off
@@ -1596,7 +1608,13 @@
             )
         )
 
-        (trap (build-dash-frame))
+        (let ((t0 (systime)))
+            {
+                (trap (build-dash-frame))
+                (var m (- (systime) t0))
+                (if (> m dsh-ms) (set 'dsh-ms m))
+            }
+        )
         (let ((t0 (systime)))
             {
                 (trap (app-run-todo))
@@ -1612,7 +1630,13 @@
             }
         )
         (trap (handle-taillight))
-        (handle-lock (abs current-speed))
+        (let ((t0 (systime)))
+            {
+                (handle-lock (abs current-speed))
+                (var m (- (systime) t0))
+                (if (> m lck-ms) (set 'lck-ms m))
+            }
+        )
         (let ((m (- (systime) feat-t0)))
             (if (> m feat-ms) (set 'feat-ms m))
         )
@@ -2790,6 +2814,10 @@
             (set 'cache-ms 0)
             (set 'todo-ms 0)
             (set 'tx-ms 0)
+            (set 'spd-ms 0)
+            (set 'cru-ms 0)
+            (set 'dsh-ms 0)
+            (set 'lck-ms 0)
             (app-build-serial)
             (app-build-pin)
             (build-app-frame app-f-1a 0x1a 2) ; constant, built once
