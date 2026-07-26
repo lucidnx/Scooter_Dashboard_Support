@@ -181,6 +181,8 @@
 (def app-boot-time (systime))
 (def app-cache-time (systime))
 (def app-reply-time (systime))
+(def rx-last (systime))
+(def rx-gap-max 0) ; worst gap between lever frames, in ticks - (set 'rx-gap-max 0) to reset
 
 ; rear light state
 (def pwm-started false)
@@ -1934,37 +1936,38 @@
                         (bufset-u8 uart-buf 1 (bufget-u8 uart-buf 2))
                         (uart-read-bytes uart-buf 1 2)
                     })
-                    (if (= (bufget-u16 uart-buf 0) 0x5aa5)
+                    (var len (bufget-u8 uart-buf 2))
+                    (if (< len 59) ; len+6 must fit the 64 byte buffer, len 0 is a valid read
                         {
-                            (var len (bufget-u8 uart-buf 2))
-                            (var crc len)
-                            (if (< len 59) ; len+6 must fit the 64 byte buffer, len 0 is a valid read
+                            (uart-read-bytes uart-buf (+ len 6) 0) ; rest of the frame, overwrites the header
+                            (var dst (bufget-u8 uart-buf 1))
+                            (var code (bufget-u8 uart-buf 2))
+                            ; Verify only what we act on. The dash sends a steady
+                            ; stream of 0x61 we have no use for, and every byte
+                            ; checked costs interpreter time the lever path needs.
+                            (if (or (= code 0x64) (= code 0x65)
+                                    (and (or (= dst 0x20) (= dst 0x22))
+                                         (or (= code 0x01) (= code 0x02) (= code 0x03))))
                                 {
-                                    (uart-read-bytes uart-buf (+ len 6) 0) ;read remaining 6 bytes + payload, overwrite buffer
-
-                                    (let ((code (bufget-u8 uart-buf 2)) (checksum (bufget-u16 uart-buf (+ len 4))))
-                                        {
-                                            (looprange i 0 (+ len 4) (setq crc (+ crc (bufget-u8 uart-buf i))))
-
-                                            (if (= checksum (bitwise-and (+ (shr (bitwise-xor crc 0xFFFF) 8) (shl (bitwise-xor crc 0xFFFF) 8)) 65535)) ;If the calculated checksum matches with sent checksum, forward comman
-                                                {
-                                                    (if (and (= code 0x65) software-adc (>= len 3)) ; frame must actually carry the throttle/brake bytes
-                                                        (adc-input uart-buf)
-                                                    )
-                                                    (if (= code 0x64) ; dash reply only on 0x64
-                                                        (update-dash uart-buf)
-                                                    )
-                                                    ; App register access, addressed to the ESC or to
-                                                    ; the emulated BMS. The dash only ever sends
-                                                    ; 0x64/0x65, so the command is the reliable
-                                                    ; discriminator, not the source address.
-                                                    (if (and (or (= (bufget-u8 uart-buf 1) 0x20) (= (bufget-u8 uart-buf 1) 0x22))
-                                                             (or (= code 0x01) (= code 0x02) (= code 0x03)))
-                                                        (trap (nb-app-frame (bufget-u8 uart-buf 1) (bufget-u8 uart-buf 0) code (bufget-u8 uart-buf 3) len))
-                                                    )
-                                                }
-                                            )
-                                        }
+                                    (var crc len)
+                                    (looprange i 0 (+ len 4) (setq crc (+ crc (bufget-u8 uart-buf i))))
+                                    (setq crc (bitwise-xor crc 0xFFFF))
+                                    (if (= (bufget-u16 uart-buf (+ len 4))
+                                           (bitwise-and (+ (shr crc 8) (shl crc 8)) 65535))
+                                        (cond
+                                            ((= code 0x65) {
+                                                (var now (systime))
+                                                (if (> (- now rx-last) rx-gap-max)
+                                                    (set 'rx-gap-max (- now rx-last))
+                                                )
+                                                (set 'rx-last now)
+                                                (if (and software-adc (>= len 3)) ; frame must carry the lever bytes
+                                                    (adc-input uart-buf)
+                                                )
+                                            })
+                                            ((= code 0x64) (update-dash uart-buf))
+                                            (t (trap (nb-app-frame dst (bufget-u8 uart-buf 0) code (bufget-u8 uart-buf 3) len)))
+                                        )
                                     )
                                 }
                             )
