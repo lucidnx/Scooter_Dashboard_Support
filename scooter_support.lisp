@@ -2065,6 +2065,14 @@
                                     (if (= (bufget-u16 uart-buf (+ len 4))
                                            (bitwise-and (+ (shr crc 8) (shl crc 8)) 65535))
                                         (cond
+                                                ; 0x61 is a lever frame the dash switches to while
+                                                ; it serves an app - same payload layout as 0x65, and
+                                                ; the most frequent of the three in that state
+                                                ((= code 0x61)
+                                                    (if (and software-adc (>= len 3))
+                                                        (adc-input uart-buf)
+                                                    )
+                                                )
                                                 ((= code 0x65)
                                                     (if (and software-adc (>= len 3)) ; frame must carry the lever bytes
                                                         (adc-input uart-buf)
