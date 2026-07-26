@@ -183,6 +183,7 @@
 (def app-reply-time (systime))
 ; worst time spent handling one frame, in ms - this is our own cost, unlike a
 ; gap between frames which also counts the dash simply being quiet
+(def rx-lever 0)    ; lever frames seen - sample twice to get the dash's rate
 (def proc-ms 0.0)   ; any frame
 (def proc-ms-app 0.0) ; app register frames only
 (def quick-sum 0)   ; checksum contribution of the prebuilt 0xB0 block
@@ -2021,11 +2022,12 @@
                                         {
                                             (var t0 (systime))
                                             (cond
-                                                ((= code 0x65)
+                                                ((= code 0x65) {
+                                                    (set 'rx-lever (+ rx-lever 1))
                                                     (if (and software-adc (>= len 3)) ; frame must carry the lever bytes
                                                         (adc-input uart-buf)
                                                     )
-                                                )
+                                                })
                                                 ((= code 0x64) (update-dash uart-buf))
                                                 (t {
                                                     (if app-enable
