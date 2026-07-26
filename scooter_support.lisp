@@ -181,8 +181,10 @@
 (def app-boot-time (systime))
 (def app-cache-time (systime))
 (def app-reply-time (systime))
-(def rx-last (systime))
-(def rx-gap-max 0) ; worst gap between lever frames, in ticks - (set 'rx-gap-max 0) to reset
+; worst time spent handling one frame, in ms - this is our own cost, unlike a
+; gap between frames which also counts the dash simply being quiet
+(def proc-ms 0.0)   ; any frame
+(def proc-ms-app 0.0) ; app register frames only
 
 ; rear light state
 (def pwm-started false)
@@ -1954,21 +1956,24 @@
                                     (setq crc (bitwise-xor crc 0xFFFF))
                                     (if (= (bufget-u16 uart-buf (+ len 4))
                                            (bitwise-and (+ (shr crc 8) (shl crc 8)) 65535))
-                                        (cond
-                                            ((= code 0x65) {
-                                                (var now (systime))
-                                                (var gap (- now rx-last))
-                                                (if (and (> gap rx-gap-max) (< gap 10000))
-                                                    (set 'rx-gap-max gap)
+                                        {
+                                            (var t0 (systime))
+                                            (cond
+                                                ((= code 0x65)
+                                                    (if (and software-adc (>= len 3)) ; frame must carry the lever bytes
+                                                        (adc-input uart-buf)
+                                                    )
                                                 )
-                                                (set 'rx-last now)
-                                                (if (and software-adc (>= len 3)) ; frame must carry the lever bytes
-                                                    (adc-input uart-buf)
-                                                )
-                                            })
-                                            ((= code 0x64) (update-dash uart-buf))
-                                            (t (trap (nb-app-frame dst (bufget-u8 uart-buf 0) code (bufget-u8 uart-buf 3) len)))
-                                        )
+                                                ((= code 0x64) (update-dash uart-buf))
+                                                (t {
+                                                    (trap (nb-app-frame dst (bufget-u8 uart-buf 0) code (bufget-u8 uart-buf 3) len))
+                                                    (var ma (* (secs-since t0) 1000))
+                                                    (if (> ma proc-ms-app) (set 'proc-ms-app ma))
+                                                })
+                                            )
+                                            (var m (* (secs-since t0) 1000))
+                                            (if (> m proc-ms) (set 'proc-ms m))
+                                        }
                                     )
                                 }
                             )
@@ -2486,8 +2491,8 @@
             ; app protocol identity - mutable, so it is built here and not in flash
             (def app-serial (array-create 14))
             (def app-pin-buf (array-create 6))
-            (set 'rx-last (systime))
-            (set 'rx-gap-max 0)
+            (set 'proc-ms 0.0)
+            (set 'proc-ms-app 0.0)
             (set 'cur-cells (let ((n (conf-get 'si-battery-cells))) (if (> n 0) n 10)))
             (set 'cur-cap (app-clamp16 (* (conf-get 'si-battery-ah) 1000)))
             (app-build-serial)
