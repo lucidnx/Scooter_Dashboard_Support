@@ -199,8 +199,12 @@
 ; and the cell voltage read alone is over one a second. Those are diagnostics,
 ; not riding data, so they wait until the levers are released.
 (def levers-active false)
-(def thr-start 0.3)
-(def brk-start 0.3)
+; Lever detection for the deferral above works off the raw dash bytes against a
+; learned resting value, not the corrected voltage against the ADC start point -
+; the correction shifts with the headlight and the start point can sit below the
+; resting reading, either of which leaves this stuck on or stuck off.
+(def thr-rest 255)
+(def brk-rest 255)
 ; In half duplex the firmware switches the receiver off for the whole of every
 ; uart-write and leaves it off a millisecond or two afterwards, so every
 ; transmission is a window in which the dash's lever frames are simply lost.
@@ -1346,7 +1350,10 @@
         ; gain=1/offset=0 (uncalibrated default) makes this a no-op.
         (var throttle (if light (/ (- thr-raw-v light-offset-thr) light-gain-thr) thr-raw-v))
         (var brake (if light (/ (- brk-raw-v light-offset-brk) light-gain-brk) brk-raw-v))
-        (set 'levers-active (or (> throttle thr-start) (> brake brk-start)))
+        (if (< dash-thr-raw thr-rest) (set 'thr-rest dash-thr-raw))
+        (if (< dash-brk-raw brk-rest) (set 'brk-rest dash-brk-raw))
+        (set 'levers-active (or (> dash-thr-raw (+ thr-rest 10))
+                                (> dash-brk-raw (+ brk-rest 10))))
 
         (if (< throttle 0.0) (setq throttle 0.0))
         (if (> throttle 3.3) (setq throttle 3.3))
@@ -2681,8 +2688,6 @@
             (def app-f-3b (array-create 11))
             (def app-f-75 (array-create 11))
             (def app-f-da (array-create 21))
-            (set 'thr-start (conf-get 'adc-v1-start))
-            (set 'brk-start (conf-get 'adc-v2-start))
             (set 'cur-cells (let ((n (conf-get 'si-battery-cells))) (if (> n 0) n 10)))
             (set 'cur-cap (app-clamp16 (* (conf-get 'si-battery-ah) 1000)))
             (app-build-serial)
