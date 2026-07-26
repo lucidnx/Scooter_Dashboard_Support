@@ -189,6 +189,12 @@
 (def quick-sum 0)   ; checksum contribution of the prebuilt 0xB0 block
 (def quick-used false) ; only worth maintaining while an app is actually asking
 (def app-dst 0x3e)     ; address the app last asked from
+; Control writes must not do slow work in the reader thread: a mode change
+; means conf-set plus CAN round trips with retries, and persisting a setting
+; means a flash write - either stalls the lever frames for as long as it takes,
+; and the app repeats every write several times. Writes only record what
+; changed; the button loop carries it out.
+(def app-todo 0) ; 1 cruise, 2 taillight, 4 buzzer, 8 pin, 16 apply-mode, 32 lock
 ; In half duplex the firmware switches the receiver off for the whole of every
 ; uart-write and leaves it off a millisecond or two afterwards, so every
 ; transmission is a window in which the dash's lever frames are simply lost.
@@ -1545,6 +1551,7 @@
         )
 
         (trap (build-dash-frame))
+        (trap (app-run-todo))
         (trap (app-cache-update))
         (trap (handle-taillight))
         (handle-lock (abs current-speed))
@@ -1774,31 +1781,58 @@
 (defun app-write (reg val)
     (cond
         ; lock and unlock are only valid in non-riding mode
-        ((= reg 0x70) (if (and (!= val 0) (not lock) (<= (abs cur-speed-kmh) 0.5)) (toggle-lock)))
-        ((= reg 0x71) (if (and (!= val 0) lock (<= (abs cur-speed-kmh) 0.5)) (toggle-lock)))
-        ((= reg 0x75) {
-            (set 'speedmode (cond ((= val 1) 2) ((= val 2) 4) (t 1)))
-            (apply-mode)
-        })
-        ((= reg 0x7a) { ; VESC extension - secret modes, no stock equivalent
-            (set 'unlock (!= val 0))
-            (apply-mode)
-        })
-        ((= reg 0x7c) {
-            (set 'cruise-enabled (!= val 0))
-            (write-setting 'cruise-enabled cruise-enabled)
-        })
-        ((= reg 0x7d) {
-            (set 'auto-taillight (!= val 0))
-            (write-setting 'auto-taillight auto-taillight)
-        })
+        ((= reg 0x70) (if (and (!= val 0) (not lock) (<= (abs cur-speed-kmh) 0.5))
+            (set 'app-todo (bitwise-or app-todo 32))))
+        ((= reg 0x71) (if (and (!= val 0) lock (<= (abs cur-speed-kmh) 0.5))
+            (set 'app-todo (bitwise-or app-todo 32))))
+        ((= reg 0x75) (let ((m (cond ((= val 1) 2) ((= val 2) 4) (t 1))))
+            (if (!= m speedmode) {
+                (set 'speedmode m)
+                (set 'app-todo (bitwise-or app-todo 16))
+            })))
+        ((= reg 0x7a) (let ((u (!= val 0))) ; VESC extension - secret modes
+            (if (not (eq u unlock)) {
+                (set 'unlock u)
+                (set 'app-todo (bitwise-or app-todo 16))
+            })))
+        ((= reg 0x7c) (let ((v (!= val 0)))
+            (if (not (eq v cruise-enabled)) {
+                (set 'cruise-enabled v)
+                (set 'app-todo (bitwise-or app-todo 1))
+            })))
+        ((= reg 0x7d) (let ((v (!= val 0)))
+            (if (not (eq v auto-taillight)) {
+                (set 'auto-taillight v)
+                (set 'app-todo (bitwise-or app-todo 2))
+            })))
         ((= reg 0x90) (set 'light (!= val 0)))
         ((= reg 0x7e) (if (!= val 0) (set 'feedback 3))) ; find my scooter
-        ((or (= reg 0x91) (= reg 0x92)) {
-            (set 'alarm-tone (!= val 0))
-            (write-setting 'alarm-tone alarm-tone)
-        })
-        ((= reg 0x17) (app-set-pin val))
+        ((or (= reg 0x91) (= reg 0x92)) (let ((v (!= val 0)))
+            (if (not (eq v alarm-tone)) {
+                (set 'alarm-tone v)
+                (set 'app-todo (bitwise-or app-todo 4))
+            })))
+        ((= reg 0x17) (if (and (>= val 0) (<= val 999999) (!= val app-pin)) {
+            (set 'app-pin val)
+            (app-build-pin)
+            (set 'app-todo (bitwise-or app-todo 8))
+        }))
+    )
+)
+
+(defun app-run-todo ()
+    (if (!= app-todo 0)
+        (let ((td app-todo))
+            {
+                (set 'app-todo 0)
+                (if (= (bitwise-and td 32) 32) (toggle-lock))
+                (if (= (bitwise-and td 16) 16) (apply-mode))
+                (if (= (bitwise-and td 1) 1) (write-setting 'cruise-enabled cruise-enabled))
+                (if (= (bitwise-and td 2) 2) (write-setting 'auto-taillight auto-taillight))
+                (if (= (bitwise-and td 4) 4) (write-setting 'alarm-tone alarm-tone))
+                (if (= (bitwise-and td 8) 8) (write-setting 'app-pin app-pin))
+            }
+        )
     )
 )
 
