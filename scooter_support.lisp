@@ -1806,6 +1806,20 @@
                 (build-app-frame app-f-7b 0x7b 6)
                 (set 'app-todo (bitwise-or app-todo 2))
             })))
+        ; The app's KERS selector and direct-power-control toggle have no VESC
+        ; equivalent, so they drive speed mode and secret instead. Neither may
+        ; touch the headlight: changing that drops the app connection, however
+        ; it is switched, so the light stays on the button gesture.
+        ((= reg 0x7b) (let ((m (cond ((= val 1) 1) ((= val 2) 4) (t 2)))) ; weak eco, medium drive, strong sport
+            (if (!= m speedmode) {
+                (set 'speedmode m)
+                (set 'app-todo (bitwise-or app-todo 16))
+            })))
+        ((= reg 0x76) (let ((u (!= val 0)))
+            (if (not (eq u unlock)) {
+                (set 'unlock u)
+                (set 'app-todo (bitwise-or app-todo 16))
+            })))
         ((= reg 0x90) (set 'light (!= val 0)))
         ((= reg 0x7e) (if (!= val 0) (set 'feedback 3))) ; find my scooter
         ((or (= reg 0x91) (= reg 0x92)) (let ((v (!= val 0)))
@@ -1867,7 +1881,8 @@
         (cond
             ((= reg 0x1a) app-ver)
             ((= reg 0x75) (app-workmode))
-            ((= reg 0x7b) 0) ; KERS - VESC has no Xiaomi-style regen levels
+            ((= reg 0x7b) (cond ((= speedmode 1) 1) ((= speedmode 4) 2) (t 0))) ; shows the speed mode
+            ((= reg 0x76) (if unlock 1 0))
             ((= reg 0x7c) (if cruise-enabled 1 0))
             ((= reg 0x7d) (if auto-taillight 2 0)) ; the app writes 2 for on
             ((or (= reg 0x24) (= reg 0x25)) (app-range-10m))
@@ -1999,7 +2014,8 @@
         ((= reg 0x67) app-ver)
         ((= reg 0x75) (if (= speedmode 2) 1 0))
         ((= reg 0x7a) (if unlock 1 0))
-        ((= reg 0x7b) 0)
+        ((= reg 0x7b) (cond ((= speedmode 1) 1) ((= speedmode 4) 2) (t 0)))
+        ((= reg 0x76) (if unlock 1 0))
         ((= reg 0x7c) (if cruise-enabled 1 0))
         ((= reg 0x7d) (if auto-taillight 2 0))
         ((= reg 0xb0) (get-fault))
