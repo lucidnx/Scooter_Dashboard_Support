@@ -186,7 +186,8 @@
 (def proc-ms 0.0)   ; any frame
 (def proc-ms-app 0.0) ; app register frames only
 (def quick-sum 0)   ; checksum contribution of the prebuilt 0xB0 block
-(def quick-dirty true) ; rebuild the block on the next request, not every cycle
+(def quick-used false) ; only worth maintaining while an app is actually asking
+(def app-enable true)  ; (set 'app-enable false) to ignore the app entirely
 (def proc-ms-move 0.0) ; worst handler time while actually moving
 (def cur-cell-mv 0) ; one division, not fifteen per cell read
 
@@ -1653,7 +1654,7 @@
         (set 'cur-mot (get-temp-mot))
         (set 'cur-maxkmh (send-state-maxkmh))
         (set 'cur-cell-mv (app-clamp16 (/ (* cur-vin 1000) cur-cells)))
-        (set 'quick-dirty true)
+        (if quick-used (build-quick))
     })
 )
 
@@ -1693,7 +1694,6 @@
                 (setq sum (+ sum lo hi))
             })
             (set 'quick-sum sum)
-            (set 'quick-dirty false)
         }
     )
 )
@@ -1820,7 +1820,7 @@
                 }
                 (if (and (not bms) (= reg 0xb0) (= n 52)) ; the app's bulk read, prebuilt
                     {
-                        (if quick-dirty (build-quick))
+                        (if (not quick-used) { (set 'quick-used true) (build-quick) })
                         (bufcpy buf 7 quick-buf 0 52)
                         (setq crc (+ crc quick-sum))
                     }
@@ -1999,7 +1999,9 @@
                                                 )
                                                 ((= code 0x64) (update-dash uart-buf))
                                                 (t {
-                                                    (trap (nb-app-frame dst (bufget-u8 uart-buf 0) code (bufget-u8 uart-buf 3) len))
+                                                    (if app-enable
+                                                        (trap (nb-app-frame dst (bufget-u8 uart-buf 0) code (bufget-u8 uart-buf 3) len))
+                                                    )
                                                     (var ma (* (secs-since t0) 1000))
                                                     (if (> ma proc-ms-app) (set 'proc-ms-app ma))
                                                 })
