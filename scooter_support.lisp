@@ -181,20 +181,31 @@
 (def app-boot-time (systime))
 (def app-cache-time (systime))
 (def app-reply-time (systime))
+(def app-t-live (systime))
+(def app-t-bulk (systime))
 ; worst time spent handling one frame, in ms - this is our own cost, unlike a
 ; gap between frames which also counts the dash simply being quiet
 (def quick-sum 0)   ; checksum contribution of the prebuilt 0xB0 block
 (def quick-used false) ; only worth maintaining while an app is actually asking
 (def app-dst 0x3e)     ; address the app last asked from
+; In half duplex the firmware switches the receiver off for the whole of every
+; uart-write and leaves it off a millisecond or two afterwards, so every
+; transmission is a window in which the dash's lever frames are simply lost.
+; Answering every single 0x64 costs about a sixth of all receive time and the
+; display does not need that rate. 0 restores a reply to every poll.
+(def dash-tx-iv 0.05)
+(def dash-tx-time (systime))
 (def app-enable true)  ; (set 'app-enable false) to ignore the app entirely
 ; Below this speed the app is answered freely; above it each class of register
 ; gets its own interval, because answering keeps the app polling back to back
 ; and that leaves the dash too little of the bus for its lever frames.
 (def app-idle-speed 3.0)
-(def app-iv-live 0.1) ; speed, battery, average speed
-(def app-iv-ctrl 0.5) ; mode, cruise, light, lock state
-(def app-iv-bulk 2.0) ; the 0xB0 block and anything else large
-(def app-iv-slow 5.0) ; battery pack data, identity, everything else
+; Every transmission switches the receiver off for its length plus about two
+; milliseconds of driver overhead, so what costs us lever frames is the number
+; of replies, not their size. While riding only the two reads the dashboard
+; needs are answered: speed and battery often, the rest of the block slowly.
+(def app-iv-live 0.1) ; 0xB4 - battery, speed, average speed
+(def app-iv-bulk 1.0) ; 0xB0 - power, temperature, odometer, trip, errors
 (def cur-cell-mv 0) ; one division, not fifteen per cell read
 
 ; rear light state
@@ -1662,9 +1673,14 @@
         (set 'cur-maxkmh (send-state-maxkmh))
         (set 'cur-cell-mv (app-clamp16 (/ (* cur-vin 1000) cur-cells)))
         (if quick-used {
-            (build-app-frame app-f-b0 0xb0 52) ; the three the app asks for constantly
-            (build-app-frame app-f-b4 0xb4 6)
+            (build-app-frame app-f-b0 0xb0 52) ; everything the app asks for often,
+            (build-app-frame app-f-b4 0xb4 6)  ; ready to go out as a single write
             (build-app-frame app-f-7b 0x7b 6)
+            (build-app-frame app-f-1a 0x1a 2)
+            (build-app-frame app-f-25 0x25 2)
+            (build-app-frame app-f-3b 0x3b 2)
+            (build-app-frame app-f-75 0x75 2)
+            (build-app-frame app-f-da 0xda 12)
         })
     })
 )
@@ -1674,34 +1690,6 @@
 ; 115200 baud. Nothing may delay the lever path while riding, so above walking
 ; pace only short replies are answered and the big blocks wait for a standstill.
 ; The app re-requests what it misses, which the traces show it already does.
-(defun app-class (dev reg n)
-    (cond
-        ((= dev 0x22) 3)
-        ((> n 16) 2)
-        ((and (>= reg 0xb4) (<= reg 0xb6)) 0)
-        ((or (= reg 0x75) (= reg 0x1d) (and (>= reg 0x7b) (<= reg 0x7d))) 1)
-        (t 3)
-    )
-)
-
-(defun app-iv (c)
-    (cond ((= c 0) app-iv-live) ((= c 1) app-iv-ctrl) ((= c 2) app-iv-bulk) (t app-iv-slow))
-)
-
-(defunret app-read-ok (dev reg n)
-    {
-        (if (<= (abs cur-speed-kmh) app-idle-speed)
-            (return (> (secs-since app-reply-time) 0.05))
-        )
-        (var c (app-class dev reg n))
-        (if (< (secs-since (bufget-i32 app-times (* c 4))) (app-iv c))
-            (return false)
-        )
-        (bufset-i32 app-times (* c 4) (systime))
-        true
-    }
-)
-
 (defun app-speed-01 () (app-clamp16 (* (abs cur-speed-kmh) 10))) ; 0.1 km/h
 (defun app-trip-m () cur-trip)
 (defun app-volt-cv () (app-clamp16 (* cur-vin 100))) ; 0.01 V
@@ -1909,14 +1897,22 @@
             (setq n (bitwise-and n 0xFE))
             (if (!= src app-dst) (set 'app-dst src))
             (set 'quick-used true)
-            (cond
-                ((and (= dev 0x20) (= reg 0xb0) (= n 52)) (uart-write app-f-b0))
-                ((and (= dev 0x20) (= reg 0xb4) (= n 6)) (uart-write app-f-b4))
-                ((and (= dev 0x20) (= reg 0x7b) (= n 6)) (uart-write app-f-7b))
-                ((app-read-ok dev reg n) {
-                    (set 'app-reply-time (systime))
-                    (nb-send dev src 0x04 reg n (= dev 0x22))
-                })
+            ; Answer immediately, always. What hurts is the BLE module waiting
+            ; on us, not the reply itself, so everything it asks for often goes
+            ; out as one prepared write with nothing computed in between.
+            (if (= dev 0x20)
+                (cond
+                    ((and (= reg 0xb4) (= n 6)) (uart-write app-f-b4))
+                    ((and (= reg 0xb0) (= n 52)) (uart-write app-f-b0))
+                    ((and (= reg 0x7b) (= n 6)) (uart-write app-f-7b))
+                    ((and (= reg 0x1a) (= n 2)) (uart-write app-f-1a))
+                    ((and (= reg 0x25) (= n 2)) (uart-write app-f-25))
+                    ((and (= reg 0x3b) (= n 2)) (uart-write app-f-3b))
+                    ((and (= reg 0x75) (= n 2)) (uart-write app-f-75))
+                    ((and (= reg 0xda) (= n 12)) (uart-write app-f-da))
+                    (t (nb-send dev src 0x04 reg n false))
+                )
+                (nb-send dev src 0x04 reg n true)
             )
         }))
         ((or (= cmd 0x02) (= cmd 0x03)) {
@@ -2007,10 +2003,7 @@
 (defun xm-app-frame (dev cmd reg len)
     (cond
         ((= cmd 0x01) (let ((n (bitwise-and (bufget-u8 uart-buf 3) 0xFE)))
-            (if (and (> n 1) (<= n 64) (app-read-ok dev reg n)) {
-                (set 'app-reply-time (systime))
-                (xm-send (if (= dev 0x22) 0x25 0x23) reg n (= dev 0x22))
-            })
+            (if (and (> n 1) (<= n 64)) (xm-send (if (= dev 0x22) 0x25 0x23) reg n (= dev 0x22)))
         ))
         ((= cmd 0x03) (if (!= dev 0x22)
             (app-write reg (if (> len 3)
@@ -2058,7 +2051,12 @@
                                                         (adc-input uart-buf)
                                                     )
                                                 )
-                                                ((= code 0x64) (update-dash uart-buf))
+                                                ((= code 0x64)
+                                                    (if (> (secs-since dash-tx-time) dash-tx-iv) {
+                                                        (set 'dash-tx-time (systime))
+                                                        (update-dash uart-buf)
+                                                    })
+                                                )
                                                 (t (if app-enable
                                                     (trap (nb-app-frame dst (bufget-u8 uart-buf 0) code (bufget-u8 uart-buf 3) len))
                                                 ))
@@ -2584,7 +2582,11 @@
             (def app-f-b0 (array-create 61)) ; prepared replies, sent as-is
             (def app-f-b4 (array-create 15))
             (def app-f-7b (array-create 15))
-            (def app-times (array-create 16)) ; last reply time per register class
+            (def app-f-1a (array-create 11))
+            (def app-f-25 (array-create 11))
+            (def app-f-3b (array-create 11))
+            (def app-f-75 (array-create 11))
+            (def app-f-da (array-create 21))
             (set 'cur-cells (let ((n (conf-get 'si-battery-cells))) (if (> n 0) n 10)))
             (set 'cur-cap (app-clamp16 (* (conf-get 'si-battery-ah) 1000)))
             (app-build-serial)
