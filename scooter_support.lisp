@@ -186,6 +186,14 @@
 (def quick-sum 0)   ; checksum contribution of the prebuilt 0xB0 block
 (def quick-used false) ; only worth maintaining while an app is actually asking
 (def app-dst 0x3e)     ; address the app last asked from
+; An answer sent the moment a request arrives can land on top of the dash's
+; next frame. The dash never expects a reply to 0x65, so the line is reliably
+; free straight after one - requests are held and answered there instead.
+(def app-pend false)
+(def pend-dev 0)
+(def pend-src 0)
+(def pend-reg 0)
+(def pend-n 0)
 (def app-enable true)  ; (set 'app-enable false) to ignore the app entirely
 ; Below this speed the app is answered freely; above it each class of register
 ; gets its own interval, because answering keeps the app polling back to back
@@ -1714,6 +1722,18 @@
 ; The app fetches 0xB0..0xC9 as a single 52 byte read. Assembling that is 26
 ; register lookups and 104 buffer operations, so it is done once per cache
 ; cycle and only when something actually asks for it.
+(defun app-flush ()
+    {
+        (set 'app-pend false)
+        (cond
+            ((and (= pend-dev 0x20) (= pend-reg 0xb0) (= pend-n 52)) (uart-write app-f-b0))
+            ((and (= pend-dev 0x20) (= pend-reg 0xb4) (= pend-n 6)) (uart-write app-f-b4))
+            ((and (= pend-dev 0x20) (= pend-reg 0x7b) (= pend-n 6)) (uart-write app-f-7b))
+            (t (nb-send pend-dev pend-src 0x04 pend-reg pend-n (= pend-dev 0x22)))
+        )
+    }
+)
+
 (defun build-app-frame (buf reg n)
     (let ((crc (+ n 0x20 app-dst 0x04 reg)))
         {
@@ -1909,14 +1929,16 @@
             (setq n (bitwise-and n 0xFE))
             (if (!= src app-dst) (set 'app-dst src))
             (set 'quick-used true)
-            (cond
-                ((and (= dev 0x20) (= reg 0xb0) (= n 52)) (uart-write app-f-b0))
-                ((and (= dev 0x20) (= reg 0xb4) (= n 6)) (uart-write app-f-b4))
-                ((and (= dev 0x20) (= reg 0x7b) (= n 6)) (uart-write app-f-7b))
-                ((app-read-ok dev reg n) {
-                    (set 'app-reply-time (systime))
-                    (nb-send dev src 0x04 reg n (= dev 0x22))
-                })
+            ; hold it for the quiet slot after the next lever frame
+            (if (or (and (= dev 0x20) (= reg 0xb0) (= n 52))
+                    (and (= dev 0x20) (= reg 0xb4) (= n 6))
+                    (and (= dev 0x20) (= reg 0x7b) (= n 6))
+                    (app-read-ok dev reg n))
+                {
+                    (set 'pend-dev dev) (set 'pend-src src)
+                    (set 'pend-reg reg) (set 'pend-n n)
+                    (set 'app-pend true)
+                }
             )
         }))
         ((or (= cmd 0x02) (= cmd 0x03)) {
@@ -2053,11 +2075,12 @@
                                     (if (= (bufget-u16 uart-buf (+ len 4))
                                            (bitwise-and (+ (shr crc 8) (shl crc 8)) 65535))
                                         (cond
-                                                ((= code 0x65)
+                                                ((= code 0x65) {
                                                     (if (and software-adc (>= len 3)) ; frame must carry the lever bytes
                                                         (adc-input uart-buf)
                                                     )
-                                                )
+                                                    (if app-pend (app-flush)) ; line is idle here
+                                                })
                                                 ((= code 0x64) (update-dash uart-buf))
                                                 (t (if app-enable
                                                     (trap (nb-app-frame dst (bufget-u8 uart-buf 0) code (bufget-u8 uart-buf 3) len))
