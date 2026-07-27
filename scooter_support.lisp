@@ -2855,18 +2855,6 @@
             (def app-f-35 (array-create 11))
             (def app-f-31 (array-create 11))
             (def app-f-40 (array-create 39))
-            ; dash answer plus each app answer size - the dash frame is two
-            ; bytes longer on the G2, so they are sized from it
-            (let ((dl (buflen tx-frame)))
-                {
-                    (def combo11 (array-create (+ dl 11)))
-                    (def combo13 (array-create (+ dl 13)))
-                    (def combo15 (array-create (+ dl 15)))
-                    (def combo21 (array-create (+ dl 21)))
-                    (def combo39 (array-create (+ dl 39)))
-                    (def combo61 (array-create (+ dl 61)))
-                }
-            )
             (set 'cur-cells (let ((n (conf-get 'si-battery-cells))) (if (> n 0) n 10)))
             (set 'cur-wh-tot (* 0.85 (conf-get 'si-battery-ah) (* 3.7 (conf-get 'si-battery-cells))))
             (set 'cur-cap (app-clamp16 (* (conf-get 'si-battery-ah) 1000)))
@@ -2917,6 +2905,19 @@
             })
 
             (looprange i 2 tx-base (set 'tx-hdr-sum (+ tx-hdr-sum (bufget-u8 tx-frame i))))
+
+            ; dash answer plus each app answer size - the dash frame is two bytes
+            ; longer on the G2, so they can only be sized once it exists
+            (let ((dl (buflen tx-frame)))
+                {
+                    (def combo11 (array-create (+ dl 11)))
+                    (def combo13 (array-create (+ dl 13)))
+                    (def combo15 (array-create (+ dl 15)))
+                    (def combo21 (array-create (+ dl 21)))
+                    (def combo39 (array-create (+ dl 39)))
+                    (def combo61 (array-create (+ dl 61)))
+                }
+            )
 
             (apply-software-adc)
 
