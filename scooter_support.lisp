@@ -212,6 +212,7 @@
 ; So an app answer rides along inside the next dash answer: framing is by header
 ; and length, not by transmission, and this halves the number of writes.
 (def app-pend false)
+(def sniff-enable false) ; bus logging, deliberately not saved - never survives a reboot
 (def pend-dev 0)
 (def pend-src 0)
 (def pend-reg 0)
@@ -2207,6 +2208,27 @@
     )
 )
 
+; One line per received frame, same layout as the Flipper captures:
+;   uptime  src>dst  cmd  arg  length  payload
+; Lever frames are left out - at 40/s they bury everything worth reading. Our
+; own replies never appear either: the receiver is off while we transmit.
+(defun sniff-log (len xiaomi)
+    (let ((from (if xiaomi 3 4)) (pay ""))
+        {
+            (looprange i from (+ from (if (> len 24) 24 len))
+                (setq pay (str-merge pay (str-from-n (bufget-u8 uart-buf i) "%02x") " ")))
+            (print (str-merge
+                (str-from-n (secs-since 0) "%8.3f") "  "
+                (str-from-n (bufget-u8 uart-buf 0) "%02x")
+                (if xiaomi "   " (str-merge ">" (str-from-n (bufget-u8 uart-buf 1) "%02x")))
+                "  " (str-from-n (bufget-u8 uart-buf (if xiaomi 1 2)) "%02x")
+                "  " (str-from-n (bufget-u8 uart-buf (if xiaomi 2 3)) "%02x")
+                "  " (str-from-n len "%-2d") "  " pay
+            ))
+        }
+    )
+)
+
 (defun read-frames-g30()
     (loopwhile t {
         (trap ; a parse error must not kill the reader thread
@@ -2226,6 +2248,9 @@
                             (uart-read-bytes uart-buf (+ len 6) 0) ; rest of the frame, overwrites the header
                             (var dst (bufget-u8 uart-buf 1))
                             (var code (bufget-u8 uart-buf 2))
+                            (if (and sniff-enable (!= code 0x65) (!= code 0x61))
+                                (trap (sniff-log len false))
+                            )
                             ; Verify only what we act on. The dash sends a steady
                             ; stream of 0x61 we have no use for, and every byte
                             ; checked costs interpreter time the lever path needs.
@@ -2305,6 +2330,9 @@
                             (if (and (> len 0) (< len 60)) ; max 64 bytes
                                 {
                                     (uart-read-bytes uart-buf (+ len 4) 0)
+                                    (if (and sniff-enable (!= (bufget-u8 uart-buf 1) 0x65))
+                                        (trap (sniff-log len true))
+                                    )
                                     (looprange i 0 len
                                         (setq crc (+ crc (bufget-u8 uart-buf i))))
                                     (if (=(+(shl(bufget-u8 uart-buf (+ len 2))8) (bufget-u8 uart-buf (+ len 1))) (bitwise-xor crc 0xFFFF))

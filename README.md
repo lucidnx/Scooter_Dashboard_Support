@@ -57,6 +57,20 @@ VESC firmware 7.00, available at https://vesc-project.com/
 **Updating:** just install the new package over the old one - your settings are kept and
 migrated automatically. To go back to defaults, use the **Reset** button in the UI.
 
+## What's new in 4.0
+
+- **Stock scooter apps work.** NineDash, m365 Tools and the **official Segway Ninebot app**
+  all connect over the dashboard's own BLE module and show live data, and their switches
+  control the scooter. No extra hardware, no rewiring - see below.
+- **Throttle response improved for everyone**, app or no app. The dashboard sends lever
+  data in three different frame types and the package only read one of them; it now reads
+  all three, which roughly halves the worst-case delay before a throttle change is applied.
+- **Phone app support can be turned off** in General, for the sharpest possible throttle.
+- **App pairing PIN** - set your own 6-digit code in Setup.
+- **Bus logging** in Setup -> Debug prints every frame the dashboard and phone apps send
+  to VESC Dev Tools -> Lisp. It applies immediately, is never saved, and always stops at
+  the next power on, so it cannot be left on by accident.
+
 ## What's new in 3.0
 
 - **Light compensation is now a real calibration.** The headlight sags the throttle/brake
@@ -184,10 +198,10 @@ Lock, mode switching, headlight and secret mode activation are all **fully remap
   control on/off, and mode selection - with live status
 
 ### Third-party app support (v4.0)
-Stock scooter apps that talk to the dashboard over BLE - **NineDash** (Ninebot) and
-**m365 Dashboard** (Xiaomi) - now see live data and can control the scooter. The dash BLE
-module bridges their frames onto the same UART the package already listens on, so no extra
-hardware or wiring is needed.
+Scooter apps that talk to the dashboard over BLE now see live data and can control the
+scooter. Tested on a G30 with **NineDash**, **m365 Tools** and the **official Segway
+Ninebot app**, including pairing. The dash BLE module bridges their frames onto the same
+UART the package already listens on, so no extra hardware or wiring is needed.
 
 - **Live data**: speed, battery %, voltage, current, power, temperature, odometer, trip
   distance and time, average speed, estimated range, error and alarm codes

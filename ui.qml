@@ -1377,6 +1377,27 @@ Item {
                                 Label { text: "Volume (V)"; Layout.fillWidth: true }
                                 TextField { id: alarmVoltage; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
                             }
+
+                            Label { text: "Debug"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 24 }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Label { text: "Log dashboard bus"; Layout.fillWidth: true }
+                                CheckBox {
+                                    id: sniffEnable
+                                    text: "Enabled"
+                                    spacing: 4
+                                    // applies at once and is never saved, so it cannot be left on
+                                    onCheckedChanged: sendCode("(set 'sniff-enable " + (checked ? "true" : "false") + ")")
+                                }
+                            }
+
+                            Label {
+                                text: "Prints every frame the dashboard and phone apps send, to VESC Dev Tools -> Lisp. Slows throttle response while on and stops at the next power on."
+                                opacity: 0.6
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
                         }
                     }
                 }
