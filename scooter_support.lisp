@@ -1,4 +1,5 @@
-(def software-adc true)
+(def software-adc true)  ; ADC1 / throttle from the dashboard
+(def software-adc2 true) ; ADC2 / brake from the dashboard
 ; Decoded lever position counted as a touch. get-adc-decoded is mapped by the
 ; ADC app itself (Start/End voltage + hysteresis, after our light correction),
 ; so >0 already means "past the configured start voltage" - this is just an
@@ -278,12 +279,13 @@
 
 @const-start
 
-(def settings-version 402i32)
+(def settings-version 403i32)
 
 ; Persistent settings: (label . (eeprom-offset type))
 (def eeprom-addrs '(
     (ver-code              . (0 i))
     (software-adc          . (1 b))
+    (software-adc2         . (87 b))
     (min-adc-throttle      . (2 f)) ; legacy, unused - kept so old migrations keep working
     (min-adc-brake         . (3 f)) ; legacy, unused - the ADC app start voltages rule now
     (temp-warning-motor    . (4 f))
@@ -411,6 +413,11 @@
 ; (raw wasn't shifted by a constant volts - it scaled non-linearly with lever
 ; position). A flat offset from v308 would be WRONG under the new formula
 ; (sign-inverted at points), so it's reset here - recalibrate with Sample.
+; the brake channel keeps whatever the single old switch was set to
+(defun write-v403-defaults () ; settings added in v403
+    (write-setting 'software-adc2 (read-setting 'software-adc))
+)
+
 (defun write-v402-defaults () ; settings added in v402
     (write-setting 'dash-power-out false)
 )
@@ -511,7 +518,9 @@
         (write-v400-defaults)
         (write-v401-defaults)
         (write-v402-defaults)
+        (write-v403-defaults)
                     (write-v402-defaults)
+                    (write-v403-defaults)
         (write-setting 'secret-presses 1)
         (write-setting 'secret-combo 0)
         (write-setting 'secret-requires-lock false)
@@ -524,6 +533,7 @@
     {
         (var cur-model (read-setting 'model)) ; keep model across restores
         (write-setting 'software-adc true)
+        (write-setting 'software-adc2 true)
         (write-setting 'min-adc-throttle 0.1)
         (write-setting 'min-adc-brake 0.1)
         (write-setting 'temp-warning-motor 80.0)
@@ -587,6 +597,7 @@
                     (write-v400-defaults)
                     (write-v401-defaults)
                     (write-v402-defaults)
+                    (write-v403-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 302i32) {
@@ -601,6 +612,7 @@
                     (write-v400-defaults)
                     (write-v401-defaults)
                     (write-v402-defaults)
+                    (write-v403-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 303i32) {
@@ -614,6 +626,7 @@
                     (write-v400-defaults)
                     (write-v401-defaults)
                     (write-v402-defaults)
+                    (write-v403-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 304i32) {
@@ -626,6 +639,7 @@
                     (write-v400-defaults)
                     (write-v401-defaults)
                     (write-v402-defaults)
+                    (write-v403-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 305i32) {
@@ -637,6 +651,7 @@
                     (write-v400-defaults)
                     (write-v401-defaults)
                     (write-v402-defaults)
+                    (write-v403-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 306i32) {
@@ -647,6 +662,7 @@
                     (write-v400-defaults)
                     (write-v401-defaults)
                     (write-v402-defaults)
+                    (write-v403-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 307i32) {
@@ -656,6 +672,7 @@
                     (write-v400-defaults)
                     (write-v401-defaults)
                     (write-v402-defaults)
+                    (write-v403-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 308i32) {
@@ -664,6 +681,7 @@
                     (write-v400-defaults)
                     (write-v401-defaults)
                     (write-v402-defaults)
+                    (write-v403-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 309i32) {
@@ -671,21 +689,29 @@
                     (write-v400-defaults)
                     (write-v401-defaults)
                     (write-v402-defaults)
+                    (write-v403-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 310i32) {
                     (write-v400-defaults)
                     (write-v401-defaults)
                     (write-v402-defaults)
+                    (write-v403-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 400i32) {
                     (write-v401-defaults)
                     (write-v402-defaults)
+                    (write-v403-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 401i32) {
                     (write-v402-defaults)
+                    (write-v403-defaults)
+                    (write-setting 'ver-code settings-version)
+                })
+                ((eq ver 402i32) {
+                    (write-v403-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 (t (restore-defaults))
@@ -693,6 +719,7 @@
         )
 
         (set 'software-adc (read-setting 'software-adc))
+        (set 'software-adc2 (read-setting 'software-adc2))
         (set 'temp-warning-motor (read-setting 'temp-warning-motor))
         (set 'temp-warning-fet (read-setting 'temp-warning-fet))
         (set 'show-batt-in-idle (read-setting 'show-batt-in-idle))
@@ -785,11 +812,15 @@
     }
 )
 
+; 1 detaches both channels, 2 only the throttle, 3 only the brake - so each
+; lever can come from the dashboard or from a lever wired to the pin
 (defun apply-software-adc ()
-    (if software-adc
-        (app-adc-detach 3 1)
-        (app-adc-detach 3 0)
-    )
+    (app-adc-detach 3 (cond
+        ((and software-adc software-adc2) 1)
+        (software-adc 2)
+        (software-adc2 3)
+        (t 0)
+    ))
 )
 
 ; ADC2 switches the dashboard's supply: high while the scooter is on, low when
@@ -799,7 +830,7 @@
 ; so claiming it cannot glitch the supply, and the mode is only touched when the
 ; setting changes, never on an ordinary save.
 (defun apply-dash-power ()
-    (if (and dash-power-out software-adc)
+    (if (and dash-power-out software-adc2)
         (if (not dash-power-held) {
             (gpio-write 'pin-adc2 (if off 0 1))
             (gpio-configure 'pin-adc2 'pin-mode-out)
@@ -830,10 +861,11 @@
     }
 )
 
-(defun save-general-settings (adc show-batt show-batt-secret min-speed-kmh app)
+(defun save-general-settings (adc adc2 show-batt show-batt-secret min-speed-kmh app)
     {
         (write-setting 'app-enable app)
         (write-setting 'software-adc adc)
+        (write-setting 'software-adc2 adc2)
         (write-setting 'show-batt-in-idle show-batt)
         (write-setting 'show-batt-idle-secret show-batt-secret)
         (write-setting 'min-speed-kmh min-speed-kmh)
@@ -1142,6 +1174,7 @@
         (send-data (str-merge
             "general "
             (if (read-setting 'software-adc) "true " "false ")
+            (if (read-setting 'software-adc2) "true " "false ")
             (if (read-setting 'show-batt-in-idle) "true " "false ")
             (if (read-setting 'show-batt-idle-secret) "true " "false ")
             (str-from-n (read-setting 'min-speed-kmh) "%.1f ")
@@ -1455,12 +1488,12 @@
         ; needed; safe to calibrate stopped on the road like people actually do)
         (if (eq calib-stage 'idle)
             {
-                (app-adc-override 0 throttle)
-                (app-adc-override 1 brake)
+                (if software-adc (app-adc-override 0 throttle))
+                (if software-adc2 (app-adc-override 1 brake))
             }
             {
-                (app-adc-override 0 0)
-                (app-adc-override 1 0)
+                (if software-adc (app-adc-override 0 0))
+                (if software-adc2 (app-adc-override 1 0))
             }
         )
 
@@ -1618,10 +1651,10 @@
         (var wd (* 8 rx-gap-avg))
         (if (< wd 0.5) (setq wd 0.5))
         (if (> wd 1.5) (setq wd 1.5))
-        (if (and software-adc (> (secs-since last-rx) wd))
+        (if (and (or software-adc software-adc2) (> (secs-since last-rx) wd))
             {
-                (app-adc-override 0 0)
-                (app-adc-override 1 0)
+                (if software-adc (app-adc-override 0 0))
+                (if software-adc2 (app-adc-override 1 0))
                 (cruise-cancel)
             }
         )
@@ -2338,12 +2371,12 @@
                                                 ; it serves an app - same payload layout as 0x65, and
                                                 ; the most frequent of the three in that state
                                                 ((= code 0x61)
-                                                    (if (and software-adc (>= len 3))
+                                                    (if (and (or software-adc software-adc2) (>= len 3))
                                                         (adc-input uart-buf)
                                                     )
                                                 )
                                                 ((= code 0x65)
-                                                    (if (and software-adc (>= len 3)) ; frame must carry the lever bytes
+                                                    (if (and (or software-adc software-adc2) (>= len 3)) ; frame must carry the lever bytes
                                                         (adc-input uart-buf)
                                                     )
                                                 )
@@ -2353,7 +2386,7 @@
                                                     ; while serving an app but keeps sending 0x64, so
                                                     ; ignoring these threw away half the lever data
                                                     ; exactly when it was scarce.
-                                                    (if (and software-adc (>= len 7))
+                                                    (if (and (or software-adc software-adc2) (>= len 7))
                                                         (adc-input uart-buf)
                                                     )
                                                     ; only off 0x64 - the horn and turn signal do not
@@ -2410,7 +2443,7 @@
                                         (setq crc (+ crc (bufget-u8 uart-buf i))))
                                     (if (=(+(shl(bufget-u8 uart-buf (+ len 2))8) (bufget-u8 uart-buf (+ len 1))) (bitwise-xor crc 0xFFFF))
                                         {
-                                            (if (and (= (bufget-u8 uart-buf 1) 0x65) software-adc (>= len 2)) ; frame must actually carry the throttle/brake bytes
+                                            (if (and (= (bufget-u8 uart-buf 1) 0x65) (or software-adc software-adc2) (>= len 2)) ; frame must actually carry the throttle/brake bytes
                                                 (adc-input uart-buf)
                                             )
                                             ; the dash also addresses 0x20 - only the command

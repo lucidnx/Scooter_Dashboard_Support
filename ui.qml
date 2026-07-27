@@ -332,6 +332,7 @@ Item {
         saveTimeout.restart()
         queueCode("(save-general-settings "
             + boolAtom(softwareAdc)
+            + " " + boolAtom(softwareAdc2)
             + " " + boolAtom(showBatteryInIdle)
             + " " + boolAtom(showBatterySecret)
             + " " + readSpeed(minSpeed, 1)
@@ -467,10 +468,11 @@ Item {
             modelBox.currentIndex = loadedModel
         } else if (parts[0] === "general") {
             softwareAdc.checked = parseBoolToken(parts[1])
-            showBatteryInIdle.checked = parseBoolToken(parts[2])
-            showBatterySecret.checked = parseBoolToken(parts[3])
-            setSpeed(minSpeed, parts[4], 1)
-            appEnable.checked = parseBoolToken(parts[5])
+            softwareAdc2.checked = parseBoolToken(parts[2])
+            showBatteryInIdle.checked = parseBoolToken(parts[3])
+            showBatterySecret.checked = parseBoolToken(parts[4])
+            setSpeed(minSpeed, parts[5], 1)
+            appEnable.checked = parseBoolToken(parts[6])
         } else if (parts[0] === "temps") {
             setReal(tempWarningMotor, parts[1], 1)
             setReal(tempWarningFet, parts[2], 1)
@@ -1183,7 +1185,8 @@ Item {
                             RowLayout {
                                 Layout.fillWidth: true
                                 Label { text: "Software ADC"; Layout.fillWidth: true }
-                                CheckBox { id: softwareAdc; text: "Enabled" }
+                                CheckBox { id: softwareAdc; text: "Throttle"; spacing: 4 }
+                                CheckBox { id: softwareAdc2; text: "Brake"; spacing: 4 }
                             }
 
                             Label { text: "Light Compensation"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 24 }
@@ -1327,6 +1330,19 @@ Item {
                                 Layout.fillWidth: true
                                 Label { text: "Tail Light Output"; Layout.fillWidth: true }
                                 CheckBox { id: rearLightEnable; text: "Enabled"; spacing: 4 }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Label { text: "Dashboard Power Output"; Layout.fillWidth: true }
+                                CheckBox { id: dashPowerOut; text: "Enabled"; enabled: softwareAdc2.checked; spacing: 4 }
+                            }
+
+                            Label {
+                                text: "Switches the dashboard supply from the ADC2 pin - 3.3V on, 0V off. Needs Software ADC Brake on, and a step-down whose enable it drives."
+                                opacity: 0.6
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
                             }
 
                             Label {

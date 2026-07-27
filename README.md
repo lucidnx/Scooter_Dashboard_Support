@@ -110,7 +110,9 @@ few controller settings must be set (in VESC Tool, not the package UI):
 - **App Settings -> ADC -> General -> Control Type = `Current No Reverse Brake ADC2`**
 - **App Settings -> ADC -> General -> Multiple VESCs Over CAN = `True`** (dual-motor setups)
 - Keep **Software ADC** enabled in the package **Setup** tab (default) - the dashboard
-  supplies throttle/brake over UART; the package overrides the ADC app inputs.
+  supplies throttle/brake over UART; the package overrides the ADC app inputs. Throttle
+  and brake are switchable separately, so you can take one from the dashboard and leave
+  the other on a lever wired to the ADC pin.
 - For accurate battery % and range, set your pack under
   **Motor Settings -> Additional Info -> Battery**: type, cell count and Ah.
 
@@ -275,6 +277,11 @@ Setup and use the app when parked. The full analysis is in
   headlight (or always on), full or blinking brake light while braking. As on a stock
   scooter the tail light is lit whenever the headlight is on, so the always-on option -
   and the app's *Back light* switch - only make a visible difference with the headlight off
+- **Dashboard power output**: with Software ADC Brake on, the ADC2 pin is free and can
+  switch the dashboard's supply - 3.3 V while the scooter is on, 0 V when you switch it
+  off with the button or from the app. Needs a step-down whose enable pin it drives, and
+  a 1 kOhm pulldown on ADC2. Off by default. Because the pin stays low until the script is
+  running, the dashboard no longer shows error 10 while the VESC boots
 - **Battery % at idle** on the dashboard, separately configurable for normal and secret modes
 - **BMS battery %**: if a VESC BMS reports, its SOC is used as the battery percentage,
   with a temperature warning above 50 °C or below 0 °C
