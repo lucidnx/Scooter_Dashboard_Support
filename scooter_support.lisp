@@ -185,10 +185,6 @@
 (def app-slow-step 0)
 (def cur-wh-tot 0.0)
 (def app-reply-time (systime))
-(def app-t-live (systime))
-(def app-t-bulk (systime))
-; worst time spent handling one frame, in ms - this is our own cost, unlike a
-; gap between frames which also counts the dash simply being quiet
 (def quick-sum 0)   ; checksum contribution of the prebuilt 0xB0 block
 (def quick-used false) ; only worth maintaining while an app is actually asking
 (def b0-wanted false)  ; the 52 byte block is 26 lookups - only rebuild it when asked
@@ -236,16 +232,6 @@
 ; long as the firmware's worker takes to switch it back on, so a connected app
 ; costs lever responsiveness - turn this off to ride with the sharpest throttle.
 (def app-enable true)
-; Below this speed the app is answered freely; above it each class of register
-; gets its own interval, because answering keeps the app polling back to back
-; and that leaves the dash too little of the bus for its lever frames.
-(def app-idle-speed 3.0)
-; Every transmission switches the receiver off for its length plus about two
-; milliseconds of driver overhead, so what costs us lever frames is the number
-; of replies, not their size. While riding only the two reads the dashboard
-; needs are answered: speed and battery often, the rest of the block slowly.
-(def app-iv-live 0.1) ; 0xB4 - battery, speed, average speed
-(def app-iv-bulk 1.0) ; 0xB0 - power, temperature, odometer, trip, errors
 (def cur-cell-mv 0) ; one division, not fifteen per cell read
 
 ; rear light state
@@ -516,7 +502,7 @@
         (write-v309-defaults)
         (write-v310-defaults)
         (write-v400-defaults)
-        (write-v401-defaults)
+                    (write-v401-defaults)
         (write-setting 'secret-presses 1)
         (write-setting 'secret-combo 0)
         (write-setting 'secret-requires-lock false)
@@ -590,7 +576,7 @@
                     (write-v309-defaults)
                     (write-v310-defaults)
                     (write-v400-defaults)
-        (write-v401-defaults)
+                    (write-v401-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 302i32) {
@@ -603,7 +589,7 @@
                     (write-v309-defaults)
                     (write-v310-defaults)
                     (write-v400-defaults)
-        (write-v401-defaults)
+                    (write-v401-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 303i32) {
@@ -615,7 +601,7 @@
                     (write-v309-defaults)
                     (write-v310-defaults)
                     (write-v400-defaults)
-        (write-v401-defaults)
+                    (write-v401-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 304i32) {
@@ -626,7 +612,7 @@
                     (write-v309-defaults)
                     (write-v310-defaults)
                     (write-v400-defaults)
-        (write-v401-defaults)
+                    (write-v401-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 305i32) {
@@ -636,7 +622,7 @@
                     (write-v309-defaults)
                     (write-v310-defaults)
                     (write-v400-defaults)
-        (write-v401-defaults)
+                    (write-v401-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 306i32) {
@@ -645,7 +631,7 @@
                     (write-v309-defaults)
                     (write-v310-defaults)
                     (write-v400-defaults)
-        (write-v401-defaults)
+                    (write-v401-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 307i32) {
@@ -653,25 +639,29 @@
                     (write-v309-defaults)
                     (write-v310-defaults)
                     (write-v400-defaults)
-        (write-v401-defaults)
+                    (write-v401-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 308i32) {
                     (write-v309-defaults)
                     (write-v310-defaults)
                     (write-v400-defaults)
-        (write-v401-defaults)
+                    (write-v401-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 309i32) {
                     (write-v310-defaults)
                     (write-v400-defaults)
-        (write-v401-defaults)
+                    (write-v401-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 310i32) {
                     (write-v400-defaults)
-        (write-v401-defaults)
+                    (write-v401-defaults)
+                    (write-setting 'ver-code settings-version)
+                })
+                ((eq ver 400i32) {
+                    (write-v401-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 (t (restore-defaults))
@@ -1798,7 +1788,6 @@
 (defun app-trip-m () cur-trip)
 (defun app-volt-cv () (app-clamp16 (* cur-vin 100))) ; 0.01 V
 (defun app-amp-ca () (app-clamp16 (* cur-amps 100))) ; 0.01 A, negative = charging
-(defun app-watts () (app-clamp16 (* cur-vin cur-amps)))
 (defun app-range-10m () (app-clamp16 (* cur-range 100)))
 (defun app-fet-01 () (app-clamp16 (* cur-fet 10)))
 (defun app-cell-mv () cur-cell-mv)
@@ -2223,9 +2212,11 @@
 ; Lever frames are left out - at 40/s they bury everything worth reading. Our
 ; own replies never appear either: the receiver is off while we transmit.
 (defun sniff-log (len xiaomi)
-    (let ((from (if xiaomi 3 4)) (pay ""))
+    (let ((from (if xiaomi 3 4))
+          (n (if xiaomi (- len 2) len)) ; Xiaomi counts cmd and arg in the length
+          (pay ""))
         {
-            (looprange i from (+ from (if (> len 24) 24 len))
+            (looprange i from (+ from (if (> n 24) 24 (if (< n 0) 0 n)))
                 (setq pay (str-merge pay (str-from-n (bufget-u8 uart-buf i) "%02x") " ")))
             (print (str-merge
                 (str-from-n (secs-since 0) "%8.3f") "  "
@@ -2887,6 +2878,13 @@
             (set 'app-slow-time (systime))
             (set 'app-reply-time (systime))
             (set 'dash-tx-time (systime))
+            (set 'press-time (systime))
+            (set 'alarm-time (systime))
+            (set 'lever-since (systime))
+            (set 'blink-since (systime))
+            (set 'cruise-since (systime))
+            (set 'cruise-shown-time (systime))
+            (set 'calib-since (systime))
             (app-build-serial)
             (app-build-pin)
             (build-app-frame app-f-1a 0x1a 2) ; constant, built once
