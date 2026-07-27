@@ -1346,6 +1346,33 @@ Item {
                             }
 
                             Label {
+                                visible: dashPowerOut.currentIndex === 1 && !softwareAdc.checked
+                                text: "WARNING! You have no throttle!"
+                                color: "#ff5252"
+                                font.bold: true
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
+
+                            Label {
+                                visible: dashPowerOut.currentIndex === 2 && !softwareAdc2.checked
+                                text: "WARNING! Cruise control cannot be stopped when braking!"
+                                color: "#ff5252"
+                                font.bold: true
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
+
+                            Label {
+                                visible: dashPowerOut.currentIndex === 2 && !softwareAdc2.checked
+                                text: "WARNING! No motor braking and no brake light!"
+                                color: "#ff5252"
+                                font.bold: true
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
+
+                            Label {
                                 text: "MOSFET on the servo/PPM pin, PWM 200 Hz. See the wiring diagram in the README."
                                 opacity: 0.6
                                 wrapMode: Text.WordWrap
