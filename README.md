@@ -235,7 +235,9 @@ General and use the app when parked. The full analysis is in
 ### Comfort
 - **Auto headlight**: turn the headlight on automatically at power on
 - **Rear / brake light** on the servo pin (MOSFET driver): dim tail light following the
-  headlight (or always on), full or blinking brake light while braking
+  headlight (or always on), full or blinking brake light while braking. As on a stock
+  scooter the tail light is lit whenever the headlight is on, so the always-on option -
+  and the app's *Back light* switch - only make a visible difference with the headlight off
 - **Battery % at idle** on the dashboard, separately configurable for normal and secret modes
 - **BMS battery %**: if a VESC BMS reports, its SOC is used as the battery percentage,
   with a temperature warning above 50 °C or below 0 °C
