@@ -299,7 +299,7 @@ Setup and use the app when parked. The full analysis is in
 <span style="color:rgb(97, 189, 109);">Green </span>to RX (Button) \
 1k Ohm Resistor from <span style="color:rgb(251, 160, 38);">3.3V</span> to <span style="color:rgb(97, 189, 109);">RX (Button)</span>
 
-![image](screenshots/wiring.png)
+![Dashboard connection](screenshots/wiring-dash.svg)
 
 ### Parts for the dash connection
 
@@ -310,11 +310,12 @@ Setup and use the app when parked. The full analysis is in
 | 1 | Resistor 1 kΩ, 0.25 W, THT |
 | 1 | Clip-on ferrite, 5 mm inner diameter - *optional* |
 
-Both capacitors go **across 5V and GND**, as close to the dashboard as the wiring
-allows - the electrolytic is the reservoir for current spikes, the ceramic
-handles the fast edges. The electrolytic is polarised: its **marked leg is the
-minus and goes to GND**, getting that backwards will destroy it. The ferrite
-clips over the whole bundle anywhere along its length.
+The **220 µF** goes across **5V and GND** as the reservoir for current spikes, and
+the **1 µF** across the **green button line and GND** to keep noise off it. Nothing
+goes on the yellow UART line. Fit both as close to the dashboard as the wiring
+allows. The electrolytic is polarised: its **marked leg is the minus and goes to
+GND**, getting that backwards will destroy it. The ferrite clips over the whole
+bundle anywhere along its length.
 
 > **Check your 5V budget first.** The dashboard is powered from the VESC's 5V
 > output, and if you also add the rear/brake light (and/or a headlight) that all

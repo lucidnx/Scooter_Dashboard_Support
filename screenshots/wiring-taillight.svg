@@ -1,35 +1,58 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 330" width="400" height="330" font-family="Verdana, Geneva, DejaVu Sans, sans-serif">
-  <rect x="0" y="0" width="400" height="330" fill="#ffffff"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 690" width="1280" height="690" font-family="Inter, Roboto, system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <rect x="0" y="0" width="1280" height="690" fill="#ffffff"/>
 
-  <text x="200" y="30" text-anchor="middle" font-size="23" font-weight="700" fill="#1a1a1a">VESC</text>
-
-  <g font-size="12" font-weight="700" text-anchor="middle">
-    <text x="80" y="55" fill="#d92b2b">5v</text>
-    <text x="200" y="55" fill="#29a745">Servo</text>
-    <text x="320" y="55" fill="#1a1a1a">GND</text>
+  <!-- wires -->
+  <g stroke-width="4" fill="none">
+    <path d="M360 226 L990 226" stroke="#e8453c"/>
+    <path d="M990 330 L720 330 L720 380" stroke="#9e9e9e"/>
+    <path d="M360 440 L640 440" stroke="#f0a72a"/>
+    <path d="M720 500 L720 545 L360 545" stroke="#9e9e9e"/>
   </g>
 
-  <g stroke-linecap="round" stroke-width="11" fill="none">
-    <path d="M80 68 L80 248" stroke="#d92b2b"/>
-    <path d="M200 68 L200 248" stroke="#29a745"/>
-    <path d="M320 68 L320 248" stroke="#1a1a1a"/>
-    <path d="M200 180 L320 180" stroke="#29a745"/>
+  <!-- 10k holding the gate down when the pin is not driven -->
+  <g stroke-width="3" fill="none" stroke="#8a8a8a">
+    <path d="M530 440 L530 469"/>
+    <path d="M530 491 L530 545"/>
+  </g>
+  <rect x="519" y="469" width="22" height="45" fill="#111111"/>
+  <text x="556" y="497" font-size="17" fill="#9e9e9e">10k&#8486;</text>
+
+  <!-- junctions -->
+  <circle cx="530" cy="440" r="5" fill="#f0a72a"/>
+  <circle cx="530" cy="545" r="5" fill="#9e9e9e"/>
+
+  <!-- mosfet -->
+  <rect x="640" y="380" width="160" height="120" rx="8" fill="#2f3437"/>
+  <text x="720" y="428" text-anchor="middle" font-size="20" font-weight="600" fill="#ffffff">MOSFET</text>
+  <text x="720" y="458" text-anchor="middle" font-size="15" fill="#b9bec1">IRLZ44N</text>
+  <g font-size="16" fill="#9e9e9e">
+    <text x="632" y="430" text-anchor="end">1 G</text>
+    <text x="736" y="366">2 D</text>
+    <text x="736" y="530">3 S</text>
   </g>
 
-  <rect x="26" y="98" width="108" height="30" rx="15" fill="#d92b2b"/>
-  <text x="80" y="118" text-anchor="middle" font-size="13" font-weight="700" fill="#ffffff">tail light</text>
-
-  <rect x="234" y="166" width="52" height="28" rx="14" fill="#29a745"/>
-  <text x="260" y="185" text-anchor="middle" font-size="13" font-weight="700" fill="#ffffff">10K</text>
-
-  <g text-anchor="middle">
-    <text x="80" y="270" font-size="12" font-weight="700" fill="#1a1a1a">Drain</text>
-    <text x="80" y="284" font-size="9" font-weight="700" fill="#8a8a8a">PIN 2</text>
-    <text x="200" y="270" font-size="12" font-weight="700" fill="#1a1a1a">Gate</text>
-    <text x="200" y="284" font-size="9" font-weight="700" fill="#8a8a8a">PIN 1</text>
-    <text x="320" y="270" font-size="12" font-weight="700" fill="#1a1a1a">Source</text>
-    <text x="320" y="284" font-size="9" font-weight="700" fill="#8a8a8a">PIN 3</text>
+  <!-- boxes -->
+  <rect x="120" y="120" width="240" height="485" rx="8" fill="#453d9e"/>
+  <text x="240" y="175" text-anchor="middle" font-size="22" font-weight="600" fill="#ffffff">VESC</text>
+  <g font-size="18" text-anchor="end" fill="#e9e7f7">
+    <text x="345" y="233">+5V</text>
+    <text x="345" y="447">PPM</text>
+    <text x="345" y="552">GND</text>
   </g>
 
-  <text x="200" y="316" text-anchor="middle" font-size="23" font-weight="700" fill="#1a1a1a">MOSFET</text>
+  <rect x="990" y="120" width="170" height="485" rx="8" fill="#14594a"/>
+  <text x="1075" y="175" text-anchor="middle" font-size="22" font-weight="600" fill="#ffffff">Rear light</text>
+  <g font-size="18" fill="#dfeae6">
+    <text x="1006" y="233">+5V</text>
+    <text x="1006" y="337">GND</text>
+  </g>
+
+  <!-- pin dots -->
+  <g>
+    <circle cx="360" cy="226" r="5" fill="#e8453c"/>
+    <circle cx="360" cy="440" r="5" fill="#f0a72a"/>
+    <circle cx="360" cy="545" r="5" fill="#9e9e9e"/>
+    <circle cx="990" cy="226" r="5" fill="#e8453c"/>
+    <circle cx="990" cy="330" r="5" fill="#9e9e9e"/>
+  </g>
 </svg>
