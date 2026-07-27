@@ -160,10 +160,26 @@ replies were sometimes hundreds of milliseconds late — and NineDash was the ap
 the bus into that state, so a plain timeout has not been fully ruled out either. The
 headlight now sits on `0x76` (Direct power control) and can be re-tested directly.
 
-### Two smaller things
+### What is `0xDA`?
 
-**`0xDA`** is polled at 3.2 Hz — your third most frequent register — and is undocumented in
-every protocol reference we can find. The package returns zeros. What is it?
+The one register we cannot account for. Across every capture we have — NineDash, m365
+Tools and the official Segway app — `0xDA` was read **628 times**, more than any register
+except `0xB4`. All three apps ask for it, always 12 bytes, at around 3 Hz.
+
+It appears in no Ninebot or Xiaomi protocol reference we can find, and no open-source
+project we looked at decodes it. The package answers twelve zero bytes and **all three apps
+work normally**, so whatever it carries is either optional or is being displayed somewhere
+without anything looking obviously wrong.
+
+Since you poll it more often than almost anything else, you presumably know what you expect
+back. If you can tell us the field layout we will populate it properly; if it turns out to
+be dead weight, dropping it removes 3 requests/s on its own — most of the way to the
+5 requests/s budget above.
+
+For reference, these registers are also read and answered with zeros, with no complaint
+from any app: ESC `0xBE`, `0xE4`, `0xE7`, `0x23`, `0x7F`, `0x69`, and BMS `0x1B`, `0x8B`.
+
+### Two smaller things
 
 **BMS version** displays as `0067` no matter what we return. We answer `0x0700` at both ESC
 `0x67` and BMS `0x17`; feeding `0x1234` and `0x5678` respectively changed nothing, so the
