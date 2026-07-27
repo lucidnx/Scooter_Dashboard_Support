@@ -1,62 +1,35 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 600" width="900" height="600" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
-  <rect x="0" y="0" width="900" height="600" rx="16" fill="#fdfdfc" stroke="#e3e0d8" stroke-width="2"/>
-  <text x="450" y="38" text-anchor="middle" font-size="17" font-weight="700" fill="#2f3437">Rear / brake light</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 330" width="400" height="330" font-family="Verdana, Geneva, DejaVu Sans, sans-serif">
+  <rect x="0" y="0" width="400" height="330" fill="#ffffff"/>
 
-  <!-- wires -->
-  <g stroke-linecap="round" stroke-width="9" fill="none">
-    <path d="M350 116 L350 300" stroke="#3fa45b"/>
-    <path d="M460 116 L460 180" stroke="#d13b34"/>
-    <path d="M460 220 L460 300" stroke="#d13b34"/>
-    <path d="M680 116 L680 460" stroke="#1b1b1b"/>
-    <path d="M200 460 L680 460" stroke="#1b1b1b"/>
-    <path d="M570 415 L570 460" stroke="#1b1b1b"/>
+  <text x="200" y="30" text-anchor="middle" font-size="23" font-weight="700" fill="#1a1a1a">VESC</text>
+
+  <g font-size="12" font-weight="700" text-anchor="middle">
+    <text x="80" y="55" fill="#d92b2b">5v</text>
+    <text x="200" y="55" fill="#29a745">Servo</text>
+    <text x="320" y="55" fill="#1a1a1a">GND</text>
   </g>
 
-  <!-- gate pull-down leg -->
-  <g stroke-linecap="round" stroke-width="7" fill="none">
-    <path d="M200 250 L350 250" stroke="#3fa45b"/>
-    <path d="M200 250 L200 460" stroke="#6b6b6b"/>
+  <g stroke-linecap="round" stroke-width="11" fill="none">
+    <path d="M80 68 L80 248" stroke="#d92b2b"/>
+    <path d="M200 68 L200 248" stroke="#29a745"/>
+    <path d="M320 68 L320 248" stroke="#1a1a1a"/>
+    <path d="M200 180 L320 180" stroke="#29a745"/>
   </g>
 
-  <!-- mosfet legs -->
-  <g stroke-linecap="round" stroke-width="7" stroke="#2f3437" fill="none">
-    <path d="M350 300 L350 340"/>
-    <path d="M460 300 L460 340"/>
+  <rect x="26" y="98" width="108" height="30" rx="15" fill="#d92b2b"/>
+  <text x="80" y="118" text-anchor="middle" font-size="13" font-weight="700" fill="#ffffff">tail light</text>
+
+  <rect x="234" y="166" width="52" height="28" rx="14" fill="#29a745"/>
+  <text x="260" y="185" text-anchor="middle" font-size="13" font-weight="700" fill="#ffffff">10K</text>
+
+  <g text-anchor="middle">
+    <text x="80" y="270" font-size="12" font-weight="700" fill="#1a1a1a">Drain</text>
+    <text x="80" y="284" font-size="9" font-weight="700" fill="#8a8a8a">PIN 2</text>
+    <text x="200" y="270" font-size="12" font-weight="700" fill="#1a1a1a">Gate</text>
+    <text x="200" y="284" font-size="9" font-weight="700" fill="#8a8a8a">PIN 1</text>
+    <text x="320" y="270" font-size="12" font-weight="700" fill="#1a1a1a">Source</text>
+    <text x="320" y="284" font-size="9" font-weight="700" fill="#8a8a8a">PIN 3</text>
   </g>
 
-  <g fill="#1b1b1b">
-    <circle cx="350" cy="250" r="6"/>
-    <circle cx="200" cy="460" r="6"/>
-    <circle cx="570" cy="460" r="6"/>
-    <circle cx="680" cy="460" r="6"/>
-  </g>
-
-  <!-- tail light -->
-  <rect x="390" y="180" width="140" height="40" rx="8" fill="#ffffff" stroke="#2f3437" stroke-width="2"/>
-  <text x="460" y="205" text-anchor="middle" font-size="15" font-weight="700" fill="#2f3437">tail light</text>
-
-  <!-- pull-down -->
-  <rect x="164" y="331" width="72" height="38" rx="8" fill="#ffffff" stroke="#2f3437" stroke-width="2"/>
-  <text x="200" y="355" text-anchor="middle" font-size="15" font-weight="700" fill="#2f3437">10 k&#8486;</text>
-
-  <!-- mosfet -->
-  <rect x="300" y="340" width="320" height="75" rx="10" fill="#ffffff" stroke="#2f3437" stroke-width="2"/>
-  <g font-size="14" font-weight="700" fill="#2f3437" text-anchor="middle">
-    <text x="350" y="366">1 G</text>
-    <text x="460" y="366">2 D</text>
-    <text x="570" y="366">3 S</text>
-  </g>
-  <text x="460" y="400" text-anchor="middle" font-size="14" font-weight="700" fill="#2f3437">IRLZ44N &#183; N-channel MOSFET</text>
-
-  <!-- endpoint -->
-  <rect x="50" y="56" width="800" height="60" rx="12" fill="#2f3437"/>
-  <text x="72" y="92" font-size="17" font-weight="700" fill="#ffffff">VESC</text>
-  <g font-size="13" font-weight="700" fill="#ffffff" text-anchor="middle">
-    <text x="350" y="92">Servo</text>
-    <text x="460" y="92">5V</text>
-    <text x="680" y="92">GND</text>
-  </g>
-
-  <text x="450" y="512" text-anchor="middle" font-size="13" fill="#6b6b6b">PWM at 200 Hz &#183; dim tail light, full brightness while braking</text>
-  <text x="450" y="536" text-anchor="middle" font-size="13" fill="#6b6b6b">A brighter light belongs on its own step-down from the battery, sharing this ground</text>
+  <text x="200" y="316" text-anchor="middle" font-size="23" font-weight="700" fill="#1a1a1a">MOSFET</text>
 </svg>
