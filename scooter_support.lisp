@@ -3073,5 +3073,7 @@
 
 @const-end
 
-(image-save)
+; image-save stores the whole environment in the same flash region the reader
+; fills while parsing the @const blocks. With a script this size the two no
+; longer fit together, so the environment is rebuilt on each boot instead.
 (main)
