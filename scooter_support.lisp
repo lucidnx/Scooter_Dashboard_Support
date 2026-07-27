@@ -1721,6 +1721,11 @@
         (trap (app-cache-update))
         (trap (handle-taillight))
         (if dash-power-held (gpio-write dash-power-held (if off 0 1)))
+        ; A detached ADC app stops resetting the timeout itself - the script has to.
+        ; Without this a pin taken for the supply kills the other channel too, a
+        ; second after boot, even when a real lever is wired to it.
+        (if (and (= power-pin 1) (not software-adc)) (app-adc-override 0 0))
+        (if (and (= power-pin 2) (not software-adc2)) (app-adc-override 1 0))
         (handle-lock (abs current-speed))
             }
 )
