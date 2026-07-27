@@ -193,6 +193,7 @@
 (def quick-used false) ; only worth maintaining while an app is actually asking
 (def b0-wanted false)  ; the 52 byte block is 26 lookups - only rebuild it when asked
 (def app-dst 0x3e)     ; address the app last asked from
+(def g2-aux 0x40)      ; last G2 horn / turn signal byte, for edge detection
 ; Control writes must not do slow work in the reader thread: a mode change
 ; means conf-set plus CAN round trips with retries, and persisting a setting
 ; means a flash write - either stalls the lever frames for as long as it takes,
@@ -406,7 +407,7 @@
 )))
 
 (defun valid-model (m) ; eeprom reads nil when never written
-    (and (not (eq m nil)) (>= m 0) (<= m 2))
+    (and (not (eq m nil)) (>= m 0) (<= m 3))
 )
 
 (defun write-secret-mode-toggles () ; settings added in v303
@@ -1639,11 +1640,14 @@
             (bufset-u8 tx-frame (+ tx-base 1) battery)
         )
 
-        ; light field
+        ; light field - the G2 packs headlight, park and cruise into one byte
         (if (not off)
             (if (> alarm 4)
                 (bufset-u8 tx-frame (+ tx-base 2) 1) ; alarm on
-                (bufset-u8 tx-frame (+ tx-base 2) (if light 1 0))
+                (bufset-u8 tx-frame (+ tx-base 2) (if (= model 3)
+                    (+ (if light 1 0) (if lock 2 0) (if cruising 4 0))
+                    (if light 1 0)
+                ))
             )
             (bufset-u8 tx-frame (+ tx-base 2) 0)
         )
@@ -1827,10 +1831,10 @@
     }
 )
 
-; one buffer per total length that can occur - never resized, never allocated
+; one buffer per app answer size that can occur - never resized, never allocated
 (defun combo-buf (al)
-    (cond ((= al 11) combo26) ((= al 13) combo28) ((= al 15) combo30)
-          ((= al 21) combo36) ((= al 39) combo54) ((= al 61) combo76) (t nil))
+    (cond ((= al 11) combo11) ((= al 13) combo13) ((= al 15) combo15)
+          ((= al 21) combo21) ((= al 39) combo39) ((= al 61) combo61) (t nil))
 )
 
 (defun send-dash-and-app ()
@@ -2235,6 +2239,26 @@
     )
 )
 
+; The G2 handlebar has a horn and a turn signal button, and reports them one
+; byte past the brake: 0x40 nothing pressed, 0x50 turn signal held for three
+; seconds, 0x60 horn. The dash drives its own turn signal lamps, so the hold is
+; free to toggle cruise; the horn has no VESC output and sounds the dash buzzer.
+(defun g2-extras (len)
+    (if (>= len 4)
+        (let ((a (bufget-u8 uart-buf 7)))
+            {
+                (if (= a 0x60) (set 'feedback 1)) ; refreshed while held
+                (if (and (= a 0x50) (!= g2-aux 0x50) (not off) (not lock)) {
+                    (set 'cruise-enabled (not cruise-enabled))
+                    (set 'feedback 2)
+                    (set 'app-todo (bitwise-or app-todo 1)) ; the flash write waits for the feature loop
+                })
+                (set 'g2-aux a)
+            }
+        )
+    )
+)
+
 (defun read-frames-g30()
     (loopwhile t {
         (trap ; a parse error must not kill the reader thread
@@ -2292,6 +2316,9 @@
                                                     (if (and software-adc (>= len 7))
                                                         (adc-input uart-buf)
                                                     )
+                                                    ; only off 0x64 - the horn and turn signal do not
+                                                    ; need the 40/s the lever frames arrive at
+                                                    (if (= model 3) (g2-extras len))
                                                     (if (> (secs-since dash-tx-time) dash-tx-iv) {
                                                         (set 'dash-tx-time (systime))
                                                         (if app-pend
@@ -2837,12 +2864,18 @@
             (def app-f-35 (array-create 11))
             (def app-f-31 (array-create 11))
             (def app-f-40 (array-create 39))
-            (def combo26 (array-create 26)) ; dash answer plus each app answer size
-            (def combo28 (array-create 28))
-            (def combo30 (array-create 30))
-            (def combo36 (array-create 36))
-            (def combo54 (array-create 54))
-            (def combo76 (array-create 76))
+            ; dash answer plus each app answer size - the dash frame is two
+            ; bytes longer on the G2, so they are sized from it
+            (let ((dl (buflen tx-frame)))
+                {
+                    (def combo11 (array-create (+ dl 11)))
+                    (def combo13 (array-create (+ dl 13)))
+                    (def combo15 (array-create (+ dl 15)))
+                    (def combo21 (array-create (+ dl 21)))
+                    (def combo39 (array-create (+ dl 39)))
+                    (def combo61 (array-create (+ dl 61)))
+                }
+            )
             (set 'cur-cells (let ((n (conf-get 'si-battery-cells))) (if (> n 0) n 10)))
             (set 'cur-wh-tot (* 0.85 (conf-get 'si-battery-ah) (* 3.7 (conf-get 'si-battery-cells))))
             (set 'cur-cap (app-clamp16 (* (conf-get 'si-battery-ah) 1000)))
@@ -2869,11 +2902,17 @@
                 (set 'thr-idx 4)
                 (set 'brk-idx 5)
             } {
-                (define tx-frame (array-create 15))
+                (define tx-frame (array-create (if (= model 3) 17 15)))
                 (bufset-u16 tx-frame 0 0x5AA5) ;Ninebot protocol
-                (bufset-u8 tx-frame 2 0x06) ;Payload length is 5 bytes
+                (bufset-u8 tx-frame 2 (if (= model 3) 0x08 0x06)) ;Payload length
                 (bufset-u16 tx-frame 3 0x2021) ; Packet is from ESC to BLE
                 (bufset-u16 tx-frame 5 0x6400) ; Packet is from ESC to BLE
+                ; the G2 reply carries two more payload bytes, both constant -
+                ; what they mean is not known, the reference sends them fixed too
+                (if (= model 3) {
+                    (bufset-u8 tx-frame 13 0x06)
+                    (bufset-u8 tx-frame 14 0x2e)
+                })
                 (set 'tx-base 7)
                 (set 'thr-idx 5)
                 (set 'brk-idx 6)

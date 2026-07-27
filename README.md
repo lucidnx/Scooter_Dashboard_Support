@@ -49,7 +49,8 @@ VESC firmware 7.00, available at https://vesc-project.com/
    unit via **CAN forwarding** and install it there too - each unit runs its own copy.
 3. Open the package UI (**Navigation Bar -> App UI**), go to the **Setup** tab and select
    the model **for each unit**:
-   - the unit wired to the dashboard gets its dashboard model (**G30** or **M365/1S/PRO2**),
+   - the unit wired to the dashboard gets its dashboard model (**G30**, **M365/1S/PRO2**
+     or **G2**),
    - every other unit gets **Slave**.
 4. Press **Save** - the script restarts with the chosen model. The model is stored per unit.
 5. Configure everything else in the **General**, **Modes** and **Setup** tabs and press **Save**.
@@ -58,6 +59,12 @@ VESC firmware 7.00, available at https://vesc-project.com/
 migrated automatically. To go back to defaults, use the **Reset** button in the UI.
 
 ## What's new in 4.0
+
+- **Ninebot Max G2 dashboard**, selectable as its own model. Its handlebar **horn** sounds
+  the dash buzzer, and **holding the turn signal button** for three seconds toggles cruise
+  control - the dash drives its own turn signal lamps, so that button is free. **Untested:**
+  built from a working reference implementation, but nobody has run it on a G2 yet. Please
+  report back if you have one.
 
 - **Stock scooter apps work.** NineDash, m365 Tools and the **official Segway Ninebot app**
   all connect over the dashboard's own BLE module and show live data, and their switches

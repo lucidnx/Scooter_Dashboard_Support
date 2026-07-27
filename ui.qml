@@ -1167,7 +1167,7 @@ Item {
                             ComboBox {
                                 id: modelBox
                                 Layout.preferredWidth: 170
-                                model: ["G30", "M365/1S/PRO2", "Slave"]
+                                model: ["G30", "M365/1S/PRO2", "Slave", "G2 (untested)"]
                             }
                         }
 
@@ -1301,9 +1301,9 @@ Item {
                                 Label {
                                     Layout.fillWidth: true
                                     wrapMode: Text.WordWrap
-                                    text: (modelBox.currentIndex === 0 ? "Segway" :
-                                           modelBox.currentIndex === 1 ? "Xiaomi" : "")
-                                          + (modelBox.currentIndex < 2 ? " App Support (experimental)" : "App Support")
+                                    text: (root.isSlave ? "App Support"
+                                           : (modelBox.currentIndex === 1 ? "Xiaomi" : "Segway")
+                                             + " App Support (experimental)")
                                 }
                                 CheckBox { id: appEnable; text: "Enabled"; spacing: 4 }
                             }
