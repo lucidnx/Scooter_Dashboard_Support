@@ -416,7 +416,7 @@ Item {
             + " " + boolAtom(bmsSoc)
             + " " + boolAtom(secretExitOnLock)
             + " " + (Number.parseInt(appPin.text) || 0)
-            + " " + boolAtom(dashPowerOut)
+            + " " + dashPowerOut.currentIndex
             + ")")
 
         queueCode("(save-light-offsets "
@@ -545,7 +545,7 @@ Item {
             setOffsetV(lightOffBrk, parts[8])
             setGain(lightGainBrk, parts[9])
             appPin.text = ("00000" + (Number.parseInt(parts[10]) || 0)).slice(-6)
-            dashPowerOut.checked = parseBoolToken(parts[11])
+            dashPowerOut.currentIndex = Number.parseInt(parts[11]) || 0
         } else if (parts[0] === "rear") {
             rearLightEnable.checked = parseBoolToken(parts[1])
             autoTaillight.checked = parseBoolToken(parts[2])
@@ -1335,11 +1335,11 @@ Item {
                             RowLayout {
                                 Layout.fillWidth: true
                                 Label { text: "Dashboard Power Output"; Layout.fillWidth: true }
-                                CheckBox { id: dashPowerOut; text: "Enabled"; enabled: softwareAdc2.checked; spacing: 4 }
+                                ComboBox { id: dashPowerOut; Layout.preferredWidth: 100; model: ["Off", "ADC1", "ADC2"] }
                             }
 
                             Label {
-                                text: "Switches the dashboard supply from the ADC2 pin - 3.3V on, 0V off. Needs Software ADC Brake on, and a step-down whose enable it drives."
+                                text: "Switches the dashboard supply from the chosen pin - 3.3V on, 0V off. Needs a step-down whose enable it drives and a 1kOhm pulldown. That pin stops working as a lever input."
                                 opacity: 0.6
                                 wrapMode: Text.WordWrap
                                 Layout.fillWidth: true

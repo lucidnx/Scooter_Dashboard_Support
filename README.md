@@ -277,11 +277,14 @@ Setup and use the app when parked. The full analysis is in
   headlight (or always on), full or blinking brake light while braking. As on a stock
   scooter the tail light is lit whenever the headlight is on, so the always-on option -
   and the app's *Back light* switch - only make a visible difference with the headlight off
-- **Dashboard power output**: with Software ADC Brake on, the ADC2 pin is free and can
-  switch the dashboard's supply - 3.3 V while the scooter is on, 0 V when you switch it
-  off with the button or from the app. Needs a step-down whose enable pin it drives, and
-  a 1 kOhm pulldown on ADC2. Off by default. Because the pin stays low until the script is
-  running, the dashboard no longer shows error 10 while the VESC boots
+- **Dashboard power output**: pick **ADC1** or **ADC2** in Setup and that pin switches the
+  dashboard's supply - 3.3 V while the scooter is on, 0 V when you switch it off with the
+  button or from the app. Needs a step-down whose enable pin it drives and a 1 kOhm
+  pulldown. Off by default. Because the pin stays low until the script is running, the
+  dashboard no longer shows error 10 while the VESC boots.
+  The chosen pin is always detached from the ADC app, so it can never be read as a lever -
+  which also means it stops working as one. On ADC2 that costs you the motor brake unless
+  the brake comes from the dashboard; on ADC1 it costs you the throttle the same way
 - **Battery % at idle** on the dashboard, separately configurable for normal and secret modes
 - **BMS battery %**: if a VESC BMS reports, its SOC is used as the battery percentage,
   with a temperature warning above 50 °C or below 0 °C

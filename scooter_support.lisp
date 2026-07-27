@@ -210,8 +210,8 @@
 ; So an app answer rides along inside the next dash answer: framing is by header
 ; and length, not by transmission, and this halves the number of writes.
 (def app-pend false)
-(def dash-power-out false) ; ADC2 drives the dashboard supply
-(def dash-power-held false) ; true once the pin is ours
+(def power-pin 0) ; dashboard supply switch: 0 off, 1 ADC1, 2 ADC2
+(def dash-power-held false) ; the pin symbol once it is ours, false otherwise
 (def sniff-enable false) ; bus logging, deliberately not saved - never survives a reboot
 (def pend-dev 0)
 (def pend-src 0)
@@ -279,7 +279,7 @@
 
 @const-start
 
-(def settings-version 403i32)
+(def settings-version 404i32)
 
 ; Persistent settings: (label . (eeprom-offset type))
 (def eeprom-addrs '(
@@ -370,7 +370,8 @@
     (light-gain-brk        . (81 f))
     (app-pin               . (84 i))
     (app-enable            . (85 b))
-    (dash-power-out        . (86 b))
+    (dash-power-out        . (86 b)) ; kept so the v404 migration can read it
+    (power-pin             . (88 i))
 ))
 
 (def last-button-state false)
@@ -413,6 +414,11 @@
 ; (raw wasn't shifted by a constant volts - it scaled non-linearly with lever
 ; position). A flat offset from v308 would be WRONG under the new formula
 ; (sign-inverted at points), so it's reset here - recalibrate with Sample.
+; the ADC2-only bool becomes a pin selector
+(defun write-v404-defaults () ; settings added in v404
+    (write-setting 'power-pin (if (read-setting 'dash-power-out) 2 0))
+)
+
 ; the brake channel keeps whatever the single old switch was set to
 (defun write-v403-defaults () ; settings added in v403
     (write-setting 'software-adc2 (read-setting 'software-adc))
@@ -519,8 +525,10 @@
         (write-v401-defaults)
         (write-v402-defaults)
         (write-v403-defaults)
+        (write-v404-defaults)
                     (write-v402-defaults)
                     (write-v403-defaults)
+                    (write-v404-defaults)
         (write-setting 'secret-presses 1)
         (write-setting 'secret-combo 0)
         (write-setting 'secret-requires-lock false)
@@ -598,6 +606,7 @@
                     (write-v401-defaults)
                     (write-v402-defaults)
                     (write-v403-defaults)
+                    (write-v404-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 302i32) {
@@ -613,6 +622,7 @@
                     (write-v401-defaults)
                     (write-v402-defaults)
                     (write-v403-defaults)
+                    (write-v404-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 303i32) {
@@ -627,6 +637,7 @@
                     (write-v401-defaults)
                     (write-v402-defaults)
                     (write-v403-defaults)
+                    (write-v404-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 304i32) {
@@ -640,6 +651,7 @@
                     (write-v401-defaults)
                     (write-v402-defaults)
                     (write-v403-defaults)
+                    (write-v404-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 305i32) {
@@ -652,6 +664,7 @@
                     (write-v401-defaults)
                     (write-v402-defaults)
                     (write-v403-defaults)
+                    (write-v404-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 306i32) {
@@ -663,6 +676,7 @@
                     (write-v401-defaults)
                     (write-v402-defaults)
                     (write-v403-defaults)
+                    (write-v404-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 307i32) {
@@ -673,6 +687,7 @@
                     (write-v401-defaults)
                     (write-v402-defaults)
                     (write-v403-defaults)
+                    (write-v404-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 308i32) {
@@ -682,6 +697,7 @@
                     (write-v401-defaults)
                     (write-v402-defaults)
                     (write-v403-defaults)
+                    (write-v404-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 309i32) {
@@ -690,6 +706,7 @@
                     (write-v401-defaults)
                     (write-v402-defaults)
                     (write-v403-defaults)
+                    (write-v404-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 310i32) {
@@ -697,21 +714,29 @@
                     (write-v401-defaults)
                     (write-v402-defaults)
                     (write-v403-defaults)
+                    (write-v404-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 400i32) {
                     (write-v401-defaults)
                     (write-v402-defaults)
                     (write-v403-defaults)
+                    (write-v404-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 401i32) {
                     (write-v402-defaults)
                     (write-v403-defaults)
+                    (write-v404-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 402i32) {
                     (write-v403-defaults)
+                    (write-v404-defaults)
+                    (write-setting 'ver-code settings-version)
+                })
+                ((eq ver 403i32) {
+                    (write-v404-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 (t (restore-defaults))
@@ -783,7 +808,7 @@
         (set 'boot-mode (read-setting 'boot-mode))
         (set 'use-mph (read-setting 'use-mph))
         (set 'rear-light-enable (read-setting 'rear-light-enable))
-        (set 'dash-power-out (read-setting 'dash-power-out))
+        (set 'power-pin (read-setting 'power-pin))
         (set 'auto-taillight (read-setting 'auto-taillight))
         (set 'brake-light-mode (read-setting 'brake-light-mode))
         (set 'eco-om (read-setting 'eco-om))
@@ -815,12 +840,21 @@
 ; 1 detaches both channels, 2 only the throttle, 3 only the brake - so each
 ; lever can come from the dashboard or from a lever wired to the pin
 (defun apply-software-adc ()
-    (app-adc-detach 3 (cond
-        ((and software-adc software-adc2) 1)
-        (software-adc 2)
-        (software-adc2 3)
-        (t 0)
-    ))
+    (let ((d1 (or software-adc (= power-pin 1)))   ; a pin driving the supply must
+          (d2 (or software-adc2 (= power-pin 2)))) ; never be read as a lever
+        {
+            (app-adc-detach 3 (cond
+                ((and d1 d2) 1)
+                (d1 2)
+                (d2 3)
+                (t 0)
+            ))
+            ; a channel we detached but do not feed would otherwise keep the last
+            ; value the dashboard put there
+            (if (and d1 (not software-adc)) (app-adc-override 0 0))
+            (if (and d2 (not software-adc2)) (app-adc-override 1 0))
+        }
+    )
 )
 
 ; ADC2 switches the dashboard's supply: high while the scooter is on, low when
@@ -830,16 +864,19 @@
 ; so claiming it cannot glitch the supply, and the mode is only touched when the
 ; setting changes, never on an ordinary save.
 (defun apply-dash-power ()
-    (if (and dash-power-out software-adc2)
-        (if (not dash-power-held) {
-            (gpio-write 'pin-adc2 (if off 0 1))
-            (gpio-configure 'pin-adc2 'pin-mode-out)
-            (set 'dash-power-held true)
-        })
-        (if dash-power-held {
-            (gpio-configure 'pin-adc2 'pin-mode-analog)
-            (set 'dash-power-held false)
-        })
+    (let ((pin (if (= power-pin 1) 'pin-adc1 'pin-adc2)))
+        (if (> power-pin 0)
+            (if (not (eq dash-power-held pin)) {
+                (if dash-power-held (gpio-configure dash-power-held 'pin-mode-analog))
+                (gpio-write pin (if off 0 1))
+                (gpio-configure pin 'pin-mode-out)
+                (set 'dash-power-held pin)
+            })
+            (if dash-power-held {
+                (gpio-configure dash-power-held 'pin-mode-analog)
+                (set 'dash-power-held false)
+            })
+        )
     )
 )
 
@@ -963,7 +1000,7 @@
 
 (defun save-misc-settings (auto-light btn-speed-kmh mph bms secret-exit pin dash-power)
     {
-        (write-setting 'dash-power-out dash-power)
+        (write-setting 'power-pin dash-power)
         (write-setting 'light-on-boot auto-light)
         (write-setting 'button-speed-kmh btn-speed-kmh)
         (write-setting 'use-mph mph)
@@ -1168,7 +1205,7 @@
             (str-from-n (read-setting 'light-offset-brk) "%.3f ")
             (str-from-n (read-setting 'light-gain-brk) "%.3f ")
             (str-from-n (read-setting 'app-pin) "%d ")
-            (if (read-setting 'dash-power-out) "true" "false")
+            (str-from-n (read-setting 'power-pin) "%d")
         ))
         (sleep 0.05)
         (send-data (str-merge
@@ -1683,7 +1720,7 @@
         (trap (app-run-todo))
         (trap (app-cache-update))
         (trap (handle-taillight))
-        (if dash-power-held (gpio-write 'pin-adc2 (if off 0 1)))
+        (if dash-power-held (gpio-write dash-power-held (if off 0 1)))
         (handle-lock (abs current-speed))
             }
 )
