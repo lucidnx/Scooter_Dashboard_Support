@@ -202,6 +202,8 @@ Lock, mode switching, headlight and secret mode activation are all **fully remap
   (button between Light and Secret); the two share the same setting. Tune delay, deviation
   and the speed window in Setup. Requires the ADC Cruise Control button enabled (see
   above). Use with care.
+- Works with the levers coming from the dashboard **or** from levers wired to the ADC pins,
+  in any combination of the two Software ADC switches
 
 ### Remote control (Control tab)
 - Live dashboard in the app: **speed, battery %, voltage, watts, amps, Wh/km and estimated

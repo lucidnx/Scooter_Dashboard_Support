@@ -843,12 +843,15 @@
     (let ((d1 (or software-adc (= power-pin 1)))   ; a pin driving the supply must
           (d2 (or software-adc2 (= power-pin 2)))) ; never be read as a lever
         {
-            (app-adc-detach 3 (cond
-                ((and d1 d2) 1)
-                (d1 2)
-                (d2 3)
-                (t 0)
-            ))
+            ; mode 3 detaches the levers and the buttons, mode 2 only the buttons.
+            ; Cruise presses the ADC app's own cruise button, so that has to stay
+            ; ours even when both levers come straight from their pins.
+            (let ((d (cond ((and d1 d2) 1) (d1 2) (d2 3) (t 0))))
+                (if (= d 0)
+                    (app-adc-detach 2 1)
+                    (app-adc-detach 3 d)
+                )
+            )
             ; a channel we detached but do not feed would otherwise keep the last
             ; value the dashboard put there
             (if (and d1 (not software-adc)) (app-adc-override 0 0))
@@ -1612,11 +1615,16 @@
             (var brk (get-adc-decoded 1))
             (if cruising
                 {
-                    ; Released = corrected lever voltage back under the ADC app's
-                    ; own start voltage, i.e. exactly what the firmware counts as
-                    ; "no throttle". Safety timeout after 3 s so the throttle can
-                    ; never stay masked if the lever simply isn't released.
-                    (if (or (< thr-corr-v cruise-v1-start) (> (secs-since cruise-shown-time) 3))
+                    ; Released = the lever is back under what the firmware counts
+                    ; as "no throttle". The dashboard value is masked to zero until
+                    ; release, so that path needs the pre-mask voltage; a lever on
+                    ; the pin is never masked and reads true straight from the app.
+                    ; Safety timeout after 3 s so the throttle can never stay masked
+                    ; if the lever simply isn't released.
+                    (if (or (if software-adc
+                                (< thr-corr-v cruise-v1-start)
+                                (<= thr adc-touch))
+                            (> (secs-since cruise-shown-time) 3))
                         (set 'cruise-thr-released true)
                     )
                     ; After release, any lever touch past the ADC mapping start
