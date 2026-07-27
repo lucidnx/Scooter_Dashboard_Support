@@ -1,13 +1,22 @@
 VESC_TOOL ?= $(if $(wildcard ./vesc_tool),./vesc_tool,vesc_tool)
 
 PKG = vesc_scooter_support.vescpkg
+BUILD = build
+SRC = pkgdesc.qml ui.qml scooter_support.lisp README.md version
 
 all: $(PKG)
 
-$(PKG): pkgdesc.qml ui.qml scooter_support.lisp README.md version
-	$(VESC_TOOL) --buildPkgFromDesc pkgdesc.qml --testPkgDesc 'vesc:maxim 120' --testPkgDesc 'vesc:pronto'
+# The packager stores the script as source text, so comments and indentation are
+# charged against the Lisp data budget. Build from a stripped copy.
+$(PKG): $(SRC) tools/minify_lisp.py
+	@mkdir -p $(BUILD)
+	python3 tools/minify_lisp.py scooter_support.lisp $(BUILD)/scooter_support.lisp
+	@cp pkgdesc.qml ui.qml README.md version $(BUILD)/
+	cd $(BUILD) && $(abspath $(VESC_TOOL)) --buildPkgFromDesc pkgdesc.qml \
+		--testPkgDesc 'vesc:maxim 120' --testPkgDesc 'vesc:pronto'
+	@mv $(BUILD)/$(PKG) $(PKG)
 
 clean:
-	rm -f $(PKG)
+	rm -rf $(BUILD) $(PKG)
 
 .PHONY: all clean

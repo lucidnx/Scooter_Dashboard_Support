@@ -431,7 +431,8 @@ Item {
             + ")")
 
         queueCode("(save-cruise-settings "
-            + readReal(cruiseDelay, 1)
+            + boolAtom(cruiseEnable)
+            + " " + readReal(cruiseDelay, 1)
             + " " + readSpeed(cruiseDeviation, 1)
             + " " + readSpeed(cruiseMinSpeed, 1)
             + " " + readSpeed(cruiseMaxSpeed, 1)
@@ -547,6 +548,7 @@ Item {
             var blm = Number.parseInt(parts[3])
             brakeLightMode.currentIndex = blm === 1 ? 0 : (blm === 2 ? 1 : 2)
         } else if (parts[0] === "cruise") {
+            cruiseEnable.checked = parseBoolToken(parts[1])
             setReal(cruiseDelay, parts[2], 1)
             setSpeed(cruiseDeviation, parts[3], 1)
             setSpeed(cruiseMinSpeed, parts[4], 1)
@@ -1161,7 +1163,7 @@ Item {
 
                         RowLayout {
                             Layout.fillWidth: true
-                            Label { text: "Model"; Layout.fillWidth: true }
+                            Label { text: "Model"; font.bold: true; font.pointSize: root.titleSize; Layout.fillWidth: true }
                             ComboBox {
                                 id: modelBox
                                 Layout.preferredWidth: 170
@@ -1180,12 +1182,6 @@ Item {
                                 Layout.fillWidth: true
                                 Label { text: "Software ADC"; Layout.fillWidth: true }
                                 CheckBox { id: softwareAdc; text: "Enabled" }
-                            }
-
-                            RowLayout {
-                                Layout.fillWidth: true
-                                Label { text: "Phone app support"; Layout.fillWidth: true }
-                                CheckBox { id: appEnable; text: "Enabled"; spacing: 4 }
                             }
 
                             Label { text: "Light Compensation"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 24 }
@@ -1302,9 +1298,22 @@ Item {
 
                             RowLayout {
                                 Layout.fillWidth: true
+                                Label {
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.WordWrap
+                                    text: (modelBox.currentIndex === 0 ? "Segway" :
+                                           modelBox.currentIndex === 1 ? "Xiaomi" : "")
+                                          + (modelBox.currentIndex < 2 ? " App Support (experimental)" : "App Support")
+                                }
+                                CheckBox { id: appEnable; text: "Enabled"; spacing: 4 }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
                                 Label { text: "App pairing PIN"; Layout.fillWidth: true }
                                 TextField {
                                     id: appPin
+                                    enabled: appEnable.checked
                                     Layout.preferredWidth: 100
                                     maximumLength: 6
                                     inputMethodHints: Qt.ImhDigitsOnly
@@ -1314,7 +1323,7 @@ Item {
 
                             RowLayout {
                                 Layout.fillWidth: true
-                                Label { text: "Rear light output"; Layout.fillWidth: true }
+                                Label { text: "Tail Light Output"; Layout.fillWidth: true }
                                 CheckBox { id: rearLightEnable; text: "Enabled"; spacing: 4 }
                             }
 
@@ -1326,6 +1335,12 @@ Item {
                             }
 
                             Label { text: "Cruise control (experimental)"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 24 }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Label { text: "Cruise Control"; Layout.fillWidth: true }
+                                CheckBox { id: cruiseEnable; text: "Enabled"; spacing: 4 }
+                            }
 
                             RowLayout {
                                 Layout.fillWidth: true

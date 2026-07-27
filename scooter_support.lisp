@@ -920,8 +920,10 @@
     }
 )
 
-(defun save-cruise-settings (delay deviation min-speed max-speed)
-    { ; enable is toggled live from the Control tab (ctrl-cruise), not here
+(defun save-cruise-settings (enable delay deviation min-speed max-speed)
+    { ; also toggled live from the Control tab (ctrl-cruise)
+        (set 'cruise-enabled enable)
+        (write-setting 'cruise-enabled enable)
         (write-setting 'cruise-delay delay)
         (write-setting 'cruise-deviation deviation)
         (write-setting 'cruise-min-speed min-speed)
@@ -1618,7 +1620,6 @@
         (var current-speed (abs cur-speed-kmh))
         (var disp-speed (+ (if use-mph (* current-speed 0.621371) current-speed) 0.5)) ; rounded for the dash
         (var battery cur-batt)
-        (var crc-end (- (buflen tx-frame) 2)) ; crc bytes at end of frame
 
         ; mode field (1=drive, 2=eco, 4=sport, 8=charge, 16=off, 32=lock)
         (if off
@@ -1647,15 +1648,6 @@
             (bufset-u8 tx-frame (+ tx-base 2) 0)
         )
 
-        ; beep field
-        (if (> feedback 0)
-            {
-                (bufset-u8 tx-frame (+ tx-base 3) 1)
-                (set 'feedback (- feedback 1))
-            }
-            (bufset-u8 tx-frame (+ tx-base 3) 0)
-        )
-
         ; speed field
         (if lock
             (bufset-u8 tx-frame (+ tx-base 4) 0) ; lock display
@@ -1676,19 +1668,32 @@
             (bufset-u8 tx-frame (+ tx-base 5) (get-fault))
         )
 
-        ; calc crc
-
-        (var crcout tx-hdr-sum) ; header bytes never change, only the fields do
-        (looprange i tx-base crc-end
-        (setq crcout (+ crcout (bufget-u8 tx-frame i))))
-        (set 'crcout (bitwise-xor crcout 0xFFFF))
-        (bufset-u8 tx-frame crc-end crcout)
-        (bufset-u8 tx-frame (+ crc-end 1) (shr crcout 8))
-
     }
 )
 
-(defun update-dash(buffer) (uart-write tx-frame)) ; already composed
+; The beep must be spent by a frame that actually goes out. The feature loop
+; builds faster than the dash is answered, so counting it down there dropped and
+; doubled beeps at random. Sealing the frame here also covers the beep byte.
+(defun seal-dash-frame ()
+    {
+        (if (> feedback 0)
+            {
+                (bufset-u8 tx-frame (+ tx-base 3) 1)
+                (set 'feedback (- feedback 1))
+            }
+            (bufset-u8 tx-frame (+ tx-base 3) 0)
+        )
+        (var crc-end (- (buflen tx-frame) 2)) ; crc bytes at end of frame
+        (var crcout tx-hdr-sum) ; header bytes never change, only the fields do
+        (looprange i tx-base crc-end
+            (setq crcout (+ crcout (bufget-u8 tx-frame i))))
+        (setq crcout (bitwise-xor crcout 0xFFFF))
+        (bufset-u8 tx-frame crc-end crcout)
+        (bufset-u8 tx-frame (+ crc-end 1) (shr crcout 8))
+    }
+)
+
+(defun update-dash(buffer) { (seal-dash-frame) (uart-write tx-frame) })
 
 ; -> App protocol (NineDash, m365 Dashboard)
 ; The dash BLE module bridges app frames onto this same half-duplex bus, so
@@ -1832,6 +1837,7 @@
     (let ((ab (app-pend-buf)))
         {
             (set 'app-pend false)
+            (seal-dash-frame)
             (if (eq ab nil)
                 { (uart-write tx-frame) (nb-send pend-dev pend-src 0x04 pend-reg pend-n (= pend-dev 0x22)) }
                 (let ((cb (combo-buf (buflen ab))) (dl (buflen tx-frame)))
