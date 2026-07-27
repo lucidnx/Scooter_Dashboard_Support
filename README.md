@@ -148,6 +148,8 @@ One package for everything - the model is stored on the ESC and selected in the 
 
 - **G30**: Ninebot G30 dashboard (Ninebot protocol)
 - **M365/1S/PRO2**: Xiaomi M365, 1S, Essential and PRO 2 dashboards (Xiaomi protocol)
+- **G2**: Ninebot Max G2 dashboard - same protocol as the G30 with a longer reply frame,
+  plus the handlebar horn and turn signal button. **Untested**, see below
 - **Slave**: secondary ESC in a dual setup - only runs the CAN code server, the master
   pushes the speed mode limits to it
 
@@ -194,9 +196,10 @@ Lock, mode switching, headlight and secret mode activation are all **fully remap
   your live lever position takes over the same instant - no need to release and press
   again to accelerate or brake. Cruise does *not* cancel on speed alone, so traction
   control or a bumpy road can't drop it unexpectedly
-- Off by default - **toggle it live from the Control tab** (button between Light and
-  Secret), tune delay, deviation and the speed window in Setup. Requires the ADC Cruise
-  Control button enabled (see above). Use with care.
+- Off by default - enable it in **Setup**, or **toggle it live from the Control tab**
+  (button between Light and Secret); the two share the same setting. Tune delay, deviation
+  and the speed window in Setup. Requires the ADC Cruise Control button enabled (see
+  above). Use with care.
 
 ### Remote control (Control tab)
 - Live dashboard in the app: **speed, battery %, voltage, watts, amps, Wh/km and estimated
@@ -254,6 +257,18 @@ as occasional throttle and brake lag. If it affects you, turn app support off in
 Setup and use the app when parked. The full analysis is in
 [notes for the NineDash developer](docs/ninedash.md).
 
+### Ninebot Max G2 (untested)
+- Selectable as its own model. The dashboard speaks the same protocol as the G30, with two
+  extra bytes in the reply and the headlight, park and cruise indicators packed into one
+  byte instead of a plain on/off
+- **Horn**: sounds the dashboard buzzer for as long as the button is held - a VESC has no
+  spare output to drive a real horn
+- **Turn signal button held for three seconds**: toggles cruise control, with a double beep
+  to confirm. The dashboard drives its own turn signal lamps and only reports the hold, so
+  the gesture is free to use
+- Built from the protocol notes and a working reference implementation, but **nobody has
+  run this code on a G2 yet**. If you have one, please report back
+
 ### Comfort
 - **Auto headlight**: turn the headlight on automatically at power on
 - **Rear / brake light** on the servo pin (MOSFET driver): dim tail light following the
@@ -290,6 +305,10 @@ Setup and use the app when parked. The full analysis is in
 - Hardened UART frame parsing and supervised reader threads
 - Script runs from flash (low RAM/CPU); settings stored on the ESC with versioned,
   automatic migrations between releases
+- **Bus logging** in **Setup -> Debug** prints every frame the dashboard and any connected
+  phone app sends, to VESC Dev Tools -> Lisp. It takes effect the moment you tick it, is
+  never saved, and always stops at the next power on, so it cannot be left on by accident.
+  It does slow throttle response while running
 
 ## Wiring
 
@@ -359,6 +378,7 @@ don't let it touch anything.
 - Clone M365 PRO Dashboard ([AliExpress](https://s.click.aliexpress.com/e/_9JHFDN))
 - Original DE-Edition PRO 2 Dashboard
 - Original DE-Edition G30 Dashboard
+- Ninebot Max G2 Dashboard - **supported but untested**, no G2 hardware has run it yet
 
 ### Known Compatible VESCs
 - Spintend (Reliable & High Performance):
