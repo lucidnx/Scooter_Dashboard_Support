@@ -290,7 +290,9 @@ Setup and use the app when parked. The full analysis is in
 - **Battery % at idle** on the dashboard, separately configurable for normal and secret modes
 - **BMS battery %**: if a VESC BMS reports, its SOC is used as the battery percentage,
   with a temperature warning above 50 °C or below 0 °C
-- **Light compensation**: the headlight sags throttle/brake voltage non-linearly across
+- **Light compensation** (Software ADC only - it corrects the *dashboard's* reading, so a
+  lever wired straight to a VESC ADC pin needs none, and only the channels you take from
+  the dashboard are shown): the headlight sags throttle/brake voltage non-linearly across
   the lever range (not by a fixed amount), so this applies an affine correction
   (offset + gain) rather than a flat offset. A guided **calibration wizard** in Setup
   does this automatically - one button per channel, two held lever positions:

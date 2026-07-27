@@ -856,6 +856,12 @@
             ; value the dashboard put there
             (if (and d1 (not software-adc)) (app-adc-override 0 0))
             (if (and d2 (not software-adc2)) (app-adc-override 1 0))
+            ; the calibration sequencer only runs on dashboard lever frames, so a
+            ; run left open when both channels are switched off would never finish
+            (if (and (not software-adc) (not software-adc2) (not (eq calib-stage 'idle))) {
+                (set 'calib-stage 'idle)
+                (send-data "calib-aborted")
+            })
         }
     )
 )

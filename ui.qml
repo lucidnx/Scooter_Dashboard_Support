@@ -1189,74 +1189,94 @@ Item {
                                 CheckBox { id: softwareAdc2; text: "Brake"; spacing: 4 }
                             }
 
-                            Label { text: "Light Compensation"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 24 }
-
-                            Label {
+                            ColumnLayout {
                                 Layout.fillWidth: true
-                                wrapMode: Text.WordWrap
-                                opacity: 0.7
-                                text: "The headlight sags throttle/brake voltage non-linearly across the lever range. Calibrate walks through 4 steps automatically (get ready, then hold), or edit the values directly."
-                            }
+                                spacing: 4
+                                visible: softwareAdc.checked || softwareAdc2.checked
 
-                            RowLayout {
-                                Layout.fillWidth: true
-                                Label { text: "Throttle Offset (V)"; Layout.fillWidth: true }
-                                TextField { id: lightOffThr; text: "0.000"; Layout.preferredWidth: 90; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampOffsetV(lightOffThr) }
-                            }
+                                Label { text: "Light Compensation"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 24 }
 
-                            RowLayout {
-                                Layout.fillWidth: true
-                                Label { text: "Throttle Gain (k)"; Layout.fillWidth: true }
-                                TextField { id: lightGainThr; text: "1.000"; Layout.preferredWidth: 90; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampGain(lightGainThr) }
-                            }
+                                Label {
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.WordWrap
+                                    opacity: 0.7
+                                    text: "The headlight sags throttle/brake voltage non-linearly across the lever range. Calibrate walks through 4 steps automatically (get ready, then hold), or edit the values directly."
+                                }
 
-                            Button {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 56
-                                Layout.topMargin: 4
-                                // stays enabled while THIS channel runs (so its own color
-                                // shows, not the greyed-out disabled palette) - only the
-                                // other channel's button locks out; re-tapping is a no-op
-                                enabled: root.calibRunning === "" || root.calibRunning === "thr"
-                                text: root.calibButtonText("thr")
-                                Material.foreground: root.calibRunning === "thr" ? "#d0faff" : "#ffffff"
-                                onClicked: root.calibStartChannel("thr")
-                            }
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 4
+                                    visible: softwareAdc.checked
 
-                            Label {
-                                Layout.fillWidth: true
-                                wrapMode: Text.WordWrap
-                                font.pointSize: Qt.application.font.pointSize > 0 ? Qt.application.font.pointSize - 1 : 10
-                                text: root.calibStatusThr
-                            }
 
-                            RowLayout {
-                                Layout.fillWidth: true
-                                Label { text: "Brake Offset (V)"; Layout.fillWidth: true }
-                                TextField { id: lightOffBrk; text: "0.000"; Layout.preferredWidth: 90; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampOffsetV(lightOffBrk) }
-                            }
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        Label { text: "Throttle Offset (V)"; Layout.fillWidth: true }
+                                        TextField { id: lightOffThr; text: "0.000"; Layout.preferredWidth: 90; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampOffsetV(lightOffThr) }
+                                    }
 
-                            RowLayout {
-                                Layout.fillWidth: true
-                                Label { text: "Brake Gain (k)"; Layout.fillWidth: true }
-                                TextField { id: lightGainBrk; text: "1.000"; Layout.preferredWidth: 90; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampGain(lightGainBrk) }
-                            }
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        Label { text: "Throttle Gain (k)"; Layout.fillWidth: true }
+                                        TextField { id: lightGainThr; text: "1.000"; Layout.preferredWidth: 90; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampGain(lightGainThr) }
+                                    }
 
-                            Button {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 56
-                                Layout.topMargin: 4
-                                enabled: root.calibRunning === "" || root.calibRunning === "brk"
-                                text: root.calibButtonText("brk")
-                                Material.foreground: root.calibRunning === "brk" ? "#d0faff" : "#ffffff"
-                                onClicked: root.calibStartChannel("brk")
-                            }
+                                    Button {
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: 56
+                                        Layout.topMargin: 4
+                                        // stays enabled while THIS channel runs (so its own color
+                                        // shows, not the greyed-out disabled palette) - only the
+                                        // other channel's button locks out; re-tapping is a no-op
+                                        enabled: root.calibRunning === "" || root.calibRunning === "thr"
+                                        text: root.calibButtonText("thr")
+                                        Material.foreground: root.calibRunning === "thr" ? "#d0faff" : "#ffffff"
+                                        onClicked: root.calibStartChannel("thr")
+                                    }
 
-                            Label {
-                                Layout.fillWidth: true
-                                wrapMode: Text.WordWrap
-                                font.pointSize: Qt.application.font.pointSize > 0 ? Qt.application.font.pointSize - 1 : 10
-                                text: root.calibStatusBrk
+                                    Label {
+                                        Layout.fillWidth: true
+                                        wrapMode: Text.WordWrap
+                                        font.pointSize: Qt.application.font.pointSize > 0 ? Qt.application.font.pointSize - 1 : 10
+                                        text: root.calibStatusThr
+                                    }
+
+                                }
+
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 4
+                                    visible: softwareAdc2.checked
+
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        Label { text: "Brake Offset (V)"; Layout.fillWidth: true }
+                                        TextField { id: lightOffBrk; text: "0.000"; Layout.preferredWidth: 90; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampOffsetV(lightOffBrk) }
+                                    }
+
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        Label { text: "Brake Gain (k)"; Layout.fillWidth: true }
+                                        TextField { id: lightGainBrk; text: "1.000"; Layout.preferredWidth: 90; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampGain(lightGainBrk) }
+                                    }
+
+                                    Button {
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: 56
+                                        Layout.topMargin: 4
+                                        enabled: root.calibRunning === "" || root.calibRunning === "brk"
+                                        text: root.calibButtonText("brk")
+                                        Material.foreground: root.calibRunning === "brk" ? "#d0faff" : "#ffffff"
+                                        onClicked: root.calibStartChannel("brk")
+                                    }
+
+                                    Label {
+                                        Layout.fillWidth: true
+                                        wrapMode: Text.WordWrap
+                                        font.pointSize: Qt.application.font.pointSize > 0 ? Qt.application.font.pointSize - 1 : 10
+                                        text: root.calibStatusBrk
+                                    }
+                                }
                             }
 
                             Label { text: "Gestures"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 24 }
@@ -1363,14 +1383,6 @@ Item {
                                 Layout.fillWidth: true
                             }
 
-                            Label {
-                                visible: dashPowerOut.currentIndex === 2 && !softwareAdc2.checked
-                                text: "WARNING! No motor braking and no brake light!"
-                                color: "#ff5252"
-                                font.bold: true
-                                wrapMode: Text.WordWrap
-                                Layout.fillWidth: true
-                            }
 
                             Label {
                                 text: "MOSFET on the servo/PPM pin, PWM 200 Hz. See the wiring diagram in the README."
