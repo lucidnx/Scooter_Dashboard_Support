@@ -293,12 +293,6 @@ Setup and use the app when parked. The full analysis is in
 
 ## Wiring
 
-<span style="color:rgb(184, 49, 47);">Red </span>to 5V \
-<span style="color:rgb(209, 213, 216);">Black </span>to GND \
-<span style="color:rgb(250, 197, 28);">Yellow </span>to TX (UART-HDX) \
-<span style="color:rgb(97, 189, 109);">Green </span>to RX (Button) \
-1k Ohm Resistor from <span style="color:rgb(251, 160, 38);">3.3V</span> to <span style="color:rgb(97, 189, 109);">RX (Button)</span>
-
 ![Dashboard connection](screenshots/wiring-dash.svg)
 
 ### Parts for the dash connection
