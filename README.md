@@ -72,7 +72,7 @@ migrated automatically. To go back to defaults, use the **Reset** button in the 
 - **Throttle response improved for everyone**, app or no app. The dashboard sends lever
   data in three different frame types and the package only read one of them; it now reads
   all three, which roughly halves the worst-case delay before a throttle change is applied.
-- **Phone app support can be turned off** in General, for the sharpest possible throttle.
+- **App support can be turned off** in Setup, for the sharpest possible throttle.
 - **App pairing PIN** - set your own 6-digit code in Setup.
 - **Bus logging** in Setup -> Debug prints every frame the dashboard and phone apps send
   to VESC Dev Tools -> Lisp. It applies immediately, is never saved, and always stops at
@@ -220,8 +220,9 @@ UART the package already listens on, so no extra hardware or wiring is needed.
   populated - pack voltage and current from the VESC (CAN-combined), and per-cell voltage
   derived from pack voltage ÷ series count when no VESC BMS is present
 - **App pairing PIN**: set your own 6-digit code in Setup
-- **Phone app support** can be turned off in General. Leave it on to use the app; turn it
-  off for the sharpest possible throttle response - see the note below
+- **App support** can be turned off in **Setup -> Miscellaneous** (the switch is named
+  after your dashboard's brand). Leave it on to use the app; turn it off for the sharpest
+  possible throttle response - see the note below
 - Reports firmware version **7.0.0** and a serial number of `VESC` + ten digits derived
   from your controller's UUID, so app authors can detect a VESC and adapt (e.g. hide
   unsupported functions) - see [notes for the NineDash developer](docs/ninedash.md)
@@ -249,8 +250,8 @@ much data it asks for. Measured on a G30 while riding:
 
 Apps that pace their requests at least 100 ms apart cost nothing at all - throttle feels
 exactly as it does with no app. NineDash currently polls every dash cycle and that is felt
-as occasional throttle and brake lag. If it affects you, turn **Phone app support** off in
-General and use the app when parked. The full analysis is in
+as occasional throttle and brake lag. If it affects you, turn app support off in
+Setup and use the app when parked. The full analysis is in
 [notes for the NineDash developer](docs/ninedash.md).
 
 ### Comfort
@@ -292,13 +293,32 @@ General and use the app when parked. The full analysis is in
 
 ## Wiring
 
-<span style="color:rgb(184, 49, 47);">Red </span>to 5V \
-<span style="color:rgb(209, 213, 216);">Black </span>to GND \
-<span style="color:rgb(250, 197, 28);">Yellow </span>to TX (UART-HDX) \
-<span style="color:rgb(97, 189, 109);">Green </span>to RX (Button) \
-1k Ohm Resistor from <span style="color:rgb(251, 160, 38);">3.3V</span> to <span style="color:rgb(97, 189, 109);">RX (Button)</span>
+![Dashboard connection](screenshots/wiring-dash.svg)
 
-![image](screenshots/wiring.png)
+| Dashboard wire | VESC pin |
+|---|---|
+| **Red** | 5V |
+| **Black** | GND |
+| **Yellow** | TX - UART half-duplex |
+| **Green** | RX - this is the dashboard button |
+
+The **1 kΩ** resistor bridges **3.3V to the green button wire**. It does not go
+anywhere near the dashboard; it sits at the VESC end between those two pins.
+
+### Parts for the dash connection
+
+| Qty | Part |
+|---|---|
+| 1 | Capacitor 220 µF, 25 V, low ESR, 105 °C, electrolytic, THT, ±20% |
+| 1 | Capacitor 1 µF, 50 V, X7R, ceramic, THT, ±10% |
+| 1 | Resistor 1 kΩ, 0.25 W, THT |
+| 1 | Clip-on ferrite, 5 mm inner diameter - *optional* |
+
+Both capacitors go **across 5V and GND**, as close to the dashboard as the wiring
+allows - the electrolytic is the reservoir for current spikes, the ceramic
+handles the fast edges. The electrolytic is polarised: its **marked leg is the
+minus and goes to GND**, getting that backwards will destroy it. The ferrite
+clips over the whole bundle anywhere along its length.
 
 > **Check your 5V budget first.** The dashboard is powered from the VESC's 5V
 > output, and if you also add the rear/brake light (and/or a headlight) that all
@@ -320,7 +340,7 @@ Three things must all be set or the light stays dark:
 
 1. **VESC Tool -> App Settings -> General -> `Servo Output` = enabled** (the pin is dead
    without it - see [Required VESC configuration](#required-vesc-configuration))
-2. **Setup tab -> `Rear light output`** - the master switch for the feature
+2. **Setup tab -> `Tail Light Output`** - the master switch for the feature
 3. **Setup tab -> `Always ON Tail light`** - only if you want the tail light lit
    independently of the headlight (otherwise it follows the headlight)
 
@@ -328,7 +348,19 @@ Power the LED strip from a source that can supply it (see the 5V note above) - a
 higher-current light should run from a step-down module off the battery, not the
 VESC 5V:
 
-![taillight](screenshots/taillight.jpg)
+![Rear / brake light](screenshots/wiring-taillight.svg)
+
+**Which leg is which.** Hold the MOSFET with the printed face towards you and the
+legs pointing down:
+
+| Leg | | Connects to |
+|---|---|---|
+| 1 - left | Gate | servo output, plus the 10 kΩ down to GND |
+| 2 - middle | Drain | the tail light's negative wire |
+| 3 - right | Source | GND |
+
+The metal tab is internally connected to leg 2 (Drain), so treat it as live and
+don't let it touch anything.
 
 ## Tested Hardware
 
