@@ -1,4 +1,7 @@
 VESC_TOOL ?= $(if $(wildcard ./vesc_tool),./vesc_tool,vesc_tool)
+# the build runs from $(BUILD), so a relative path has to be resolved first - a
+# bare command name must be left alone for PATH to find it
+VESC_TOOL_CMD = $(if $(findstring /,$(VESC_TOOL)),$(abspath $(VESC_TOOL)),$(VESC_TOOL))
 
 PKG = vesc_scooter_support.vescpkg
 BUILD = build
@@ -12,7 +15,7 @@ $(PKG): $(SRC) tools/minify_lisp.py
 	@mkdir -p $(BUILD)
 	python3 tools/minify_lisp.py scooter_support.lisp $(BUILD)/scooter_support.lisp
 	@cp pkgdesc.qml ui.qml README.md version $(BUILD)/
-	cd $(BUILD) && $(abspath $(VESC_TOOL)) --buildPkgFromDesc pkgdesc.qml \
+	cd $(BUILD) && $(VESC_TOOL_CMD) --buildPkgFromDesc pkgdesc.qml \
 		--testPkgDesc 'vesc:maxim 120' --testPkgDesc 'vesc:pronto'
 	@mv $(BUILD)/$(PKG) $(PKG)
 
