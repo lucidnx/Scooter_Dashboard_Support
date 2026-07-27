@@ -209,6 +209,8 @@
 ; So an app answer rides along inside the next dash answer: framing is by header
 ; and length, not by transmission, and this halves the number of writes.
 (def app-pend false)
+(def dash-power-out false) ; ADC2 drives the dashboard supply
+(def dash-power-held false) ; true once the pin is ours
 (def sniff-enable false) ; bus logging, deliberately not saved - never survives a reboot
 (def pend-dev 0)
 (def pend-src 0)
@@ -276,7 +278,7 @@
 
 @const-start
 
-(def settings-version 401i32)
+(def settings-version 402i32)
 
 ; Persistent settings: (label . (eeprom-offset type))
 (def eeprom-addrs '(
@@ -366,6 +368,7 @@
     (light-gain-brk        . (81 f))
     (app-pin               . (84 i))
     (app-enable            . (85 b))
+    (dash-power-out        . (86 b))
 ))
 
 (def last-button-state false)
@@ -408,6 +411,10 @@
 ; (raw wasn't shifted by a constant volts - it scaled non-linearly with lever
 ; position). A flat offset from v308 would be WRONG under the new formula
 ; (sign-inverted at points), so it's reset here - recalibrate with Sample.
+(defun write-v402-defaults () ; settings added in v402
+    (write-setting 'dash-power-out false)
+)
+
 (defun write-v401-defaults () ; settings added in v401
     (write-setting 'app-enable true)
 )
@@ -502,7 +509,9 @@
         (write-v309-defaults)
         (write-v310-defaults)
         (write-v400-defaults)
-                    (write-v401-defaults)
+        (write-v401-defaults)
+        (write-v402-defaults)
+                    (write-v402-defaults)
         (write-setting 'secret-presses 1)
         (write-setting 'secret-combo 0)
         (write-setting 'secret-requires-lock false)
@@ -577,6 +586,7 @@
                     (write-v310-defaults)
                     (write-v400-defaults)
                     (write-v401-defaults)
+                    (write-v402-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 302i32) {
@@ -590,6 +600,7 @@
                     (write-v310-defaults)
                     (write-v400-defaults)
                     (write-v401-defaults)
+                    (write-v402-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 303i32) {
@@ -602,6 +613,7 @@
                     (write-v310-defaults)
                     (write-v400-defaults)
                     (write-v401-defaults)
+                    (write-v402-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 304i32) {
@@ -613,6 +625,7 @@
                     (write-v310-defaults)
                     (write-v400-defaults)
                     (write-v401-defaults)
+                    (write-v402-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 305i32) {
@@ -623,6 +636,7 @@
                     (write-v310-defaults)
                     (write-v400-defaults)
                     (write-v401-defaults)
+                    (write-v402-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 306i32) {
@@ -632,6 +646,7 @@
                     (write-v310-defaults)
                     (write-v400-defaults)
                     (write-v401-defaults)
+                    (write-v402-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 307i32) {
@@ -640,6 +655,7 @@
                     (write-v310-defaults)
                     (write-v400-defaults)
                     (write-v401-defaults)
+                    (write-v402-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 308i32) {
@@ -647,21 +663,29 @@
                     (write-v310-defaults)
                     (write-v400-defaults)
                     (write-v401-defaults)
+                    (write-v402-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 309i32) {
                     (write-v310-defaults)
                     (write-v400-defaults)
                     (write-v401-defaults)
+                    (write-v402-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 310i32) {
                     (write-v400-defaults)
                     (write-v401-defaults)
+                    (write-v402-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 ((eq ver 400i32) {
                     (write-v401-defaults)
+                    (write-v402-defaults)
+                    (write-setting 'ver-code settings-version)
+                })
+                ((eq ver 401i32) {
+                    (write-v402-defaults)
                     (write-setting 'ver-code settings-version)
                 })
                 (t (restore-defaults))
@@ -732,6 +756,7 @@
         (set 'boot-mode (read-setting 'boot-mode))
         (set 'use-mph (read-setting 'use-mph))
         (set 'rear-light-enable (read-setting 'rear-light-enable))
+        (set 'dash-power-out (read-setting 'dash-power-out))
         (set 'auto-taillight (read-setting 'auto-taillight))
         (set 'brake-light-mode (read-setting 'brake-light-mode))
         (set 'eco-om (read-setting 'eco-om))
@@ -767,11 +792,32 @@
     )
 )
 
+; ADC2 switches the dashboard's supply: high while the scooter is on, low when
+; it is off. Only ever driven with software ADC on, where the ADC app replaces
+; both pin readings with ours - without it ADC2 is the brake input, and a driven
+; pin would read as brake. The level is written before the pin becomes an output
+; so claiming it cannot glitch the supply, and the mode is only touched when the
+; setting changes, never on an ordinary save.
+(defun apply-dash-power ()
+    (if (and dash-power-out software-adc)
+        (if (not dash-power-held) {
+            (gpio-write 'pin-adc2 (if off 0 1))
+            (gpio-configure 'pin-adc2 'pin-mode-out)
+            (set 'dash-power-held true)
+        })
+        (if dash-power-held {
+            (gpio-configure 'pin-adc2 'pin-mode-analog)
+            (set 'dash-power-held false)
+        })
+    )
+)
+
 (defun apply-runtime-settings ()
     {
         (load-settings)
         (if (!= model 2) { ; slave must not push conf to the master
             (apply-software-adc)
+            (apply-dash-power)
             (apply-mode)
             (if rear-light-enable
                 (if (not pwm-started) {
@@ -883,8 +929,9 @@
     }
 )
 
-(defun save-misc-settings (auto-light btn-speed-kmh mph bms secret-exit pin)
+(defun save-misc-settings (auto-light btn-speed-kmh mph bms secret-exit pin dash-power)
     {
+        (write-setting 'dash-power-out dash-power)
         (write-setting 'light-on-boot auto-light)
         (write-setting 'button-speed-kmh btn-speed-kmh)
         (write-setting 'use-mph mph)
@@ -1088,7 +1135,8 @@
             (str-from-n (read-setting 'light-gain-thr) "%.3f ")
             (str-from-n (read-setting 'light-offset-brk) "%.3f ")
             (str-from-n (read-setting 'light-gain-brk) "%.3f ")
-            (str-from-n (read-setting 'app-pin) "%d")
+            (str-from-n (read-setting 'app-pin) "%d ")
+            (if (read-setting 'dash-power-out) "true" "false")
         ))
         (sleep 0.05)
         (send-data (str-merge
@@ -1602,6 +1650,7 @@
         (trap (app-run-todo))
         (trap (app-cache-update))
         (trap (handle-taillight))
+        (if dash-power-held (gpio-write 'pin-adc2 (if off 0 1)))
         (handle-lock (abs current-speed))
             }
 )

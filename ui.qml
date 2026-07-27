@@ -415,6 +415,7 @@ Item {
             + " " + boolAtom(bmsSoc)
             + " " + boolAtom(secretExitOnLock)
             + " " + (Number.parseInt(appPin.text) || 0)
+            + " " + boolAtom(dashPowerOut)
             + ")")
 
         queueCode("(save-light-offsets "
@@ -542,6 +543,7 @@ Item {
             setOffsetV(lightOffBrk, parts[8])
             setGain(lightGainBrk, parts[9])
             appPin.text = ("00000" + (Number.parseInt(parts[10]) || 0)).slice(-6)
+            dashPowerOut.checked = parseBoolToken(parts[11])
         } else if (parts[0] === "rear") {
             rearLightEnable.checked = parseBoolToken(parts[1])
             autoTaillight.checked = parseBoolToken(parts[2])
