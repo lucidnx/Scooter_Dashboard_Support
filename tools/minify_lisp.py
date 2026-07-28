@@ -16,7 +16,7 @@ streams, so a bug here fails the build instead of reaching the scooter.
 import sys
 
 
-TOKEN_WARN = 16400
+TOKEN_WARN = 16200
 
 
 def tokenize(src):
@@ -134,10 +134,12 @@ def main():
     # 16312 tokens boots reliably, 16888 leaves image-save no room, so the script
     # is reparsed on every boot and collides with the previous one.
     n = len(tokenize(dst))
-    print(f"const-heap tokens: {n} (measured ceiling is between 16312 and 16888)")
+    print(f"const-heap tokens: {n} of about 16450 "
+          f"({n * 6.694 / 1024:.0f} KB of the 128 KB const heap, image takes 20)")
     if n > TOKEN_WARN:
         print(f"WARNING: {n} tokens is close to the limit - image-save may fail "
-              f"and the script will not start after a reboot", file=sys.stderr)
+              f"and the script will not start after a reboot. Check :info in the "
+              f"VESC Tool Lisp console for the exact free bytes", file=sys.stderr)
 
 
 if __name__ == "__main__":
