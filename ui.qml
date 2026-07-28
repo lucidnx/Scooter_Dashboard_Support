@@ -969,14 +969,14 @@ Item {
 
                         RowLayout {
                             Layout.fillWidth: true
-                            Label { text: "Always ON Tail light"; Layout.fillWidth: true }
-                            CheckBox { id: autoTaillight; text: "Enabled"; spacing: 4 }
+                            Label { text: "Always ON Tail light"; Layout.fillWidth: true; enabled: rearLightEnable.checked }
+                            CheckBox { id: autoTaillight; text: "Enabled"; spacing: 4; enabled: rearLightEnable.checked }
                         }
 
                         RowLayout {
                             Layout.fillWidth: true
-                            Label { text: "Brake light"; Layout.fillWidth: true }
-                            ComboBox { id: brakeLightMode; Layout.preferredWidth: 100; model: ["On", "Blink", "Off"] }
+                            Label { text: "Brake light"; Layout.fillWidth: true; enabled: rearLightEnable.checked }
+                            ComboBox { id: brakeLightMode; Layout.preferredWidth: 100; model: ["On", "Blink", "Off"]; enabled: rearLightEnable.checked }
                         }
 
                         RowLayout {
@@ -1352,9 +1352,16 @@ Item {
                                 CheckBox { id: rearLightEnable; text: "Enabled"; spacing: 4 }
                             }
 
+                            Label {
+                                text: "MOSFET on the servo/PPM pin, PWM 200 Hz. Off leaves the pin alone entirely, so it stays free for something else. See the wiring diagram in the README."
+                                opacity: 0.6
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
+
                             RowLayout {
                                 Layout.fillWidth: true
-                                Label { text: "Dashboard Power Output"; Layout.fillWidth: true }
+                                Label { text: "Dashboard power Control"; Layout.fillWidth: true }
                                 ComboBox { id: dashPowerOut; Layout.preferredWidth: 100; model: ["Off", "ADC1", "ADC2"] }
                             }
 
@@ -1379,14 +1386,6 @@ Item {
                                 text: "WARNING! Cruise control cannot be stopped when braking!"
                                 color: "#ff5252"
                                 font.bold: true
-                                wrapMode: Text.WordWrap
-                                Layout.fillWidth: true
-                            }
-
-
-                            Label {
-                                text: "MOSFET on the servo/PPM pin, PWM 200 Hz. See the wiring diagram in the README."
-                                opacity: 0.6
                                 wrapMode: Text.WordWrap
                                 Layout.fillWidth: true
                             }

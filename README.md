@@ -188,7 +188,8 @@ Lock, mode switching, headlight and secret mode activation are all **fully remap
 - Hold a steady speed with the throttle for the configured delay (default 5 s, deviation
   window configurable); release the throttle and the scooter keeps that speed
 - **Min / max activation speed**: cruise only arms inside this speed window, so it can't
-  engage while crawling or above a speed you don't want it at (defaults 5 - 100 km/h)
+  engage while crawling or above a speed you don't want it at (defaults 5 - 100 km/h).
+  It also never arms below the motor start speed, where the output is disabled anyway
 - Built on the VESC's native cruise function - the package only presses and releases the
   VESC's own cruise button and never runs a speed loop of its own
 - **Cancels on any throttle or brake press** past that channel's ADC start voltage, and
@@ -276,7 +277,7 @@ Setup and use the app when parked. The full analysis is in
   headlight (or always on), full or blinking brake light while braking. As on a stock
   scooter the tail light is lit whenever the headlight is on, so the always-on option -
   and the app's *Back light* switch - only make a visible difference with the headlight off
-- **Dashboard power output**: pick **ADC1** or **ADC2** in Setup and that pin switches the
+- **Dashboard power control**: pick **ADC1** or **ADC2** in Setup and that pin switches the
   dashboard's supply - 3.3 V while the scooter is on, 0 V when you switch it off with the
   button or from the app. Needs a step-down whose enable pin it drives and a 1 kOhm
   pulldown. Off by default. Because the pin stays low until the script is running, the
@@ -357,7 +358,9 @@ Three things must all be set or the light stays dark:
 
 1. **VESC Tool -> App Settings -> General -> `Servo Output` = enabled** (the pin is dead
    without it - see [Required VESC configuration](#required-vesc-configuration))
-2. **Setup tab -> `Tail Light Output`** - the master switch for the feature
+2. **Setup tab -> `Tail Light Output`** - the master switch. With it off the servo/PPM
+   pin is never touched at all, so it stays free for something else, and the tail light
+   options grey out
 3. **Setup tab -> `Always ON Tail light`** - only if you want the tail light lit
    independently of the headlight (otherwise it follows the headlight)
 

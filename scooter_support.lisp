@@ -1456,7 +1456,10 @@
                         (set 'cruise-ref speed-kmh)
                         (set 'cruise-since (systime))
                     }
-                    (if (and (not cruise-blocked) (>= speed-kmh cruise-min-speed) (<= speed-kmh cruise-max-speed))
+                    ; also never below the kick-start speed - output is disabled
+                    ; down there, so cruise would arm against a dead motor
+                    (if (and (not cruise-blocked) (>= speed-kmh min-speed)
+                             (>= speed-kmh cruise-min-speed) (<= speed-kmh cruise-max-speed))
                         {
                             (if (> (abs (- speed-kmh cruise-ref)) cruise-deviation) {
                                 (set 'cruise-ref speed-kmh)
