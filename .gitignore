@@ -2,6 +2,7 @@ vesc_scooter_support.vescpkg
 vesc_tool
 tools/*
 !tools/minify_lisp.py
+!tools/check_qml.py
 .DS_Store
 # diagnostic captures and tools, not part of the package
 *.log

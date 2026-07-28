@@ -1449,7 +1449,7 @@ Item {
                                 Label { text: "Volume (V)"; Layout.fillWidth: true }
                                 TextField { id: alarmVoltage; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
                             }
-
+                        }
                     }
                 }
             }
