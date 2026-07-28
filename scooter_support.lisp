@@ -601,90 +601,35 @@
             )
         )
 
-        (set 'software-adc (read-setting 'software-adc))
-        (set 'software-adc2 (read-setting 'software-adc2))
-        (set 'temp-warning-motor (read-setting 'temp-warning-motor))
-        (set 'temp-warning-fet (read-setting 'temp-warning-fet))
-        (set 'show-batt-in-idle (read-setting 'show-batt-in-idle))
-        (set 'show-batt-idle-secret (read-setting 'show-batt-idle-secret))
+        ; Every setting whose runtime variable carries the same name. Spelling these
+        ; out one by one cost about six hundred cells of the const heap.
+        (loopforeach n '(
+            software-adc software-adc2 temp-warning-motor temp-warning-fet
+            show-batt-in-idle show-batt-idle-secret alarm-tone alarm-speed-threshold
+            alarm-gyro-threshold alarm-voltage eco-current eco-watts eco-fw
+            drive-current drive-watts drive-fw sport-current sport-watts sport-fw
+            secret-enabled secret-eco-current secret-eco-watts secret-eco-fw
+            secret-drive-current secret-drive-watts secret-drive-fw
+            secret-sport-current secret-sport-watts secret-sport-fw apply-speed
+            apply-current apply-watts apply-fw secret-apply-fw secret-apply-speed
+            secret-apply-current secret-apply-watts secret-presses secret-combo
+            secret-requires-lock secret-exit-on-lock light-offset-thr light-gain-thr
+            light-offset-brk light-gain-brk lock-presses lock-combo mode-presses
+            mode-combo mode-requires-lock light-presses light-combo
+            light-requires-lock light-on-boot boot-mode use-mph rear-light-enable
+            power-pin auto-taillight brake-light-mode eco-om drive-om sport-om
+            secret-eco-om secret-drive-om secret-sport-om apply-om secret-apply-om
+            bms-soc-enable cruise-enabled cruise-delay cruise-deviation
+            cruise-min-speed cruise-max-speed app-pin app-enable
+        ) (set n (read-setting n)))
         (set 'min-speed (read-setting 'min-speed-kmh))
-        (set 'alarm-tone (read-setting 'alarm-tone))
-        (set 'alarm-speed-threshold (read-setting 'alarm-speed-threshold))
-        (set 'alarm-gyro-threshold (read-setting 'alarm-gyro-threshold))
-        (set 'alarm-voltage (read-setting 'alarm-voltage))
         (set 'eco-speed (/ (read-setting 'eco-speed-kmh) 3.6))
-        (set 'eco-current (read-setting 'eco-current))
-        (set 'eco-watts (read-setting 'eco-watts))
-        (set 'eco-fw (read-setting 'eco-fw))
         (set 'drive-speed (/ (read-setting 'drive-speed-kmh) 3.6))
-        (set 'drive-current (read-setting 'drive-current))
-        (set 'drive-watts (read-setting 'drive-watts))
-        (set 'drive-fw (read-setting 'drive-fw))
         (set 'sport-speed (/ (read-setting 'sport-speed-kmh) 3.6))
-        (set 'sport-current (read-setting 'sport-current))
-        (set 'sport-watts (read-setting 'sport-watts))
-        (set 'sport-fw (read-setting 'sport-fw))
-        (set 'secret-enabled (read-setting 'secret-enabled))
         (set 'secret-eco-speed (/ (read-setting 'secret-eco-speed-kmh) 3.6))
-        (set 'secret-eco-current (read-setting 'secret-eco-current))
-        (set 'secret-eco-watts (read-setting 'secret-eco-watts))
-        (set 'secret-eco-fw (read-setting 'secret-eco-fw))
         (set 'secret-drive-speed (/ (read-setting 'secret-drive-speed-kmh) 3.6))
-        (set 'secret-drive-current (read-setting 'secret-drive-current))
-        (set 'secret-drive-watts (read-setting 'secret-drive-watts))
-        (set 'secret-drive-fw (read-setting 'secret-drive-fw))
         (set 'secret-sport-speed (/ (read-setting 'secret-sport-speed-kmh) 3.6))
-        (set 'secret-sport-current (read-setting 'secret-sport-current))
-        (set 'secret-sport-watts (read-setting 'secret-sport-watts))
-        (set 'secret-sport-fw (read-setting 'secret-sport-fw))
-        (set 'apply-speed (read-setting 'apply-speed))
-        (set 'apply-current (read-setting 'apply-current))
-        (set 'apply-watts (read-setting 'apply-watts))
-        (set 'apply-fw (read-setting 'apply-fw))
-        (set 'secret-apply-fw (read-setting 'secret-apply-fw))
-        (set 'secret-apply-speed (read-setting 'secret-apply-speed))
-        (set 'secret-apply-current (read-setting 'secret-apply-current))
-        (set 'secret-apply-watts (read-setting 'secret-apply-watts))
-        (set 'secret-presses (read-setting 'secret-presses))
-        (set 'secret-combo (read-setting 'secret-combo))
-        (set 'secret-requires-lock (read-setting 'secret-requires-lock))
-        (set 'secret-exit-on-lock (read-setting 'secret-exit-on-lock))
-        (set 'light-offset-thr (read-setting 'light-offset-thr))
-        (set 'light-gain-thr (read-setting 'light-gain-thr))
-        (set 'light-offset-brk (read-setting 'light-offset-brk))
-        (set 'light-gain-brk (read-setting 'light-gain-brk))
-        (set 'lock-presses (read-setting 'lock-presses))
-        (set 'lock-combo (read-setting 'lock-combo))
-        (set 'mode-presses (read-setting 'mode-presses))
-        (set 'mode-combo (read-setting 'mode-combo))
-        (set 'mode-requires-lock (read-setting 'mode-requires-lock))
-        (set 'light-presses (read-setting 'light-presses))
-        (set 'light-combo (read-setting 'light-combo))
-        (set 'light-requires-lock (read-setting 'light-requires-lock))
-        (set 'light-on-boot (read-setting 'light-on-boot))
         (set 'button-safety-speed (/ (read-setting 'button-speed-kmh) 3.6))
-        (set 'boot-mode (read-setting 'boot-mode))
-        (set 'use-mph (read-setting 'use-mph))
-        (set 'rear-light-enable (read-setting 'rear-light-enable))
-        (set 'power-pin (read-setting 'power-pin))
-        (set 'auto-taillight (read-setting 'auto-taillight))
-        (set 'brake-light-mode (read-setting 'brake-light-mode))
-        (set 'eco-om (read-setting 'eco-om))
-        (set 'drive-om (read-setting 'drive-om))
-        (set 'sport-om (read-setting 'sport-om))
-        (set 'secret-eco-om (read-setting 'secret-eco-om))
-        (set 'secret-drive-om (read-setting 'secret-drive-om))
-        (set 'secret-sport-om (read-setting 'secret-sport-om))
-        (set 'apply-om (read-setting 'apply-om))
-        (set 'secret-apply-om (read-setting 'secret-apply-om))
-        (set 'bms-soc-enable (read-setting 'bms-soc-enable))
-        (set 'cruise-enabled (read-setting 'cruise-enabled))
-        (set 'cruise-delay (read-setting 'cruise-delay))
-        (set 'cruise-deviation (read-setting 'cruise-deviation))
-        (set 'cruise-min-speed (read-setting 'cruise-min-speed))
-        (set 'cruise-max-speed (read-setting 'cruise-max-speed))
-        (set 'app-pin (read-setting 'app-pin))
-        (set 'app-enable (read-setting 'app-enable))
 
         (var m (read-setting 'model))
         (if (not (valid-model m)) {
@@ -1051,137 +996,142 @@
         )
 })
 
+; Reading a setting straight into a state line is the same two shapes ninety
+; times over, and each spelled-out copy costs const heap.
+(defun setting-bool (n) (if (read-setting n) "true " "false "))
+(defun setting-num (n f) (str-from-n (read-setting n) f))
+
 (defun send-settings ()
     {
         (send-data (str-merge
             "model "
-            (str-from-n (read-setting 'model) "%d")
+            (setting-num \'model "%d")
         ))
         (sleep 0.05)
         ; misc goes early so the UI knows the km/h vs mph unit before it
         ; renders the speed fields that follow
         (send-data (str-merge
             "misc "
-            (if (read-setting 'light-on-boot) "true " "false ")
-            (str-from-n (read-setting 'button-speed-kmh) "%.1f ")
-            (if (read-setting 'use-mph) "true " "false ")
-            (if (read-setting 'bms-soc-enable) "true " "false ")
-            (if (read-setting 'secret-exit-on-lock) "true " "false ")
-            (str-from-n (read-setting 'light-offset-thr) "%.3f ")
-            (str-from-n (read-setting 'light-gain-thr) "%.3f ")
-            (str-from-n (read-setting 'light-offset-brk) "%.3f ")
-            (str-from-n (read-setting 'light-gain-brk) "%.3f ")
-            (str-from-n (read-setting 'app-pin) "%d ")
-            (str-from-n (read-setting 'power-pin) "%d")
+            (setting-bool 'light-on-boot)
+            (setting-num \'button-speed-kmh "%.1f ")
+            (setting-bool 'use-mph)
+            (setting-bool 'bms-soc-enable)
+            (setting-bool 'secret-exit-on-lock)
+            (setting-num \'light-offset-thr "%.3f ")
+            (setting-num \'light-gain-thr "%.3f ")
+            (setting-num \'light-offset-brk "%.3f ")
+            (setting-num \'light-gain-brk "%.3f ")
+            (setting-num \'app-pin "%d ")
+            (setting-num \'power-pin "%d")
         ))
         (sleep 0.05)
         (send-data (str-merge
             "general "
-            (if (read-setting 'software-adc) "true " "false ")
-            (if (read-setting 'software-adc2) "true " "false ")
-            (if (read-setting 'show-batt-in-idle) "true " "false ")
-            (if (read-setting 'show-batt-idle-secret) "true " "false ")
-            (str-from-n (read-setting 'min-speed-kmh) "%.1f ")
+            (setting-bool 'software-adc)
+            (setting-bool 'software-adc2)
+            (setting-bool 'show-batt-in-idle)
+            (setting-bool 'show-batt-idle-secret)
+            (setting-num \'min-speed-kmh "%.1f ")
             (if (read-setting 'app-enable) "true" "false")
         ))
         (sleep 0.05)
         (send-data (str-merge
             "temps "
-            (str-from-n (read-setting 'temp-warning-motor) "%.1f ")
-            (str-from-n (read-setting 'temp-warning-fet) "%.1f")
+            (setting-num \'temp-warning-motor "%.1f ")
+            (setting-num \'temp-warning-fet "%.1f")
         ))
         (sleep 0.05)
         (send-data (str-merge
             "modes "
-            (str-from-n (read-setting 'eco-speed-kmh) "%.1f ")
-            (str-from-n (read-setting 'eco-current) "%.2f ")
-            (str-from-n (read-setting 'eco-watts) "%.0f ")
-            (str-from-n (read-setting 'eco-fw) "%.1f ")
-            (str-from-n (read-setting 'drive-speed-kmh) "%.1f ")
-            (str-from-n (read-setting 'drive-current) "%.2f ")
-            (str-from-n (read-setting 'drive-watts) "%.0f ")
-            (str-from-n (read-setting 'drive-fw) "%.1f ")
-            (str-from-n (read-setting 'sport-speed-kmh) "%.1f ")
-            (str-from-n (read-setting 'sport-current) "%.2f ")
-            (str-from-n (read-setting 'sport-watts) "%.0f ")
-            (str-from-n (read-setting 'sport-fw) "%.1f ")
-            (str-from-n (read-setting 'boot-mode) "%d ")
-            (str-from-n (read-setting 'eco-om) "%.3f ")
-            (str-from-n (read-setting 'drive-om) "%.3f ")
-            (str-from-n (read-setting 'sport-om) "%.3f")
+            (setting-num \'eco-speed-kmh "%.1f ")
+            (setting-num \'eco-current "%.2f ")
+            (setting-num \'eco-watts "%.0f ")
+            (setting-num \'eco-fw "%.1f ")
+            (setting-num \'drive-speed-kmh "%.1f ")
+            (setting-num \'drive-current "%.2f ")
+            (setting-num \'drive-watts "%.0f ")
+            (setting-num \'drive-fw "%.1f ")
+            (setting-num \'sport-speed-kmh "%.1f ")
+            (setting-num \'sport-current "%.2f ")
+            (setting-num \'sport-watts "%.0f ")
+            (setting-num \'sport-fw "%.1f ")
+            (setting-num \'boot-mode "%d ")
+            (setting-num \'eco-om "%.3f ")
+            (setting-num \'drive-om "%.3f ")
+            (setting-num \'sport-om "%.3f")
         ))
         (sleep 0.05)
         (send-data (str-merge
             "secret "
-            (if (read-setting 'secret-enabled) "true " "false ")
-            (str-from-n (read-setting 'secret-eco-speed-kmh) "%.1f ")
-            (str-from-n (read-setting 'secret-eco-current) "%.2f ")
-            (str-from-n (read-setting 'secret-eco-watts) "%.0f ")
-            (str-from-n (read-setting 'secret-eco-fw) "%.1f ")
-            (str-from-n (read-setting 'secret-drive-speed-kmh) "%.1f ")
-            (str-from-n (read-setting 'secret-drive-current) "%.2f ")
-            (str-from-n (read-setting 'secret-drive-watts) "%.0f ")
-            (str-from-n (read-setting 'secret-drive-fw) "%.1f ")
-            (str-from-n (read-setting 'secret-sport-speed-kmh) "%.1f ")
-            (str-from-n (read-setting 'secret-sport-current) "%.2f ")
-            (str-from-n (read-setting 'secret-sport-watts) "%.0f ")
-            (str-from-n (read-setting 'secret-sport-fw) "%.1f ")
-            (str-from-n (read-setting 'secret-eco-om) "%.3f ")
-            (str-from-n (read-setting 'secret-drive-om) "%.3f ")
-            (str-from-n (read-setting 'secret-sport-om) "%.3f")
+            (setting-bool 'secret-enabled)
+            (setting-num \'secret-eco-speed-kmh "%.1f ")
+            (setting-num \'secret-eco-current "%.2f ")
+            (setting-num \'secret-eco-watts "%.0f ")
+            (setting-num \'secret-eco-fw "%.1f ")
+            (setting-num \'secret-drive-speed-kmh "%.1f ")
+            (setting-num \'secret-drive-current "%.2f ")
+            (setting-num \'secret-drive-watts "%.0f ")
+            (setting-num \'secret-drive-fw "%.1f ")
+            (setting-num \'secret-sport-speed-kmh "%.1f ")
+            (setting-num \'secret-sport-current "%.2f ")
+            (setting-num \'secret-sport-watts "%.0f ")
+            (setting-num \'secret-sport-fw "%.1f ")
+            (setting-num \'secret-eco-om "%.3f ")
+            (setting-num \'secret-drive-om "%.3f ")
+            (setting-num \'secret-sport-om "%.3f")
         ))
         (sleep 0.05)
         (send-data (str-merge
             "apply "
-            (if (read-setting 'apply-speed) "true " "false ")
-            (if (read-setting 'apply-current) "true " "false ")
-            (if (read-setting 'apply-watts) "true " "false ")
-            (if (read-setting 'apply-fw) "true " "false ")
-            (if (read-setting 'apply-om) "true " "false ")
-            (if (read-setting 'secret-apply-speed) "true " "false ")
-            (if (read-setting 'secret-apply-current) "true " "false ")
-            (if (read-setting 'secret-apply-watts) "true " "false ")
-            (if (read-setting 'secret-apply-fw) "true " "false ")
+            (setting-bool 'apply-speed)
+            (setting-bool 'apply-current)
+            (setting-bool 'apply-watts)
+            (setting-bool 'apply-fw)
+            (setting-bool 'apply-om)
+            (setting-bool 'secret-apply-speed)
+            (setting-bool 'secret-apply-current)
+            (setting-bool 'secret-apply-watts)
+            (setting-bool 'secret-apply-fw)
             (if (read-setting 'secret-apply-om) "true" "false")
         ))
         (sleep 0.05)
         (send-data (str-merge
             "gesture "
-            (str-from-n (read-setting 'secret-presses) "%d ")
-            (str-from-n (read-setting 'secret-combo) "%d ")
-            (if (read-setting 'secret-requires-lock) "true " "false ")
-            (str-from-n (read-setting 'lock-presses) "%d ")
-            (str-from-n (read-setting 'lock-combo) "%d ")
-            (str-from-n (read-setting 'mode-presses) "%d ")
-            (str-from-n (read-setting 'mode-combo) "%d ")
-            (if (read-setting 'mode-requires-lock) "true " "false ")
-            (str-from-n (read-setting 'light-presses) "%d ")
-            (str-from-n (read-setting 'light-combo) "%d ")
+            (setting-num \'secret-presses "%d ")
+            (setting-num \'secret-combo "%d ")
+            (setting-bool 'secret-requires-lock)
+            (setting-num \'lock-presses "%d ")
+            (setting-num \'lock-combo "%d ")
+            (setting-num \'mode-presses "%d ")
+            (setting-num \'mode-combo "%d ")
+            (setting-bool 'mode-requires-lock)
+            (setting-num \'light-presses "%d ")
+            (setting-num \'light-combo "%d ")
             (if (read-setting 'light-requires-lock) "true" "false")
         ))
         (sleep 0.05)
         (send-data (str-merge
             "rear "
-            (if (read-setting 'rear-light-enable) "true " "false ")
-            (if (read-setting 'auto-taillight) "true " "false ")
-            (str-from-n (read-setting 'brake-light-mode) "%d")
+            (setting-bool 'rear-light-enable)
+            (setting-bool 'auto-taillight)
+            (setting-num \'brake-light-mode "%d")
         ))
         (sleep 0.05)
         (send-data (str-merge
             "cruise "
-            (if (read-setting 'cruise-enabled) "true " "false ")
-            (str-from-n (read-setting 'cruise-delay) "%.1f ")
-            (str-from-n (read-setting 'cruise-deviation) "%.1f ")
-            (str-from-n (read-setting 'cruise-min-speed) "%.1f ")
-            (str-from-n (read-setting 'cruise-max-speed) "%.1f")
+            (setting-bool 'cruise-enabled)
+            (setting-num \'cruise-delay "%.1f ")
+            (setting-num \'cruise-deviation "%.1f ")
+            (setting-num \'cruise-min-speed "%.1f ")
+            (setting-num \'cruise-max-speed "%.1f")
         ))
         (sleep 0.05)
         (send-data (str-merge
             "alarm "
-            (if (read-setting 'alarm-tone) "true " "false ")
-            (str-from-n (read-setting 'alarm-speed-threshold) "%.1f ")
-            (str-from-n (read-setting 'alarm-gyro-threshold) "%.1f ")
-            (str-from-n (read-setting 'alarm-voltage) "%.1f")
+            (setting-bool 'alarm-tone)
+            (setting-num \'alarm-speed-threshold "%.1f ")
+            (setting-num \'alarm-gyro-threshold "%.1f ")
+            (setting-num \'alarm-voltage "%.1f")
         ))
     }
 )
@@ -1553,19 +1503,18 @@
         )
         (var current-speed cur-speed-kmh)
 
-        ; Dash link watchdog: release the ADC overrides when throttle frames stop
-        ; coming, otherwise the last (possibly full) throttle value stays applied.
+        ; Dash link watchdog. The levers are not zeroed here - writing an override
+        ; resets the firmware's command timeout, so doing it every pass would hold
+        ; off the failsafe the timeout exists to provide. Going quiet is the
+        ; release: the ADC app stops driving once the timeout expires. Only cruise
+        ; is dropped, because the virtual button is ours to let go of.
         ; Scaled to the measured frame rate - a fixed half second fires by itself
         ; once an app is connected and the dash drops to ten frames a second.
         (var wd (* 8 rx-gap-avg))
         (if (< wd 0.5) (setq wd 0.5))
         (if (> wd 1.5) (setq wd 1.5))
         (if (and (or software-adc software-adc2) (> (secs-since last-rx) wd))
-            {
-                (if software-adc (app-adc-override 0 0))
-                (if software-adc2 (app-adc-override 1 0))
-                (cruise-cancel)
-            }
+            (cruise-cancel)
         )
 
         (trap (handle-cruise current-speed)) ; experimental - never let it break the loop
@@ -1593,11 +1542,15 @@
         (trap (app-cache-update))
         (trap (handle-taillight))
         (if dash-power-held (gpio-write dash-power-held (if off 0 1)))
-        ; A detached ADC app stops resetting the timeout itself - the script has to.
-        ; Without this a pin taken for the supply kills the other channel too, a
-        ; second after boot, even when a real lever is wired to it.
-        (if (and (= power-pin 1) (not software-adc)) (app-adc-override 0 0))
-        (if (and (= power-pin 2) (not software-adc2)) (app-adc-override 1 0))
+        ; A detached ADC app stops resetting the timeout itself - the script has to,
+        ; or a pin taken for the supply kills the other channel too even when a real
+        ; lever is wired to it. Only when neither lever comes from the dashboard:
+        ; when one does, adc-input keeps the timeout alive and its silence is the
+        ; failsafe, which this would otherwise hold off.
+        (if (and (not software-adc) (not software-adc2)) {
+            (if (= power-pin 1) (app-adc-override 0 0))
+            (if (= power-pin 2) (app-adc-override 1 0))
+        })
         (handle-lock (abs current-speed))
             }
 )
