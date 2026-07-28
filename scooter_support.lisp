@@ -2948,6 +2948,7 @@
             )
 
             (apply-software-adc)
+            (apply-dash-power)
 
             ; Apply mode on start-up
             (apply-mode)
