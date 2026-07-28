@@ -1098,7 +1098,7 @@ Item {
                             Layout.topMargin: Math.round(20 * ctlScroll.hS)
                             Layout.bottomMargin: 14
                             columns: 2
-                            rowSpacing: Math.round(10 * ctlScroll.hS)
+                            rowSpacing: Math.round(16 * ctlScroll.hS)
                             columnSpacing: 10
 
                             Repeater {
