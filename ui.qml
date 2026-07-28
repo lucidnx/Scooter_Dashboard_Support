@@ -746,12 +746,14 @@ Item {
                             id: dial
                             Layout.fillWidth: true
                             Layout.topMargin: 4
-                            Layout.preferredHeight: width * 0.99
+                            Layout.preferredHeight: width * 1.0
 
                             readonly property real dcx: width / 2
                             readonly property real dcy: width * 0.50
-                            readonly property real drad: width * 0.45
-                            readonly property real dlw: Math.max(14, drad * 0.17)
+                            // as large as it goes - drad plus half the stroke has
+                            // to stay inside half the width
+                            readonly property real drad: width * 0.455
+                            readonly property real dlw: Math.max(14, drad * 0.19)
                             readonly property real srad: drad * 0.33
                             readonly property real slw: Math.max(7, srad * 0.20)
                             // the sub-dial sits in the corner of the big one, its
@@ -822,46 +824,42 @@ Item {
                                 }
                             }
 
-                            Column {
+                            Label {
+                                id: speedNum
                                 anchors.horizontalCenter: parent.left
                                 anchors.horizontalCenterOffset: dial.dcx
                                 anchors.verticalCenter: parent.top
                                 anchors.verticalCenterOffset: dial.dcy
-                                spacing: 0
-
-                                Label {
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                    text: Math.round(dial.shown)
-                                    font.pointSize: root.titleSize * 3.9
-                                    font.bold: true
-                                }
-                                Label {
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                    text: useMph.checked ? "mph" : "km/h"
-                                    font.pointSize: root.titleSize * 0.95
-                                    opacity: 0.55
-                                }
+                                text: Math.round(dial.shown)
+                                font.pointSize: root.titleSize * 3.9
+                                font.bold: true
+                            }
+                            Label {
+                                anchors.horizontalCenter: speedNum.horizontalCenter
+                                anchors.top: speedNum.bottom
+                                anchors.topMargin: -6
+                                text: useMph.checked ? "mph" : "km/h"
+                                font.pointSize: root.titleSize * 0.95
+                                opacity: 0.55
                             }
 
-                            Column {
+                            Label {
+                                id: wattNum
                                 anchors.horizontalCenter: parent.left
                                 anchors.horizontalCenterOffset: dial.subx
                                 anchors.verticalCenter: parent.top
                                 anchors.verticalCenterOffset: dial.suby
-                                spacing: -2
-
-                                Label {
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                    text: Math.round(root.stWatts)
-                                    font.pointSize: root.titleSize * 1.35
-                                    font.bold: true
-                                }
-                                Label {
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                    text: "W"
-                                    font.pointSize: root.titleSize * 0.72
-                                    opacity: 0.5
-                                }
+                                text: Math.round(root.stWatts)
+                                font.pointSize: root.titleSize * 1.35
+                                font.bold: true
+                            }
+                            Label {
+                                anchors.horizontalCenter: wattNum.horizontalCenter
+                                anchors.top: wattNum.bottom
+                                anchors.topMargin: -4
+                                text: "W"
+                                font.pointSize: root.titleSize * 0.72
+                                opacity: 0.5
                             }
 
                             // Power and cruise sit in the corners the arc leaves
@@ -870,7 +868,7 @@ Item {
                                 id: powerBtn
                                 x: 0
                                 y: dial.dcy - dial.drad
-                                width: dial.width * 0.0825
+                                width: dial.width * 0.105
                                 height: width
                                 radius: width / 2
                                 color: root.stOff ? "#2b2b31" : "#2e7d32"
@@ -908,7 +906,7 @@ Item {
                             }
 
                             Rectangle {
-                                width: dial.width * 0.0825
+                                width: dial.width * 0.105
                                 height: width
                                 radius: width / 2
                                 x: dial.width - width
@@ -919,7 +917,7 @@ Item {
                                     anchors.centerIn: parent
                                     text: "CC"
                                     font.bold: true
-                                    font.pointSize: root.titleSize * 0.62
+                                    font.pointSize: root.titleSize * 0.78
                                     color: root.stCruise ? "#00232a" : "#6e6e76"
                                     Behavior on color { ColorAnimation { duration: 200 } }
                                 }
@@ -928,7 +926,7 @@ Item {
 
                         Item {
                             Layout.fillWidth: true
-                            Layout.topMargin: 2
+                            Layout.topMargin: 18
                             Layout.preferredHeight: 26
 
                             Rectangle {
