@@ -1212,7 +1212,7 @@ Item {
                                     Layout.fillWidth: true
                                     wrapMode: Text.WordWrap
                                     opacity: 0.7
-                                    text: "The headlight sags throttle/brake voltage non-linearly across the lever range. Calibrate walks through 4 steps automatically (get ready, then hold), or edit the values directly."
+                                    text: "The headlight sags throttle/brake voltages. You can use this to correct voltages when light is ON."
                                 }
 
                                 ColumnLayout {
