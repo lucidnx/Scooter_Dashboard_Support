@@ -1561,11 +1561,7 @@
                     (app-adc-override 0 0)
                     (app-adc-override 1 0)
                     (app-disable-output -1)
-                    (set-current 0)
-                    ; rcode canset
-                    ;(loopforeach i (can-list-devs)
-                    ;    (canset-current i 0)
-                    ;)
+                    (stop-current)
                 }
             )
             (if (app-is-output-disabled) ; Enable output when scooter is turned on
@@ -2579,6 +2575,17 @@
             (print "Alarm stopped")
         }
     )
+)
+
+; Disabling the output stops the master driving, but a slave holds its last
+; command until the master's own timeout runs out - tell them directly.
+(defun stop-current()
+    {
+        (set-current-rel 0)
+        (loopforeach id (can-list-devs)
+            (rcode-run-noret id '(set-current-rel 0))
+        )
+    }
 )
 
 (defun handle-lock(speed)
