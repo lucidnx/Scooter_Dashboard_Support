@@ -407,6 +407,7 @@ Item {
             + " " + boolAtom(lightLocked)
             + " " + secretOffPresses.currentIndex
             + " " + comboFromBoxes(secretOffBrake, secretOffThrottle)
+            + " " + boolAtom(secretOffRequiresLock)
             + ")")
 
         queueCode("(save-misc-settings "
@@ -534,8 +535,9 @@ Item {
             pressesIndex(lightPresses, parts[9], 1)
             setBoxesFromCombo(Number.parseInt(parts[10]) || 0, lightBrake, lightThrottle)
             lightLocked.checked = parseBoolToken(parts[11])
-            pressesIndex(secretOffPresses, parts[12], 0)
+            pressesIndex(secretOffPresses, parts[12], 3)
             setBoxesFromCombo(Number.parseInt(parts[13]) || 0, secretOffBrake, secretOffThrottle)
+            secretOffRequiresLock.checked = parseBoolToken(parts[14])
         } else if (parts[0] === "misc") {
             useMph.checked = parseBoolToken(parts[3]) // set unit before any speed field
             lightOnBoot.checked = parseBoolToken(parts[1])
@@ -1045,8 +1047,9 @@ Item {
                             Label { text: "Secret OFF"; Layout.preferredWidth: 54 }
                             CheckBox { id: secretOffBrake; text: "Brake"; spacing: 4 }
                             CheckBox { id: secretOffThrottle; text: "Throttle"; spacing: 4 }
+                            CheckBox { id: secretOffRequiresLock; text: "Locked"; spacing: 4 }
                             Item { Layout.fillWidth: true }
-                            ComboBox { id: secretOffPresses; Layout.preferredWidth: 60; model: ["No", "1", "2", "3", "4", "5"] }
+                            ComboBox { id: secretOffPresses; Layout.preferredWidth: 60; model: ["No", "1", "2", "3", "4", "5"]; currentIndex: 3 }
                         }
                     }
                 }
