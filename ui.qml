@@ -652,36 +652,152 @@ Item {
         anchors.margins: 6
         spacing: 4
 
-        TabBar {
-            id: tabBar
+        // One header instead of a tab bar. The Control screen is the app and
+        // carries only the model and a gear; everything else lives behind it,
+        // with a back button and its own section picker.
+        Item {
             Layout.fillWidth: true
-            implicitWidth: 0
-            clip: true
+            Layout.preferredHeight: 42
 
-            property int buttons: 4
-            property int buttonWidth: 80
+            Label {
+                visible: swipeView.currentIndex === 0
+                anchors.left: parent.left
+                anchors.leftMargin: 6
+                anchors.verticalCenter: parent.verticalCenter
+                text: modelBox.currentText
+                font.bold: true
+                font.pointSize: root.titleSize * 0.95
+                opacity: 0.5
+            }
 
-            TabButton {
-                text: "Control"
-                width: Math.max(tabBar.buttonWidth, tabBar.width / tabBar.buttons)
+            Rectangle {
+                id: gearBtn
+                visible: swipeView.currentIndex === 0
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                width: 38
+                height: width
+                radius: width / 2
+                color: gearTouch.pressed ? "#3a3a44" : "#2b2b31"
+                Behavior on color { ColorAnimation { duration: 140 } }
+
+                Canvas {
+                    anchors.fill: parent
+                    onPaint: {
+                        var ctx = getContext("2d")
+                        ctx.reset()
+                        var c = width / 2
+                        var ri = width * 0.16
+                        var ro = width * 0.30
+                        ctx.strokeStyle = "#c8c8d0"
+                        ctx.lineWidth = Math.max(1.6, width * 0.075)
+                        ctx.lineCap = "round"
+                        ctx.beginPath()
+                        ctx.arc(c, c, ri, 0, Math.PI * 2)
+                        ctx.stroke()
+                        for (var i = 0; i < 8; i++) {
+                            var a = i * Math.PI / 4
+                            ctx.beginPath()
+                            ctx.moveTo(c + Math.cos(a) * (ri + width * 0.05),
+                                       c + Math.sin(a) * (ri + width * 0.05))
+                            ctx.lineTo(c + Math.cos(a) * ro, c + Math.sin(a) * ro)
+                            ctx.stroke()
+                        }
+                    }
+                }
+                MouseArea {
+                    id: gearTouch
+                    anchors.fill: parent
+                    anchors.margins: -6
+                    onClicked: swipeView.currentIndex = 1
+                }
             }
-            TabButton {
-                text: "General"
-                width: Math.max(tabBar.buttonWidth, tabBar.width / tabBar.buttons)
+
+            Rectangle {
+                id: backBtn
+                visible: swipeView.currentIndex !== 0
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                width: 40
+                height: 38
+                radius: 12
+                color: backTouch.pressed ? "#3a3a44" : "#2b2b31"
+                Behavior on color { ColorAnimation { duration: 140 } }
+
+                Canvas {
+                    anchors.fill: parent
+                    onPaint: {
+                        var ctx = getContext("2d")
+                        ctx.reset()
+                        var cx = width / 2
+                        var cy = height / 2
+                        var d = height * 0.20
+                        ctx.strokeStyle = "#c8c8d0"
+                        ctx.lineWidth = Math.max(2, height * 0.075)
+                        ctx.lineCap = "round"
+                        ctx.lineJoin = "round"
+                        ctx.beginPath()
+                        ctx.moveTo(cx + d * 0.6, cy - d)
+                        ctx.lineTo(cx - d * 0.6, cy)
+                        ctx.lineTo(cx + d * 0.6, cy + d)
+                        ctx.stroke()
+                    }
+                }
+                MouseArea {
+                    id: backTouch
+                    anchors.fill: parent
+                    onClicked: swipeView.currentIndex = 0
+                }
             }
-            TabButton {
-                text: "Modes"
-                width: Math.max(tabBar.buttonWidth, tabBar.width / tabBar.buttons)
-            }
-            TabButton {
-                text: "Setup"
-                width: Math.max(tabBar.buttonWidth, tabBar.width / tabBar.buttons)
+
+            Rectangle {
+                id: secTrack
+                visible: swipeView.currentIndex !== 0
+                anchors.left: backBtn.right
+                anchors.leftMargin: 8
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                height: 38
+                radius: 12
+                color: "#26262b"
+
+                Rectangle {
+                    width: secTrack.width / 3
+                    height: parent.height
+                    radius: parent.radius
+                    x: (swipeView.currentIndex - 1) * secTrack.width / 3
+                    color: "#3d3d48"
+                    Behavior on x { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+                }
+
+                Row {
+                    anchors.fill: parent
+                    Repeater {
+                        model: ["General", "Modes", "Setup"]
+                        Item {
+                            width: secTrack.width / 3
+                            height: secTrack.height
+                            Label {
+                                anchors.centerIn: parent
+                                text: modelData
+                                font.bold: true
+                                font.pointSize: root.titleSize * 0.8
+                                color: swipeView.currentIndex === index + 1 ? "#ffffff" : "#8e8e96"
+                                Behavior on color { ColorAnimation { duration: 200 } }
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: swipeView.currentIndex = index + 1
+                            }
+                        }
+                    }
+                }
             }
         }
 
         SwipeView {
             id: swipeView
-            currentIndex: tabBar.currentIndex
+            currentIndex: 0
             interactive: false
             Layout.fillWidth: true
             Layout.fillHeight: true
