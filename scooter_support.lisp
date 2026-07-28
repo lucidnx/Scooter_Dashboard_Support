@@ -1728,6 +1728,12 @@
             (var hi (mod (bitwise-and (shr n 7) 0x7FFFFFFF) 100000))
             (var s (str-merge "VESC" (str-from-n hi "%05d") (str-from-n lo "%05d")))
             (looprange i 0 14 (bufset-u8 app-serial i (bufget-u8 s i)))
+            ; 0xDA-0xDF is the ESC CPU id, and apps print it as plain hex. Pack
+            ; the serial digits two per byte so it reads back as the serial
+            ; instead of as an unrecognisable number.
+            (looprange i 0 5 (bufset-u8 app-cpuid i
+                (+ (shl (- (bufget-u8 s (+ 4 (* i 2))) 48) 4)
+                   (- (bufget-u8 s (+ 5 (* i 2))) 48))))
         }
     )
 )
@@ -2170,6 +2176,7 @@
         ((= reg 0xb9) (app-clamp16 (/ (app-trip-m) 10)))
         ((= reg 0xbb) (app-fet-01))
         ((= reg 0xbe) last-alarm-code) ; the alarm that just cleared
+        ((and (>= reg 0xda) (<= reg 0xdf)) (app-word app-cpuid (- reg 0xda))) ; NB_CPUID_A-F
         (t 0)
     )
 )
@@ -2869,6 +2876,7 @@
 
             ; app protocol identity - mutable, so it is built here and not in flash
             (def app-serial (array-create 14))
+            (def app-cpuid (array-create 12))
             (def app-pin-buf (array-create 6))
             (def quick-buf (array-create 52))
             (def app-f-b0 (array-create 61)) ; prepared replies, sent as-is

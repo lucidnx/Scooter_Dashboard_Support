@@ -176,13 +176,17 @@ and it cannot stop reporting that without breaking the dashboard's light indicat
 serial-read burst that follows a real pairing looks like a better discriminator.
 
 
-### What is `0xDA`?
+### `0xDA` is the controller CPU id
 
-The one register we cannot account for, and it is not in any community
-documentation — the published register table stops at `0xCE`.
+Worth flagging because it is easy to mistake for telemetry. It sits past the end
+of the register table most people work from, which stops at `0xCE` — but the
+official *Ninebot ES Communication Protocol* document has it: `0xD0`–`0xD9` is a
+reserved gap, and `0xDA`–`0xDF` are `NB_CPUID_A` … `NB_CPUID_F`, six read-only
+U16s, default 0. Twelve bytes, which is exactly the width of an STM32 unique
+device id.
 
-All three apps read it, always exactly **12 bytes**, so it is a block of six
-registers `0xDA`–`0xDF`. What differs is how hard they poll it:
+All three apps read it as one 12 byte block, never a sub-range. What differs is
+how hard they poll it:
 
 | app | rate |
 |---|---|
@@ -190,23 +194,20 @@ registers `0xDA`–`0xDF`. What differs is how hard they poll it:
 | m365 Tools | 1.2 /s |
 | NineDash | 2.2 /s |
 
-The official app reading it two or three times a session suggests static
-information rather than telemetry. If that is right, polling it at 2.2 Hz is the
-easiest saving available to you — 3 of your 15.6 requests per second, most of the
-way to the budget above on its own.
+It is a factory serial number. It cannot change while the scooter is running, and
+the official app treats it accordingly — two or three reads in a whole session.
+Polling it at 2.2 Hz is the easiest saving available to you: 3 of your 15.6
+requests per second, most of the way to the budget above on its own. Read it once
+at connect and cache it.
 
-**Ruled out:** twelve bytes is twenty-four hex characters, and NineDash shows a
-24-character controller ID, so we filled the block with a recognisable pattern
-(`0102030405060708090a0b0c`) to see whether that field was a hex dump of it. The
-ID stayed at zeros and nothing else in the app changed, so `0xDA` is not what
-feeds it.
+The package now answers with the VESC serial, packed two digits per byte so it
+reads back as the serial rather than as an unrecognisable number — a controller
+reporting `VESC6848843236` returns `684884323600000000000000`. It used to answer
+twelve zeros, which is the documented default and which all three apps accepted
+without complaint.
 
-The package answers twelve zero bytes and all three apps work normally, so
-whatever it carries is either optional or is displayed somewhere without looking
-wrong. If you know the field layout we will populate it properly.
-
-For reference, these are also read and answered with zeros without complaint: ESC
-`0xE4`, `0xE7`, `0x23`, `0x7F`, `0x69`, and BMS `0x1B`, `0x8B`. `0xBE` is now
+For reference, these are read and answered with zeros without complaint: ESC
+`0xE4`, `0xE7`, `0x23`, `0x7F`, `0x69`, and BMS `0x1B`, `0x8B`. `0xBE` is
 answered with the last alarm code.
 
 
