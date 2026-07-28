@@ -708,9 +708,15 @@ Item {
                 }
 
                 ScrollView {
+                    id: ctlScroll
                     anchors.fill: parent
                     contentWidth: availableWidth
                     clip: true
+
+                    // Everything under the dial has a natural height in pixels.
+                    // On a short window shrink it rather than going straight to a
+                    // scrollbar - past 0.62 it stops shrinking and scrolls instead.
+                    readonly property real s: Math.max(0.62, Math.min(1.0, height / 780))
 
                     ColumnLayout {
                         width: parent.width
@@ -744,9 +750,10 @@ Item {
                         // for the power sub-dial.
                         Item {
                             id: dial
-                            Layout.fillWidth: true
+                            Layout.alignment: Qt.AlignHCenter
                             Layout.topMargin: 4
-                            Layout.preferredHeight: width * 1.0
+                            Layout.preferredWidth: Math.min(parent.width, ctlScroll.height * 0.43)
+                            Layout.preferredHeight: Layout.preferredWidth
 
                             readonly property real dcx: width / 2
                             readonly property real dcy: width * 0.50
@@ -926,16 +933,16 @@ Item {
 
                         Item {
                             Layout.fillWidth: true
-                            Layout.topMargin: 18
-                            Layout.preferredHeight: 26
+                            Layout.topMargin: Math.round(18 * ctlScroll.s)
+                            Layout.preferredHeight: Math.round(26 * ctlScroll.s)
 
                             Rectangle {
                                 id: battTrack
                                 anchors.left: parent.left
                                 anchors.right: parent.right
                                 anchors.verticalCenter: parent.verticalCenter
-                                height: 24
-                                radius: 12
+                                height: Math.round(24 * ctlScroll.s)
+                                radius: height / 2
                                 color: "#2b2b31"
 
                                 Rectangle {
@@ -959,7 +966,7 @@ Item {
 
                         Item {
                             Layout.fillWidth: true
-                            Layout.topMargin: 8
+                            Layout.topMargin: Math.round(8 * ctlScroll.s)
                             Layout.preferredHeight: whkmLabel.height
 
                             Label {
@@ -979,7 +986,7 @@ Item {
 
                         RowLayout {
                             Layout.fillWidth: true
-                            Layout.topMargin: 12
+                            Layout.topMargin: Math.round(12 * ctlScroll.s)
                             spacing: 8
 
                             Repeater {
@@ -992,7 +999,7 @@ Item {
                                 Rectangle {
                                     Layout.fillWidth: true
                                     Layout.preferredWidth: 1
-                                    Layout.preferredHeight: 46
+                                    Layout.preferredHeight: Math.round(46 * ctlScroll.s)
                                     radius: 12
                                     color: "#26262b"
                                     Row {
@@ -1019,8 +1026,8 @@ Item {
                         // active mode instead of three buttons lighting up
                         Item {
                             Layout.fillWidth: true
-                            Layout.topMargin: 14
-                            Layout.preferredHeight: 56
+                            Layout.topMargin: Math.round(14 * ctlScroll.s)
+                            Layout.preferredHeight: Math.round(56 * ctlScroll.s)
 
                             Rectangle {
                                 id: modeTrack
@@ -1068,9 +1075,9 @@ Item {
 
                         GridLayout {
                             Layout.fillWidth: true
-                            Layout.topMargin: 12
+                            Layout.topMargin: Math.round(12 * ctlScroll.s)
                             columns: 2
-                            rowSpacing: 10
+                            rowSpacing: Math.round(10 * ctlScroll.s)
                             columnSpacing: 10
 
                             Repeater {
@@ -1087,7 +1094,7 @@ Item {
                                 Rectangle {
                                     Layout.fillWidth: true
                                     Layout.preferredWidth: 1
-                                    Layout.preferredHeight: 66
+                                    Layout.preferredHeight: Math.round(66 * ctlScroll.s)
                                     radius: 14
                                     color: modelData.on ? modelData.col : "#2b2b31"
                                     opacity: modelData.live ? 1.0 : 0.35
@@ -1114,7 +1121,7 @@ Item {
                         }
 
                         Label {
-                            Layout.topMargin: 18
+                            Layout.topMargin: Math.round(18 * ctlScroll.s)
                             Layout.bottomMargin: 14
                             Layout.fillWidth: true
                             horizontalAlignment: Text.AlignHCenter
