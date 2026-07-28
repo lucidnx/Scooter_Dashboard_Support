@@ -1593,14 +1593,16 @@
         (var disp-speed (+ (if use-mph (* current-speed 0.621371) current-speed) 0.5)) ; rounded for the dash
         (var battery cur-batt)
 
-        ; mode field (1=drive, 2=eco, 4=sport, 8=charge, 16=off, 32=lock)
+        ; mode field (1=drive, 2=eco, 4=sport, 8=charge, 16=off, 32=lock,
+        ; 64=mph on the G2, 128=overheat)
+        (var mode-extra (if (and (= model 3) use-mph) 64 0))
         (if off
             (bufset-u8 tx-frame tx-base 16)
             (if lock
                 (bufset-u8 tx-frame tx-base 32) ; lock display
                 (if (or (> (get-temp-fet) temp-warning-fet) (> (get-temp-mot) temp-warning-motor) bms-warn) ; temp icon will show up above warning degree
-                    (bufset-u8 tx-frame tx-base (+ 128 speedmode))
-                    (bufset-u8 tx-frame tx-base speedmode)
+                    (bufset-u8 tx-frame tx-base (+ 128 speedmode mode-extra))
+                    (bufset-u8 tx-frame tx-base (+ speedmode mode-extra))
                 )
             )
         )
@@ -2196,7 +2198,8 @@
 
 ; The G2 handlebar has a horn and a turn signal button, and reports them one
 ; byte past the brake: 0x40 nothing pressed, 0x50 turn signal held for three
-; seconds, 0x60 horn. The dash drives its own turn signal lamps, so the hold is
+; seconds, 0x60 horn. The turn signal is sent in a single frame, so every lever
+; frame has to be looked at - 0x64 alone is only a fifth of them. The dash drives its own turn signal lamps, so the hold is
 ; free to toggle cruise; the horn has no VESC output and sounds the dash buzzer.
 (defun g2-extras (len)
     (if (>= len 4)
@@ -2249,16 +2252,18 @@
                                                 ; 0x61 is a lever frame the dash switches to while
                                                 ; it serves an app - same payload layout as 0x65, and
                                                 ; the most frequent of the three in that state
-                                                ((= code 0x61)
+                                                ((= code 0x61) {
                                                     (if (and (or software-adc software-adc2) (>= len 3))
                                                         (adc-input uart-buf)
                                                     )
-                                                )
-                                                ((= code 0x65)
+                                                    (if (= model 3) (g2-extras len))
+                                                })
+                                                ((= code 0x65) {
                                                     (if (and (or software-adc software-adc2) (>= len 3)) ; frame must carry the lever bytes
                                                         (adc-input uart-buf)
                                                     )
-                                                )
+                                                    (if (= model 3) (g2-extras len))
+                                                })
                                                 ((= code 0x64) {
                                                     ; 0x64 carries throttle and brake at the same
                                                     ; offsets as 0x65. The dash halves its 0x65 rate
@@ -2268,8 +2273,6 @@
                                                     (if (and (or software-adc software-adc2) (>= len 7))
                                                         (adc-input uart-buf)
                                                     )
-                                                    ; only off 0x64 - the horn and turn signal do not
-                                                    ; need the 40/s the lever frames arrive at
                                                     (if (= model 3) (g2-extras len))
                                                     (if (> (secs-since dash-tx-time) dash-tx-iv) {
                                                         (set 'dash-tx-time (systime))
