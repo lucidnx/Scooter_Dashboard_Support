@@ -713,10 +713,14 @@ Item {
                     contentWidth: availableWidth
                     clip: true
 
-                    // Everything under the dial has a natural height in pixels.
-                    // On a short window shrink it rather than going straight to a
-                    // scrollbar - past 0.62 it stops shrinking and scrolls instead.
-                    readonly property real s: Math.max(0.62, Math.min(1.0, height / 780))
+                    // The dial, the battery bar and the figure cards follow the
+                    // width and nothing else. Only the buttons, the mode picker and
+                    // the gaps give way to a short window, and only down to 0.69 -
+                    // hS is solved so the page fills the height exactly until it
+                    // hits that floor, and scrolls from there.
+                    readonly property real wS: Math.max(0.85, Math.min(1.25, availableWidth / 320))
+                    readonly property real hS: Math.max(0.69, Math.min(1.0,
+                        (height - availableWidth - 62 - 78 * wS) / 280))
 
                     ColumnLayout {
                         width: parent.width
@@ -750,10 +754,9 @@ Item {
                         // for the power sub-dial.
                         Item {
                             id: dial
-                            Layout.alignment: Qt.AlignHCenter
+                            Layout.fillWidth: true
                             Layout.topMargin: 4
-                            Layout.preferredWidth: Math.min(parent.width, ctlScroll.height * 0.43)
-                            Layout.preferredHeight: Layout.preferredWidth
+                            Layout.preferredHeight: width
 
                             readonly property real dcx: width / 2
                             readonly property real dcy: width * 0.50
@@ -804,8 +807,8 @@ Item {
 
                                     if (sAnim > 0.004) {
                                         var g = ctx.createLinearGradient(cx - r, cy + r, cx + r, cy - r)
-                                        g.addColorStop(0, "#ffc107")
-                                        g.addColorStop(1, "#ff6d00")
+                                        g.addColorStop(0, "#e6b155")
+                                        g.addColorStop(1, "#d4703f")
                                         ctx.strokeStyle = g
                                         ctx.beginPath()
                                         ctx.arc(cx, cy, r, a0, a0 + (a1 - a0) * sAnim, false)
@@ -823,7 +826,7 @@ Item {
                                     ctx.stroke()
 
                                     if (wAnim > 0.004) {
-                                        ctx.strokeStyle = root.stWatts < 0 ? "#66bb6a" : "#4fc3f7"
+                                        ctx.strokeStyle = root.stWatts < 0 ? "#6a9e6e" : "#6ba8c9"
                                         ctx.beginPath()
                                         ctx.arc(dial.subx, dial.suby, sr, b0, b0 + (b1 - b0) * wAnim, false)
                                         ctx.stroke()
@@ -878,7 +881,7 @@ Item {
                                 width: dial.width * 0.105
                                 height: width
                                 radius: width / 2
-                                color: root.stOff ? "#2b2b31" : "#2e7d32"
+                                color: root.stOff ? "#2b2b31" : "#3c6b48"
                                 scale: powerTouch.pressed ? 0.94 : 1.0
                                 Behavior on color { ColorAnimation { duration: 180 } }
                                 Behavior on scale { NumberAnimation { duration: 90 } }
@@ -918,14 +921,14 @@ Item {
                                 radius: width / 2
                                 x: dial.width - width
                                 y: dial.dcy - dial.drad
-                                color: root.stCruise ? "#00bcd4" : "#2b2b31"
+                                color: root.stCruise ? "#4a949d" : "#2b2b31"
                                 Behavior on color { ColorAnimation { duration: 200 } }
                                 Label {
                                     anchors.centerIn: parent
                                     text: "CC"
                                     font.bold: true
                                     font.pixelSize: dial.width * 0.045
-                                    color: root.stCruise ? "#00232a" : "#6e6e76"
+                                    color: root.stCruise ? "#12262a" : "#6e6e76"
                                     Behavior on color { ColorAnimation { duration: 200 } }
                                 }
                             }
@@ -933,15 +936,15 @@ Item {
 
                         Item {
                             Layout.fillWidth: true
-                            Layout.topMargin: Math.round(18 * ctlScroll.s)
-                            Layout.preferredHeight: Math.round(26 * ctlScroll.s)
+                            Layout.topMargin: Math.round(18 * ctlScroll.hS)
+                            Layout.preferredHeight: Math.round(32 * ctlScroll.wS)
 
                             Rectangle {
                                 id: battTrack
                                 anchors.left: parent.left
                                 anchors.right: parent.right
                                 anchors.verticalCenter: parent.verticalCenter
-                                height: Math.round(24 * ctlScroll.s)
+                                height: Math.round(30 * ctlScroll.wS)
                                 radius: height / 2
                                 color: "#2b2b31"
 
@@ -949,8 +952,9 @@ Item {
                                     height: parent.height
                                     radius: parent.radius
                                     width: Math.max(height, battTrack.width * Math.max(0, Math.min(1, root.stBatt / 100)))
-                                    // green through amber to red as the pack drains
-                                    color: Qt.hsla(Math.max(0, Math.min(100, root.stBatt)) / 100 * 0.333, 0.85, 0.42, 1)
+                                    // full green down to 60%, amber through the
+                                    // thirties, red only when the pack is really low
+                                    color: Qt.hsla(0.333 * Math.max(0, Math.min(1, (root.stBatt - 8) / 52)), 0.5, 0.42, 1)
                                     Behavior on width { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
                                     Behavior on color { ColorAnimation { duration: 320 } }
                                 }
@@ -966,7 +970,7 @@ Item {
 
                         Item {
                             Layout.fillWidth: true
-                            Layout.topMargin: Math.round(8 * ctlScroll.s)
+                            Layout.topMargin: Math.round(8 * ctlScroll.hS)
                             Layout.preferredHeight: whkmLabel.height
 
                             Label {
@@ -986,22 +990,38 @@ Item {
 
                         RowLayout {
                             Layout.fillWidth: true
-                            Layout.topMargin: Math.round(12 * ctlScroll.s)
+                            Layout.topMargin: Math.round(12 * ctlScroll.hS)
                             spacing: 8
 
                             Repeater {
                                 model: [
-                                    { cap: "V", val: root.stVin.toFixed(1) },
-                                    { cap: "A", val: root.stAmps.toFixed(1) },
-                                    { cap: "ESC °C", val: String(Math.round(root.stFet)) },
-                                    { cap: "MOT °C", val: String(Math.round(root.stMot)) }
+                                    { cap: "V", val: root.stVin.toFixed(1), warn: false },
+                                    { cap: "A", val: root.stAmps.toFixed(1), warn: false },
+                                    { cap: "ESC °C", val: String(Math.round(root.stFet)),
+                                      warn: root.stFet > (Number.parseFloat(tempWarningFet.text) || 999) },
+                                    { cap: "MOT °C", val: String(Math.round(root.stMot)),
+                                      warn: root.stMot > (Number.parseFloat(tempWarningMotor.text) || 999) }
                                 ]
                                 Rectangle {
                                     Layout.fillWidth: true
                                     Layout.preferredWidth: 1
-                                    Layout.preferredHeight: Math.round(46 * ctlScroll.s)
+                                    Layout.preferredHeight: Math.round(46 * ctlScroll.wS)
                                     radius: 12
                                     color: "#26262b"
+
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        radius: parent.radius
+                                        color: "#8e3b3b"
+                                        visible: modelData.warn
+                                        SequentialAnimation on opacity {
+                                            running: true
+                                            loops: Animation.Infinite
+                                            NumberAnimation { from: 0; to: 0.85; duration: 520; easing.type: Easing.InOutQuad }
+                                            NumberAnimation { from: 0.85; to: 0; duration: 520; easing.type: Easing.InOutQuad }
+                                        }
+                                    }
+
                                     Row {
                                         anchors.centerIn: parent
                                         spacing: 4
@@ -1026,8 +1046,8 @@ Item {
                         // active mode instead of three buttons lighting up
                         Item {
                             Layout.fillWidth: true
-                            Layout.topMargin: Math.round(14 * ctlScroll.s)
-                            Layout.preferredHeight: Math.round(56 * ctlScroll.s)
+                            Layout.topMargin: Math.round(14 * ctlScroll.hS)
+                            Layout.preferredHeight: Math.round(56 * ctlScroll.hS)
 
                             Rectangle {
                                 id: modeTrack
@@ -1040,7 +1060,7 @@ Item {
                                     height: parent.height
                                     radius: parent.radius
                                     x: root.stMode === 2 ? 0 : (root.stMode === 1 ? modeTrack.width / 3 : modeTrack.width * 2 / 3)
-                                    color: root.stMode === 2 ? "#1e88e5" : (root.stMode === 1 ? "#43a047" : "#e53935")
+                                    color: root.stMode === 2 ? "#4a7fae" : (root.stMode === 1 ? "#4d8a56" : "#b05a54")
                                     Behavior on x { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
                                     Behavior on color { ColorAnimation { duration: 220 } }
                                 }
@@ -1075,26 +1095,26 @@ Item {
 
                         GridLayout {
                             Layout.fillWidth: true
-                            Layout.topMargin: Math.round(12 * ctlScroll.s)
+                            Layout.topMargin: Math.round(12 * ctlScroll.hS)
                             columns: 2
-                            rowSpacing: Math.round(10 * ctlScroll.s)
+                            rowSpacing: Math.round(10 * ctlScroll.hS)
                             columnSpacing: 10
 
                             Repeater {
                                 model: [
-                                    { t: "LOCK", on: root.stLock, col: "#c62828", fg: "#ffffff",
+                                    { t: "LOCK", on: root.stLock, col: "#a34a4a", fg: "#ffffff",
                                       cmd: "(ctrl-lock " + (root.stLock ? "false" : "true") + ")", live: true },
-                                    { t: "SECRET", on: root.stSecret, col: "#7b1fa2", fg: "#ffffff",
+                                    { t: "SECRET", on: root.stSecret, col: "#6d4a86", fg: "#ffffff",
                                       cmd: "(ctrl-secret " + (root.stSecret ? "false" : "true") + ")", live: true },
-                                    { t: "LIGHT", on: root.stLight, col: "#f9a825", fg: root.stLight ? "#221a00" : "#ffffff",
+                                    { t: "LIGHT", on: root.stLight, col: "#c39b4a", fg: root.stLight ? "#1e1a10" : "#ffffff",
                                       cmd: "(ctrl-light " + (root.stLight ? "false" : "true") + ")", live: true },
-                                    { t: "CRUISE", on: root.stCruiseEn, col: "#00897b", fg: "#ffffff",
+                                    { t: "CRUISE", on: root.stCruiseEn, col: "#3d7a72", fg: "#ffffff",
                                       cmd: "(ctrl-cruise " + (root.stCruiseEn ? "false" : "true") + ")", live: root.stCruiseAllow }
                                 ]
                                 Rectangle {
                                     Layout.fillWidth: true
                                     Layout.preferredWidth: 1
-                                    Layout.preferredHeight: Math.round(66 * ctlScroll.s)
+                                    Layout.preferredHeight: Math.round(66 * ctlScroll.hS)
                                     radius: 14
                                     color: modelData.on ? modelData.col : "#2b2b31"
                                     opacity: modelData.live ? 1.0 : 0.35
@@ -1121,7 +1141,7 @@ Item {
                         }
 
                         Label {
-                            Layout.topMargin: Math.round(18 * ctlScroll.s)
+                            Layout.topMargin: Math.round(18 * ctlScroll.hS)
                             Layout.bottomMargin: 14
                             Layout.fillWidth: true
                             horizontalAlignment: Text.AlignHCenter
