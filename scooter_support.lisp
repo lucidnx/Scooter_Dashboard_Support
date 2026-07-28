@@ -2816,9 +2816,10 @@
         (var time-passed (- (systime) press-time))
         (var is-active (or off (<= (get-speed) button-safety-speed)))
 
-        (if (> time-passed 2500) ; after 2500 ms
+        ; systime ticks are 0.1 ms, so these are 300 ms and 600 ms
+        (if (> time-passed 3000)
             (if button ; check button is still pressed
-                (if (> time-passed 6000) ; long press after 6000 ms
+                (if (> time-passed 6000) ; long press
                     {
                         (if is-active
                             (handle-holding-button)
