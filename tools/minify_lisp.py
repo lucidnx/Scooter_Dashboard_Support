@@ -85,10 +85,42 @@ def strip(src):
     return "\n".join(out) + "\n"
 
 
+def stray_backslash(src):
+    """A backslash outside a string is never valid here, and a bad edit can
+    leave one behind without unbalancing anything."""
+    i = line = 1
+    line = 1
+    i = 0
+    in_str = False
+    while i < len(src):
+        c = src[i]
+        if c == "\n":
+            line += 1
+        if in_str:
+            if c == "\\":
+                i += 2
+                continue
+            if c == '"':
+                in_str = False
+        elif c == '"':
+            in_str = True
+        elif c == ";":
+            while i < len(src) and src[i] != "\n":
+                i += 1
+            continue
+        elif c == "\\":
+            return f"stray backslash at line {line}: {src[i:i + 20]!r}"
+        i += 1
+    return None
+
+
 def main():
     if len(sys.argv) != 3:
         raise SystemExit("usage: minify_lisp.py <in.lisp> <out.lisp>")
     src = open(sys.argv[1]).read()
+    err = stray_backslash(src)
+    if err:
+        raise SystemExit(f"minify: {err}")
     dst = strip(src)
     if tokenize(src) != tokenize(dst):
         raise SystemExit("minify: token stream changed, refusing to write")
