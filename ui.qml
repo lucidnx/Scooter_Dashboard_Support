@@ -751,8 +751,13 @@ Item {
                             readonly property real dcx: width / 2
                             readonly property real dcy: width * 0.50
                             readonly property real drad: width * 0.45
-                            readonly property real subx: dcx + drad * 0.528
-                            readonly property real suby: dcy + drad * 0.343
+                            readonly property real dlw: Math.max(14, drad * 0.17)
+                            readonly property real srad: drad * 0.33
+                            readonly property real slw: Math.max(7, srad * 0.20)
+                            // the sub-dial sits in the corner of the big one, its
+                            // outer edges flush with the bottom and the right
+                            readonly property real subx: dcx + drad + dlw / 2 - srad - slw / 2
+                            readonly property real suby: dcy + drad + dlw / 2 - srad - slw / 2
 
                             readonly property real shown: useMph.checked ? (root.stSpeed * 0.621371) : root.stSpeed
                             readonly property real shownMax: Math.max(1, useMph.checked ? (root.stMax * 0.621371) : root.stMax)
@@ -782,7 +787,7 @@ Item {
                                     var a0 = Math.PI * 0.5          // bottom
                                     var a1 = Math.PI * (330 / 180)  // top right
 
-                                    ctx.lineWidth = Math.max(14, r * 0.14)
+                                    ctx.lineWidth = dial.dlw
                                     ctx.strokeStyle = "#33333a"
                                     ctx.beginPath()
                                     ctx.arc(cx, cy, r, a0, a1, false)
@@ -798,11 +803,11 @@ Item {
                                         ctx.stroke()
                                     }
 
-                                    var sr = r * 0.27
+                                    var sr = dial.srad
                                     var b0 = a0
                                     var b1 = a1
 
-                                    ctx.lineWidth = Math.max(6, sr * 0.22)
+                                    ctx.lineWidth = dial.slw
                                     ctx.strokeStyle = "#33333a"
                                     ctx.beginPath()
                                     ctx.arc(dial.subx, dial.suby, sr, b0, b1, false)
@@ -827,7 +832,7 @@ Item {
                                 Label {
                                     anchors.horizontalCenter: parent.horizontalCenter
                                     text: Math.round(dial.shown)
-                                    font.pointSize: root.titleSize * 3.6
+                                    font.pointSize: root.titleSize * 3.9
                                     font.bold: true
                                 }
                                 Label {
@@ -848,7 +853,7 @@ Item {
                                 Label {
                                     anchors.horizontalCenter: parent.horizontalCenter
                                     text: Math.round(root.stWatts)
-                                    font.pointSize: root.titleSize * 1.25
+                                    font.pointSize: root.titleSize * 1.35
                                     font.bold: true
                                 }
                                 Label {
