@@ -586,22 +586,12 @@
     {
         (var ver (read-setting 'ver-code))
         ; Each release only writes the settings it added, so an upgrade runs every
-        ; writer newer than the stored version and keeps everything else.
+        ; writer newer than the stored version and keeps everything else. Anything
+        ; older than v4.0 is reconfigured from defaults rather than migrated.
         (if (not-eq ver settings-version)
-            (if (or (eq ver nil) (< ver 300i32) (> ver settings-version))
+            (if (or (eq ver nil) (< ver 400i32) (> ver settings-version))
                 (restore-defaults)
                 {
-                    (if (< ver 301i32) (restore-gesture-apply-defaults))
-                    (if (< ver 302i32) (write-setting 'secret-apply-fw true))
-                    (if (< ver 303i32) (write-secret-mode-toggles))
-                    (if (< ver 304i32) (write-remap-defaults))
-                    (if (< ver 305i32) (write-v305-defaults))
-                    (if (< ver 306i32) (write-v306-defaults))
-                    (if (< ver 307i32) (write-v307-defaults))
-                    (if (< ver 308i32) (write-v308-defaults))
-                    (if (< ver 309i32) (write-v309-defaults))
-                    (if (< ver 310i32) (write-v310-defaults))
-                    (if (< ver 400i32) (write-v400-defaults))
                     (if (< ver 401i32) (write-v401-defaults))
                     (if (< ver 402i32) (write-v402-defaults))
                     (if (< ver 403i32) (write-v403-defaults))
