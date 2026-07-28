@@ -746,13 +746,13 @@ Item {
                             id: dial
                             Layout.fillWidth: true
                             Layout.topMargin: 4
-                            Layout.preferredHeight: width * 0.92
+                            Layout.preferredHeight: width * 0.99
 
                             readonly property real dcx: width / 2
-                            readonly property real dcy: width * 0.47
-                            readonly property real drad: width * 0.415
-                            readonly property real subx: dcx + drad * 0.502
-                            readonly property real suby: dcy + drad * 0.29
+                            readonly property real dcy: width * 0.50
+                            readonly property real drad: width * 0.45
+                            readonly property real subx: dcx + drad * 0.528
+                            readonly property real suby: dcy + drad * 0.343
 
                             readonly property real shown: useMph.checked ? (root.stSpeed * 0.621371) : root.stSpeed
                             readonly property real shownMax: Math.max(1, useMph.checked ? (root.stMax * 0.621371) : root.stMax)
@@ -782,7 +782,7 @@ Item {
                                     var a0 = Math.PI * 0.5          // bottom
                                     var a1 = Math.PI * (330 / 180)  // top right
 
-                                    ctx.lineWidth = Math.max(13, r * 0.145)
+                                    ctx.lineWidth = Math.max(14, r * 0.14)
                                     ctx.strokeStyle = "#33333a"
                                     ctx.beginPath()
                                     ctx.arc(cx, cy, r, a0, a1, false)
@@ -798,11 +798,11 @@ Item {
                                         ctx.stroke()
                                     }
 
-                                    var sr = r * 0.30
-                                    var b0 = Math.PI * 0.75
-                                    var b1 = Math.PI * 2.25
+                                    var sr = r * 0.27
+                                    var b0 = a0
+                                    var b1 = a1
 
-                                    ctx.lineWidth = Math.max(7, sr * 0.20)
+                                    ctx.lineWidth = Math.max(6, sr * 0.22)
                                     ctx.strokeStyle = "#33333a"
                                     ctx.beginPath()
                                     ctx.arc(dial.subx, dial.suby, sr, b0, b1, false)
@@ -821,13 +821,13 @@ Item {
                                 anchors.horizontalCenter: parent.left
                                 anchors.horizontalCenterOffset: dial.dcx
                                 anchors.verticalCenter: parent.top
-                                anchors.verticalCenterOffset: dial.dcy - dial.drad * 0.16
+                                anchors.verticalCenterOffset: dial.dcy
                                 spacing: 0
 
                                 Label {
                                     anchors.horizontalCenter: parent.horizontalCenter
                                     text: Math.round(dial.shown)
-                                    font.pointSize: root.titleSize * 3.9
+                                    font.pointSize: root.titleSize * 3.6
                                     font.bold: true
                                 }
                                 Label {
@@ -865,7 +865,7 @@ Item {
                                 id: powerBtn
                                 x: 0
                                 y: dial.dcy - dial.drad
-                                width: dial.width * 0.165
+                                width: dial.width * 0.0825
                                 height: width
                                 radius: width / 2
                                 color: root.stOff ? "#2b2b31" : "#2e7d32"
@@ -897,12 +897,13 @@ Item {
                                 MouseArea {
                                     id: powerTouch
                                     anchors.fill: parent
+                                    anchors.margins: -12 // finger sized target under a small badge
                                     onClicked: ctrlCode("(ctrl-power " + (root.stOff ? "true" : "false") + ")")
                                 }
                             }
 
                             Rectangle {
-                                width: dial.width * 0.165
+                                width: dial.width * 0.0825
                                 height: width
                                 radius: width / 2
                                 x: dial.width - width
@@ -913,7 +914,7 @@ Item {
                                     anchors.centerIn: parent
                                     text: "CC"
                                     font.bold: true
-                                    font.pointSize: root.titleSize * 0.95
+                                    font.pointSize: root.titleSize * 0.62
                                     color: root.stCruise ? "#00232a" : "#6e6e76"
                                     Behavior on color { ColorAnimation { duration: 200 } }
                                 }
