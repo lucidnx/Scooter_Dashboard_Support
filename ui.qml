@@ -56,6 +56,7 @@ Item {
     property real stMax: 60
     property bool stCruise: false
     property bool stCruiseEn: false
+    property bool stCruiseAllow: false
 
     function applyStateLine(line) {
         var p = line.split(" ")
@@ -74,6 +75,7 @@ Item {
         stMax = Number.parseFloat(p[13]) || 60
         stCruise = parseBoolToken(p[14])
         stCruiseEn = parseBoolToken(p[15])
+        stCruiseAllow = parseBoolToken(p[16])
     }
 
     function ctrlCode(str) {
@@ -874,7 +876,8 @@ Item {
                                 font.bold: true
                                 // brighter cyan while actively holding, teal when just enabled
                                 text: "Cruise"
-                                Material.background: root.stCruise ? "#00bcd4" : (root.stCruiseEn ? "#00897b" : "#3d3d3d")
+                                enabled: root.stCruiseAllow
+                                Material.background: (root.stCruiseAllow && root.stCruise) ? "#00bcd4" : ((root.stCruiseAllow && root.stCruiseEn) ? "#00897b" : "#3d3d3d")
                                 Material.foreground: "#ffffff"
                                 onClicked: ctrlCode("(ctrl-cruise " + (root.stCruiseEn ? "false" : "true") + ")")
                             }
@@ -1420,30 +1423,34 @@ Item {
 
                             RowLayout {
                                 Layout.fillWidth: true
+                                enabled: cruiseEnable.checked
                                 Label { text: "Activation Delay (s)"; Layout.fillWidth: true }
                                 TextField { id: cruiseDelay; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
                             }
 
                             RowLayout {
                                 Layout.fillWidth: true
+                                enabled: cruiseEnable.checked
                                 Label { text: "Speed deviation (" + (useMph.checked ? "mph" : "km/h") + ")"; Layout.fillWidth: true }
                                 TextField { id: cruiseDeviation; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
                             }
 
                             RowLayout {
                                 Layout.fillWidth: true
+                                enabled: cruiseEnable.checked
                                 Label { text: "Min activation speed (" + (useMph.checked ? "mph" : "km/h") + ")"; Layout.fillWidth: true }
                                 TextField { id: cruiseMinSpeed; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
                             }
 
                             RowLayout {
                                 Layout.fillWidth: true
+                                enabled: cruiseEnable.checked
                                 Label { text: "Max activation speed (" + (useMph.checked ? "mph" : "km/h") + ")"; Layout.fillWidth: true }
                                 TextField { id: cruiseMaxSpeed; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
                             }
 
                             Label {
-                                text: "Activates by holding steady speed for set time. Cancel on throttle/brake input. Requires Cruise Control enabled in VESC."
+                                text: "Master switch - off means cruise cannot be turned on from the Control tab, the app or a gesture. Activates by holding steady speed for set time. Cancel on throttle/brake input. Requires Cruise Control enabled in VESC."
                                 opacity: 0.6
                                 wrapMode: Text.WordWrap
                                 Layout.fillWidth: true

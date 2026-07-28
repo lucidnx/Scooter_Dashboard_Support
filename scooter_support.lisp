@@ -113,6 +113,7 @@
 (def secret-apply-om false)
 
 ; Cruise control (experimental)
+(def cruise-allow false) ; master switch - without it nothing can turn cruise on
 (def cruise-enabled false)
 (def cruise-delay 5.0) ; seconds of steady speed to activate
 (def cruise-deviation 1.0) ; km/h window counted as "steady"
@@ -283,7 +284,7 @@
 
 @const-start
 
-(def settings-version 407i32)
+(def settings-version 408i32)
 
 ; Persistent settings: (label . (eeprom-offset type))
 (def eeprom-addrs '(
@@ -380,6 +381,7 @@
     (app-enable            . (85 b))
     (dash-power-out        . (86 b)) ; kept so the v404 migration can read it
     (power-pin             . (88 i))
+    (cruise-allow          . (93 b))
 ))
 
 (def last-button-state false)
@@ -425,6 +427,15 @@
 ; the secret-off gesture only shipped as a default nobody had reason to keep
 (defun write-v407-defaults () ; settings added in v407
     (write-setting 'idle-display 0)
+)
+
+; the single cruise switch splits in two: the old one becomes the master, and
+; the Control tab gets its own that starts on, so the master alone decides
+(defun write-v408-defaults () ; settings added in v408
+    {
+        (write-setting 'cruise-allow (read-setting 'cruise-enabled))
+        (write-setting 'cruise-enabled true)
+    }
 )
 
 (defun write-v406-defaults () ; settings added in v406
@@ -557,9 +568,7 @@
         (write-v405-defaults)
         (write-v406-defaults)
         (write-v407-defaults)
-                    (write-v402-defaults)
-                    (write-v403-defaults)
-                    (write-v404-defaults)
+        (write-v408-defaults)
         (write-setting 'secret-presses 1)
         (write-setting 'secret-combo 0)
         (write-setting 'secret-requires-lock false)
@@ -631,6 +640,7 @@
                     (if (< ver 405i32) (write-v405-defaults))
                     (if (< ver 406i32) (write-v406-defaults))
                     (if (< ver 407i32) (write-v407-defaults))
+                    (if (< ver 408i32) (write-v408-defaults))
                     (write-setting 'ver-code settings-version)
                 }
             )
@@ -654,7 +664,7 @@
             light-requires-lock light-on-boot boot-mode use-mph rear-light-enable
             power-pin auto-taillight brake-light-mode eco-om drive-om sport-om
             secret-eco-om secret-drive-om secret-sport-om apply-om secret-apply-om
-            bms-soc-enable cruise-enabled cruise-delay cruise-deviation
+            bms-soc-enable cruise-allow cruise-enabled cruise-delay cruise-deviation
             cruise-min-speed cruise-max-speed app-pin app-enable secret-off-presses
             secret-off-combo secret-off-requires-lock idle-display
         ) (set n (read-setting n)))
@@ -879,10 +889,11 @@
     }
 )
 
-(defun save-cruise-settings (enable delay deviation min-speed max-speed)
-    { ; also toggled live from the Control tab (ctrl-cruise)
-        (set 'cruise-enabled enable)
-        (write-setting 'cruise-enabled enable)
+(defun save-cruise-settings (allow delay deviation min-speed max-speed)
+    { ; the Control tab switch (ctrl-cruise) is a separate setting under this one
+        (set 'cruise-allow allow)
+        (write-setting 'cruise-allow allow)
+        (if (not allow) (cruise-cancel))
         (write-setting 'cruise-delay delay)
         (write-setting 'cruise-deviation deviation)
         (write-setting 'cruise-min-speed min-speed)
@@ -951,9 +962,9 @@
 ; survives a reboot, and cancels any active hold when switched off.
 (defun ctrl-cruise (on)
     {
-        (set 'cruise-enabled on)
-        (write-setting 'cruise-enabled on)
-        (if (not on) (cruise-cancel))
+        (set 'cruise-enabled (and on cruise-allow))
+        (write-setting 'cruise-enabled cruise-enabled)
+        (if (not cruise-enabled) (cruise-cancel))
     }
 )
 
@@ -992,7 +1003,8 @@
         (str-from-n (send-state-amps) "%.1f ")
         (str-from-n (send-state-maxkmh) "%.0f ")
         (if cruising "true " "false ")
-        (if cruise-enabled "true" "false")
+        (if cruise-enabled "true " "false ")
+        (if cruise-allow "true" "false")
     ))
 )
 
@@ -1163,7 +1175,7 @@
         (sleep 0.05)
         (send-data (str-merge
             "cruise "
-            (setting-bool 'cruise-enabled)
+            (setting-bool 'cruise-allow)
             (setting-num 'cruise-delay "%.1f ")
             (setting-num 'cruise-deviation "%.1f ")
             (setting-num 'cruise-min-speed "%.1f ")
@@ -1470,7 +1482,7 @@
 ; PID-holds the speed and mirrors current to the slaves. Any lever input
 ; returns control instantly at firmware level; we just release the button.
 (defun handle-cruise(speed-kmh)
-    (if (and cruise-enabled (not off) (not lock))
+    (if (and cruise-allow cruise-enabled (not off) (not lock))
         {
             (var thr (get-adc-decoded 0))
             (var brk (get-adc-decoded 1))
@@ -1946,7 +1958,7 @@
                 (set 'light v)
                 (build-app-frame app-f-7b 0x7b 6)
             })))
-        ((= reg 0x7c) (let ((v (!= val 0)))
+        ((= reg 0x7c) (let ((v (and (!= val 0) cruise-allow)))
             (if (not (eq v cruise-enabled)) {
                 (set 'cruise-enabled v)
                 (build-app-frame app-f-7b 0x7b 6)
@@ -2046,7 +2058,7 @@
             ((= reg 0x7b) (cond ((= speedmode 1) 1) ((= speedmode 4) 2) (t 0))) ; shows the speed mode
             ((= reg 0x77) (if unlock 1 0))
             ((= reg 0x76) (if light 1 0))
-            ((= reg 0x7c) (if cruise-enabled 1 0))
+            ((= reg 0x7c) (if (and cruise-allow cruise-enabled) 1 0))
             ((= reg 0x7d) (if auto-taillight 2 0)) ; the app writes 2 for on
             ((or (= reg 0x24) (= reg 0x25)) (app-range-10m))
             ((= reg 0x3a) (to-i (secs-since app-boot-time)))
@@ -2166,7 +2178,7 @@
         ((= reg 0x7b) (cond ((= speedmode 1) 1) ((= speedmode 4) 2) (t 0)))
         ((= reg 0x77) (if unlock 1 0))
         ((= reg 0x76) (if light 1 0))
-        ((= reg 0x7c) (if cruise-enabled 1 0))
+        ((= reg 0x7c) (if (and cruise-allow cruise-enabled) 1 0))
         ((= reg 0x7d) (if auto-taillight 2 0))
         ((= reg 0xb0) (get-fault))
         ((= reg 0xb4) (to-i cur-batt))
@@ -2252,7 +2264,7 @@
         (let ((a (bufget-u8 uart-buf 7)))
             {
                 (if (= a 0x60) (set 'feedback 1)) ; refreshed while held
-                (if (and (= a 0x50) (!= g2-aux 0x50) (not off) (not lock)) {
+                (if (and (= a 0x50) (!= g2-aux 0x50) cruise-allow (not off) (not lock)) {
                     (set 'cruise-enabled (not cruise-enabled))
                     (set 'feedback 2)
                     (set 'app-todo (bitwise-or app-todo 1)) ; the flash write waits for the feature loop
