@@ -3073,7 +3073,9 @@
 
 @const-end
 
-; image-save stores the whole environment in the same flash region the reader
-; fills while parsing the @const blocks. With a script this size the two no
-; longer fit together, so the environment is rebuilt on each boot instead.
+; Without an image the firmware reparses the whole script on every boot, and it
+; rewrites the const heap from the same base pointer each time - the second boot
+; then collides with the first. With one, main is found in the restored
+; environment and only (main) runs.
+(image-save)
 (main)
