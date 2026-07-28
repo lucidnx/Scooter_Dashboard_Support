@@ -16,6 +16,9 @@ streams, so a bug here fails the build instead of reaching the scooter.
 import sys
 
 
+TOKEN_WARN = 16400
+
+
 def tokenize(src):
     """Token stream with comments dropped and strings kept intact."""
     toks, i, n = [], 0, len(src)
@@ -92,6 +95,17 @@ def main():
     open(sys.argv[2], "w").write(dst)
     saved = len(src) - len(dst)
     print(f"minify: {len(src)} -> {len(dst)} bytes ({100 * saved / len(src):.0f}% smaller)")
+
+    # The binding limit is not the code area, it is the 128 KB flash the const
+    # heap and the image share. That fills with parsed forms, so stripping bytes
+    # does nothing for it - only having fewer of them does. Measured on a G30:
+    # 16312 tokens boots reliably, 16888 leaves image-save no room, so the script
+    # is reparsed on every boot and collides with the previous one.
+    n = len(tokenize(dst))
+    print(f"const-heap tokens: {n} (measured ceiling is between 16312 and 16888)")
+    if n > TOKEN_WARN:
+        print(f"WARNING: {n} tokens is close to the limit - image-save may fail "
+              f"and the script will not start after a reboot", file=sys.stderr)
 
 
 if __name__ == "__main__":
