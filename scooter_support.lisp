@@ -2026,6 +2026,11 @@
             ((= reg 0x65) (app-speed-01))
             ((or (= reg 0x66) (= reg 0x67) (= reg 0x68)) app-ver)
             ((or (= reg 0x72) (= reg 0x73) (= reg 0x74)) (app-clamp16 (* cur-maxkmh 10)))
+            ; TEST: 0xDA is 12 bytes and NineDash shows a 24-character controller
+            ; ID, so it is probably a hex dump of exactly this. Each byte carries
+            ; its own position, which also shows whether the app swaps the words.
+            ((and (>= reg 0xda) (< reg 0xe0))
+                (let ((i (* 2 (- reg 0xda)))) (+ (shl (+ i 2) 8) (+ i 1))))
             ((= reg 0x7a) (if light 1 0))
             ((= reg 0x90) (if light 1 0))
             ((or (= reg 0x91) (= reg 0x92)) (if alarm-tone 1 0))
