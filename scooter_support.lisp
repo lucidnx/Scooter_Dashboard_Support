@@ -1005,7 +1005,9 @@
         (if cruising "true " "false ")
         (if cruise-enabled "true " "false ")
         (if cruise-allow "true " "false ")
-        (if img-ok "true" "false")
+        (if img-ok "true " "false ")
+        (str-from-n (highest-temp cur-fet canget-temp-fet) "%.0f ")
+        (str-from-n (highest-temp cur-mot canget-temp-motor) "%.0f")
     ))
 )
 

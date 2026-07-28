@@ -58,6 +58,11 @@ Item {
     property bool stCruiseEn: false
     property bool stCruiseAllow: false
     property bool stImgOk: true
+    property real stFet: 0
+    property real stMot: 0
+    // no configured power ceiling reaches the UI, so the sub-dial scales to the
+    // highest draw seen this session
+    property real stWattPeak: 500
 
     function applyStateLine(line) {
         var p = line.split(" ")
@@ -78,6 +83,10 @@ Item {
         stCruiseEn = parseBoolToken(p[15])
         stCruiseAllow = parseBoolToken(p[16])
         stImgOk = parseBoolToken(p[17])
+        stFet = Number.parseFloat(p[18]) || 0
+        stMot = Number.parseFloat(p[19]) || 0
+        if (Math.abs(stWatts) > stWattPeak)
+            stWattPeak = Math.abs(stWatts)
     }
 
     function ctrlCode(str) {
@@ -728,15 +737,22 @@ Item {
                             }
                         }
 
-                        // Speed dial. The arc is drawn rather than assembled from
-                        // segments so it can sweep smoothly, and the value it
-                        // paints is animated so the needle glides between samples
-                        // that only arrive three times a second.
+                        // Speed dial. Drawn rather than assembled from segments so
+                        // it sweeps smoothly, and the value it paints is animated
+                        // so it glides between samples that arrive three times a
+                        // second. The 240 degree sweep leaves the lower right open
+                        // for the power sub-dial.
                         Item {
                             id: dial
                             Layout.fillWidth: true
-                            Layout.topMargin: 6
-                            Layout.preferredHeight: Math.min(width * 0.76, 340)
+                            Layout.topMargin: 4
+                            Layout.preferredHeight: width * 0.92
+
+                            readonly property real dcx: width / 2
+                            readonly property real dcy: width * 0.47
+                            readonly property real drad: width * 0.415
+                            readonly property real subx: dcx + drad * 0.502
+                            readonly property real suby: dcy + drad * 0.29
 
                             readonly property real shown: useMph.checked ? (root.stSpeed * 0.621371) : root.stSpeed
                             readonly property real shownMax: Math.max(1, useMph.checked ? (root.stMax * 0.621371) : root.stMax)
@@ -744,52 +760,74 @@ Item {
                             Canvas {
                                 id: dialArc
                                 anchors.fill: parent
-                                property real frac: Math.max(0, Math.min(1, dial.shown / dial.shownMax))
-                                property real anim: 0
-                                Behavior on anim { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
-                                onFracChanged: anim = frac
-                                onAnimChanged: requestPaint()
-                                Component.onCompleted: { anim = frac; requestPaint() }
+
+                                property real sFrac: Math.max(0, Math.min(1, dial.shown / dial.shownMax))
+                                property real wFrac: Math.max(0, Math.min(1, Math.abs(root.stWatts) / root.stWattPeak))
+                                property real sAnim: 0
+                                property real wAnim: 0
+                                Behavior on sAnim { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
+                                Behavior on wAnim { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
+                                onSFracChanged: sAnim = sFrac
+                                onWFracChanged: wAnim = wFrac
+                                onSAnimChanged: requestPaint()
+                                onWAnimChanged: requestPaint()
+                                Component.onCompleted: { sAnim = sFrac; wAnim = wFrac; requestPaint() }
 
                                 onPaint: {
                                     var ctx = getContext("2d")
                                     ctx.reset()
-                                    var cx = width / 2
-                                    var cy = width * 0.39
-                                    var r = width * 0.345
-                                    var lw = Math.max(12, width * 0.052)
-                                    var a0 = Math.PI * 0.75
-                                    var a1 = Math.PI * 2.25
-
                                     ctx.lineCap = "round"
-                                    ctx.lineWidth = lw
+
+                                    var cx = dial.dcx, cy = dial.dcy, r = dial.drad
+                                    var a0 = Math.PI * 0.5          // bottom
+                                    var a1 = Math.PI * (330 / 180)  // top right
+
+                                    ctx.lineWidth = Math.max(13, r * 0.145)
                                     ctx.strokeStyle = "#33333a"
                                     ctx.beginPath()
                                     ctx.arc(cx, cy, r, a0, a1, false)
                                     ctx.stroke()
 
-                                    if (anim > 0.005) {
-                                        var g = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r)
+                                    if (sAnim > 0.004) {
+                                        var g = ctx.createLinearGradient(cx - r, cy + r, cx + r, cy - r)
                                         g.addColorStop(0, "#ffc107")
                                         g.addColorStop(1, "#ff6d00")
                                         ctx.strokeStyle = g
                                         ctx.beginPath()
-                                        ctx.arc(cx, cy, r, a0, a0 + (a1 - a0) * anim, false)
+                                        ctx.arc(cx, cy, r, a0, a0 + (a1 - a0) * sAnim, false)
+                                        ctx.stroke()
+                                    }
+
+                                    var sr = r * 0.30
+                                    var b0 = Math.PI * 0.75
+                                    var b1 = Math.PI * 2.25
+
+                                    ctx.lineWidth = Math.max(7, sr * 0.20)
+                                    ctx.strokeStyle = "#33333a"
+                                    ctx.beginPath()
+                                    ctx.arc(dial.subx, dial.suby, sr, b0, b1, false)
+                                    ctx.stroke()
+
+                                    if (wAnim > 0.004) {
+                                        ctx.strokeStyle = root.stWatts < 0 ? "#66bb6a" : "#4fc3f7"
+                                        ctx.beginPath()
+                                        ctx.arc(dial.subx, dial.suby, sr, b0, b0 + (b1 - b0) * wAnim, false)
                                         ctx.stroke()
                                     }
                                 }
                             }
 
                             Column {
-                                anchors.horizontalCenter: parent.horizontalCenter
+                                anchors.horizontalCenter: parent.left
+                                anchors.horizontalCenterOffset: dial.dcx
                                 anchors.verticalCenter: parent.top
-                                anchors.verticalCenterOffset: parent.width * 0.39
+                                anchors.verticalCenterOffset: dial.dcy - dial.drad * 0.16
                                 spacing: 0
 
                                 Label {
                                     anchors.horizontalCenter: parent.horizontalCenter
                                     text: Math.round(dial.shown)
-                                    font.pointSize: root.titleSize * 3.6
+                                    font.pointSize: root.titleSize * 3.9
                                     font.bold: true
                                 }
                                 Label {
@@ -800,24 +838,84 @@ Item {
                                 }
                             }
 
-                            Rectangle {
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                anchors.top: parent.top
-                                anchors.topMargin: parent.width * 0.62
-                                width: cruisePill.implicitWidth + 22
-                                height: 26
-                                radius: 13
-                                color: "#00bcd4"
-                                opacity: root.stCruise ? 1 : 0
-                                visible: opacity > 0.01
-                                Behavior on opacity { NumberAnimation { duration: 200 } }
+                            Column {
+                                anchors.horizontalCenter: parent.left
+                                anchors.horizontalCenterOffset: dial.subx
+                                anchors.verticalCenter: parent.top
+                                anchors.verticalCenterOffset: dial.suby
+                                spacing: -2
+
                                 Label {
-                                    id: cruisePill
-                                    anchors.centerIn: parent
-                                    text: "CRUISE"
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    text: Math.round(root.stWatts)
+                                    font.pointSize: root.titleSize * 1.25
                                     font.bold: true
-                                    font.pointSize: root.titleSize * 0.75
-                                    color: "#00232a"
+                                }
+                                Label {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    text: "W"
+                                    font.pointSize: root.titleSize * 0.72
+                                    opacity: 0.5
+                                }
+                            }
+
+                            // Power and cruise sit in the corners the arc leaves
+                            // empty, level with the top of the dial
+                            Rectangle {
+                                id: powerBtn
+                                x: 0
+                                y: dial.dcy - dial.drad
+                                width: dial.width * 0.165
+                                height: width
+                                radius: width / 2
+                                color: root.stOff ? "#2b2b31" : "#2e7d32"
+                                scale: powerTouch.pressed ? 0.94 : 1.0
+                                Behavior on color { ColorAnimation { duration: 180 } }
+                                Behavior on scale { NumberAnimation { duration: 90 } }
+
+                                Canvas {
+                                    anchors.centerIn: parent
+                                    width: parent.width * 0.52
+                                    height: width
+                                    onPaint: {
+                                        var ctx = getContext("2d")
+                                        ctx.reset()
+                                        var c = width / 2
+                                        var r = width * 0.40
+                                        ctx.strokeStyle = "#ffffff"
+                                        ctx.lineWidth = Math.max(2, width * 0.13)
+                                        ctx.lineCap = "round"
+                                        ctx.beginPath()
+                                        ctx.arc(c, c, r, Math.PI * -0.30, Math.PI * 1.30, false)
+                                        ctx.stroke()
+                                        ctx.beginPath()
+                                        ctx.moveTo(c, c - r * 1.15)
+                                        ctx.lineTo(c, c - r * 0.05)
+                                        ctx.stroke()
+                                    }
+                                }
+                                MouseArea {
+                                    id: powerTouch
+                                    anchors.fill: parent
+                                    onClicked: ctrlCode("(ctrl-power " + (root.stOff ? "true" : "false") + ")")
+                                }
+                            }
+
+                            Rectangle {
+                                width: dial.width * 0.165
+                                height: width
+                                radius: width / 2
+                                x: dial.width - width
+                                y: dial.dcy - dial.drad
+                                color: root.stCruise ? "#00bcd4" : "#2b2b31"
+                                Behavior on color { ColorAnimation { duration: 200 } }
+                                Label {
+                                    anchors.centerIn: parent
+                                    text: "CC"
+                                    font.bold: true
+                                    font.pointSize: root.titleSize * 0.95
+                                    color: root.stCruise ? "#00232a" : "#6e6e76"
+                                    Behavior on color { ColorAnimation { duration: 200 } }
                                 }
                             }
                         }
@@ -877,34 +975,35 @@ Item {
 
                         RowLayout {
                             Layout.fillWidth: true
-                            Layout.topMargin: 16
-                            spacing: 10
+                            Layout.topMargin: 12
+                            spacing: 8
 
                             Repeater {
                                 model: [
-                                    { cap: "VOLTS", val: root.stVin.toFixed(1) },
-                                    { cap: "WATTS", val: String(Math.round(root.stWatts)) },
-                                    { cap: "AMPS", val: root.stAmps.toFixed(1) }
+                                    { cap: "V", val: root.stVin.toFixed(1) },
+                                    { cap: "A", val: root.stAmps.toFixed(1) },
+                                    { cap: "ESC °C", val: String(Math.round(root.stFet)) },
+                                    { cap: "MOT °C", val: String(Math.round(root.stMot)) }
                                 ]
                                 Rectangle {
                                     Layout.fillWidth: true
                                     Layout.preferredWidth: 1
-                                    Layout.preferredHeight: 68
-                                    radius: 14
+                                    Layout.preferredHeight: 46
+                                    radius: 12
                                     color: "#26262b"
-                                    Column {
+                                    Row {
                                         anchors.centerIn: parent
-                                        spacing: 2
+                                        spacing: 4
                                         Label {
-                                            anchors.horizontalCenter: parent.horizontalCenter
+                                            anchors.verticalCenter: parent.verticalCenter
                                             text: modelData.val
                                             font.bold: true
-                                            font.pointSize: root.titleSize * 1.35
+                                            font.pointSize: root.titleSize * 1.05
                                         }
                                         Label {
-                                            anchors.horizontalCenter: parent.horizontalCenter
+                                            anchors.verticalCenter: parent.verticalCenter
                                             text: modelData.cap
-                                            font.pointSize: root.titleSize * 0.7
+                                            font.pointSize: root.titleSize * 0.68
                                             opacity: 0.5
                                         }
                                     }
@@ -916,7 +1015,7 @@ Item {
                         // active mode instead of three buttons lighting up
                         Item {
                             Layout.fillWidth: true
-                            Layout.topMargin: 16
+                            Layout.topMargin: 14
                             Layout.preferredHeight: 56
 
                             Rectangle {
@@ -963,33 +1062,9 @@ Item {
                             }
                         }
 
-                        Rectangle {
-                            Layout.fillWidth: true
-                            Layout.topMargin: 16
-                            Layout.preferredHeight: 66
-                            radius: 14
-                            color: root.stOff ? "#2b2b31" : "#2e7d32"
-                            scale: powerTouch.pressed ? 0.975 : 1.0
-                            Behavior on color { ColorAnimation { duration: 180 } }
-                            Behavior on scale { NumberAnimation { duration: 90 } }
-
-                            Label {
-                                anchors.centerIn: parent
-                                text: root.stOff ? "TURN ON" : "POWER OFF"
-                                font.bold: true
-                                font.pointSize: root.titleSize
-                                color: "#ffffff"
-                            }
-                            MouseArea {
-                                id: powerTouch
-                                anchors.fill: parent
-                                onClicked: ctrlCode("(ctrl-power " + (root.stOff ? "true" : "false") + ")")
-                            }
-                        }
-
                         GridLayout {
                             Layout.fillWidth: true
-                            Layout.topMargin: 10
+                            Layout.topMargin: 12
                             columns: 2
                             rowSpacing: 10
                             columnSpacing: 10
@@ -998,10 +1073,10 @@ Item {
                                 model: [
                                     { t: "LOCK", on: root.stLock, col: "#c62828", fg: "#ffffff",
                                       cmd: "(ctrl-lock " + (root.stLock ? "false" : "true") + ")", live: true },
-                                    { t: "LIGHT", on: root.stLight, col: "#f9a825", fg: root.stLight ? "#221a00" : "#ffffff",
-                                      cmd: "(ctrl-light " + (root.stLight ? "false" : "true") + ")", live: true },
                                     { t: "SECRET", on: root.stSecret, col: "#7b1fa2", fg: "#ffffff",
                                       cmd: "(ctrl-secret " + (root.stSecret ? "false" : "true") + ")", live: true },
+                                    { t: "LIGHT", on: root.stLight, col: "#f9a825", fg: root.stLight ? "#221a00" : "#ffffff",
+                                      cmd: "(ctrl-light " + (root.stLight ? "false" : "true") + ")", live: true },
                                     { t: "CRUISE", on: root.stCruiseEn, col: "#00897b", fg: "#ffffff",
                                       cmd: "(ctrl-cruise " + (root.stCruiseEn ? "false" : "true") + ")", live: root.stCruiseAllow }
                                 ]
