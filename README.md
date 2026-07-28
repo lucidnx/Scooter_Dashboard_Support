@@ -167,7 +167,8 @@ One package for everything - the model is stored on the ESC and selected in the 
 - **Startup mode** selection (Eco / Drive / Sport, applied at boot)
 
 ### Gestures
-Lock, mode switching, headlight and secret mode activation are all **fully remappable**:
+Lock, mode switching, headlight, secret mode and leaving secret mode are all
+**fully remappable**:
 
 - **Lever combination**: any mix of Brake / Throttle that must be held (or none)
 - **Button presses**: 1-5 presses, or **No** - with "No" the gesture fires from the levers
@@ -177,12 +178,16 @@ Lock, mode switching, headlight and secret mode activation are all **fully remap
 - A lever counts as held once it passes its **ADC start voltage** from VESC Tool (with
   light compensation applied), so there is no separate deadband to tune
 - Gestures only react at standstill (configurable button-active speed in Setup)
+- **Secret OFF** is a separate gesture that can only ever *leave* secret mode - it does
+  nothing when secret is already off, so it is a way out that cannot turn it on by mistake
+- Multi-press gestures need the next press within **300 ms**, and fire 300 ms after the
+  last one. A long press is 600 ms
 - Turning the scooter on (single press while off) always works, regardless of the mapping
 
 ### Lock & alarm
 - Lock mode: motor braked when pushed, alarm with beeping and (optional) siren on
   gyro or wheel movement, configurable thresholds and volume
-- Optional "disable secret when locked"
+- Optional "Disable Secret when Locked"
 
 ### Cruise control (experimental)
 - Hold a steady speed with the throttle for the configured delay (default 5 s, deviation
@@ -235,8 +240,9 @@ UART the package already listens on, so no extra hardware or wiring is needed.
   **Recovery mode (KERS)** selects the speed mode (Weak/Medium/Strong = Eco/Drive/Sport),
   **Walk mode** toggles secret modes, and **Direct power control** toggles the headlight
 - Lock and unlock are only accepted at standstill, as on a stock scooter
-- **Shutdown is deliberately ignored**: it would cut power to the dashboard itself. The
-  command is acknowledged so the app doesn't hang, but nothing happens
+- **Shutdown from the app** switches the dashboard off, the same as the power button in
+  the Control tab or a long press of the scooter button. It does not power down the
+  controller, which on a VESC is a separate supply. Refused above walking pace
 - Regenerative braking level (KERS) is reported as off - VESC does not use Xiaomi's levels
 
 **Throttle response with an app connected.** The dashboard bus is a single wire shared by
@@ -285,7 +291,10 @@ Setup and use the app when parked. The full analysis is in
   The chosen pin is always detached from the ADC app, so it can never be read as a lever -
   which also means it stops working as one. On ADC2 that costs you the motor brake unless
   the brake comes from the dashboard; on ADC1 it costs you the throttle the same way
-- **Battery % at idle** on the dashboard, separately configurable for normal and secret modes
+- **Idle display**: while standing still the dashboard's speed readout shows something
+  useful instead - battery %, pack voltage, controller temperature or motor temperature,
+  the two temperatures taken as the highest across every controller on the bus. Switched
+  on separately for normal and secret modes
 - **BMS battery %**: if a VESC BMS reports, its SOC is used as the battery percentage,
   with a temperature warning above 50 °C or below 0 °C
 - **Light compensation** (Software ADC only - it corrects the *dashboard's* reading, so a
@@ -361,7 +370,7 @@ Three things must all be set or the light stays dark:
 2. **Setup tab -> `Tail Light Output`** - the master switch. With it off the servo/PPM
    pin is never touched at all, so it stays free for something else, and the tail light
    options grey out
-3. **Setup tab -> `Always ON Tail light`** - only if you want the tail light lit
+3. **Setup tab -> `Always ON Tail Light`** - only if you want the tail light lit
    independently of the headlight (otherwise it follows the headlight)
 
 Power the LED strip from a source that can supply it (see the 5V note above) - a
