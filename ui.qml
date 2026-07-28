@@ -1001,7 +1001,7 @@ Item {
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: 0
-                            Label { text: "Lock"; Layout.preferredWidth: 54 }
+                            Label { text: "Lock"; Layout.preferredWidth: 70 }
                             CheckBox { id: lockBrake; text: "Brake"; checked: true; spacing: 4 }
                             CheckBox { id: lockThrottle; text: "Throttle"; spacing: 4 }
                             Item { Layout.fillWidth: true }
@@ -1011,7 +1011,7 @@ Item {
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: 0
-                            Label { text: "Modes"; Layout.preferredWidth: 54 }
+                            Label { text: "Modes"; Layout.preferredWidth: 70 }
                             CheckBox { id: modeBrake; text: "Brake"; spacing: 4 }
                             CheckBox { id: modeThrottle; text: "Throttle"; spacing: 4 }
                             CheckBox { id: modeLocked; text: "Locked"; spacing: 4 }
@@ -1022,7 +1022,7 @@ Item {
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: 0
-                            Label { text: "Headlight"; Layout.preferredWidth: 54 }
+                            Label { text: "Headlight"; Layout.preferredWidth: 70 }
                             CheckBox { id: lightBrake; text: "Brake"; spacing: 4 }
                             CheckBox { id: lightThrottle; text: "Throttle"; spacing: 4 }
                             CheckBox { id: lightLocked; text: "Locked"; spacing: 4 }
@@ -1033,7 +1033,7 @@ Item {
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: 0
-                            Label { text: "Secret"; Layout.preferredWidth: 54 }
+                            Label { text: "Secret"; Layout.preferredWidth: 70 }
                             CheckBox { id: secretBrake; text: "Brake"; checked: true; spacing: 4 }
                             CheckBox { id: secretThrottle; text: "Throttle"; checked: true; spacing: 4 }
                             CheckBox { id: secretRequiresLock; text: "Locked"; spacing: 4 }
@@ -1044,7 +1044,7 @@ Item {
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: 0
-                            Label { text: "Secret OFF"; Layout.preferredWidth: 54 }
+                            Label { text: "Secret OFF"; Layout.preferredWidth: 70 }
                             CheckBox { id: secretOffBrake; text: "Brake"; spacing: 4 }
                             CheckBox { id: secretOffThrottle; text: "Throttle"; spacing: 4 }
                             CheckBox { id: secretOffRequiresLock; text: "Locked"; spacing: 4 }
