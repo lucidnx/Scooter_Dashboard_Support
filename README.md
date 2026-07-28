@@ -74,9 +74,6 @@ migrated automatically. To go back to defaults, use the **Reset** button in the 
   all three, which roughly halves the worst-case delay before a throttle change is applied.
 - **App support can be turned off** in Setup, for the sharpest possible throttle.
 - **App pairing PIN** - set your own 6-digit code in Setup.
-- **Bus logging** in Setup -> Debug prints every frame the dashboard and phone apps send
-  to VESC Dev Tools -> Lisp. It applies immediately, is never saved, and always stops at
-  the next power on, so it cannot be left on by accident.
 
 ## What's new in 3.0
 
@@ -319,10 +316,6 @@ Setup and use the app when parked. The full analysis is in
 - Hardened UART frame parsing and supervised reader threads
 - Script runs from flash (low RAM/CPU); settings stored on the ESC with versioned,
   automatic migrations between releases
-- **Bus logging** in **Setup -> Debug** prints every frame the dashboard and any connected
-  phone app sends, to VESC Dev Tools -> Lisp. It takes effect the moment you tick it, is
-  never saved, and always stops at the next power on, so it cannot be left on by accident.
-  It does slow throttle response while running
 
 ## Wiring
 

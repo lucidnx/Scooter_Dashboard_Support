@@ -212,7 +212,6 @@
 (def app-pend false)
 (def power-pin 0) ; dashboard supply switch: 0 off, 1 ADC1, 2 ADC2
 (def dash-power-held false) ; the pin symbol once it is ours, false otherwise
-(def sniff-enable false) ; bus logging, deliberately not saved - never survives a reboot
 (def pend-dev 0)
 (def pend-src 0)
 (def pend-reg 0)
@@ -586,160 +585,29 @@
 (defun load-settings ()
     {
         (var ver (read-setting 'ver-code))
+        ; Each release only writes the settings it added, so an upgrade runs every
+        ; writer newer than the stored version and keeps everything else.
         (if (not-eq ver settings-version)
-            (cond
-                ((eq ver 300i32) { ; upgrades only write the added settings, everything else is kept
-                    (restore-gesture-apply-defaults)
+            (if (or (eq ver nil) (< ver 300i32) (> ver settings-version))
+                (restore-defaults)
+                {
+                    (if (< ver 301i32) (restore-gesture-apply-defaults))
+                    (if (< ver 302i32) (write-setting 'secret-apply-fw true))
+                    (if (< ver 303i32) (write-secret-mode-toggles))
+                    (if (< ver 304i32) (write-remap-defaults))
+                    (if (< ver 305i32) (write-v305-defaults))
+                    (if (< ver 306i32) (write-v306-defaults))
+                    (if (< ver 307i32) (write-v307-defaults))
+                    (if (< ver 308i32) (write-v308-defaults))
+                    (if (< ver 309i32) (write-v309-defaults))
+                    (if (< ver 310i32) (write-v310-defaults))
+                    (if (< ver 400i32) (write-v400-defaults))
+                    (if (< ver 401i32) (write-v401-defaults))
+                    (if (< ver 402i32) (write-v402-defaults))
+                    (if (< ver 403i32) (write-v403-defaults))
+                    (if (< ver 404i32) (write-v404-defaults))
                     (write-setting 'ver-code settings-version)
-                })
-                ((eq ver 301i32) {
-                    (write-setting 'secret-apply-fw true)
-                    (write-secret-mode-toggles)
-                    (write-remap-defaults)
-                    (write-v305-defaults)
-                    (write-v306-defaults)
-                    (write-v307-defaults)
-                    (write-v308-defaults)
-                    (write-v309-defaults)
-                    (write-v310-defaults)
-                    (write-v400-defaults)
-                    (write-v401-defaults)
-                    (write-v402-defaults)
-                    (write-v403-defaults)
-                    (write-v404-defaults)
-                    (write-setting 'ver-code settings-version)
-                })
-                ((eq ver 302i32) {
-                    (write-secret-mode-toggles)
-                    (write-remap-defaults)
-                    (write-v305-defaults)
-                    (write-v306-defaults)
-                    (write-v307-defaults)
-                    (write-v308-defaults)
-                    (write-v309-defaults)
-                    (write-v310-defaults)
-                    (write-v400-defaults)
-                    (write-v401-defaults)
-                    (write-v402-defaults)
-                    (write-v403-defaults)
-                    (write-v404-defaults)
-                    (write-setting 'ver-code settings-version)
-                })
-                ((eq ver 303i32) {
-                    (write-remap-defaults)
-                    (write-v305-defaults)
-                    (write-v306-defaults)
-                    (write-v307-defaults)
-                    (write-v308-defaults)
-                    (write-v309-defaults)
-                    (write-v310-defaults)
-                    (write-v400-defaults)
-                    (write-v401-defaults)
-                    (write-v402-defaults)
-                    (write-v403-defaults)
-                    (write-v404-defaults)
-                    (write-setting 'ver-code settings-version)
-                })
-                ((eq ver 304i32) {
-                    (write-v305-defaults)
-                    (write-v306-defaults)
-                    (write-v307-defaults)
-                    (write-v308-defaults)
-                    (write-v309-defaults)
-                    (write-v310-defaults)
-                    (write-v400-defaults)
-                    (write-v401-defaults)
-                    (write-v402-defaults)
-                    (write-v403-defaults)
-                    (write-v404-defaults)
-                    (write-setting 'ver-code settings-version)
-                })
-                ((eq ver 305i32) {
-                    (write-v306-defaults)
-                    (write-v307-defaults)
-                    (write-v308-defaults)
-                    (write-v309-defaults)
-                    (write-v310-defaults)
-                    (write-v400-defaults)
-                    (write-v401-defaults)
-                    (write-v402-defaults)
-                    (write-v403-defaults)
-                    (write-v404-defaults)
-                    (write-setting 'ver-code settings-version)
-                })
-                ((eq ver 306i32) {
-                    (write-v307-defaults)
-                    (write-v308-defaults)
-                    (write-v309-defaults)
-                    (write-v310-defaults)
-                    (write-v400-defaults)
-                    (write-v401-defaults)
-                    (write-v402-defaults)
-                    (write-v403-defaults)
-                    (write-v404-defaults)
-                    (write-setting 'ver-code settings-version)
-                })
-                ((eq ver 307i32) {
-                    (write-v308-defaults)
-                    (write-v309-defaults)
-                    (write-v310-defaults)
-                    (write-v400-defaults)
-                    (write-v401-defaults)
-                    (write-v402-defaults)
-                    (write-v403-defaults)
-                    (write-v404-defaults)
-                    (write-setting 'ver-code settings-version)
-                })
-                ((eq ver 308i32) {
-                    (write-v309-defaults)
-                    (write-v310-defaults)
-                    (write-v400-defaults)
-                    (write-v401-defaults)
-                    (write-v402-defaults)
-                    (write-v403-defaults)
-                    (write-v404-defaults)
-                    (write-setting 'ver-code settings-version)
-                })
-                ((eq ver 309i32) {
-                    (write-v310-defaults)
-                    (write-v400-defaults)
-                    (write-v401-defaults)
-                    (write-v402-defaults)
-                    (write-v403-defaults)
-                    (write-v404-defaults)
-                    (write-setting 'ver-code settings-version)
-                })
-                ((eq ver 310i32) {
-                    (write-v400-defaults)
-                    (write-v401-defaults)
-                    (write-v402-defaults)
-                    (write-v403-defaults)
-                    (write-v404-defaults)
-                    (write-setting 'ver-code settings-version)
-                })
-                ((eq ver 400i32) {
-                    (write-v401-defaults)
-                    (write-v402-defaults)
-                    (write-v403-defaults)
-                    (write-v404-defaults)
-                    (write-setting 'ver-code settings-version)
-                })
-                ((eq ver 401i32) {
-                    (write-v402-defaults)
-                    (write-v403-defaults)
-                    (write-v404-defaults)
-                    (write-setting 'ver-code settings-version)
-                })
-                ((eq ver 402i32) {
-                    (write-v403-defaults)
-                    (write-v404-defaults)
-                    (write-setting 'ver-code settings-version)
-                })
-                ((eq ver 403i32) {
-                    (write-v404-defaults)
-                    (write-setting 'ver-code settings-version)
-                })
-                (t (restore-defaults))
+                }
             )
         )
 
@@ -2345,28 +2213,6 @@
     )
 )
 
-; One line per received frame, same layout as the Flipper captures:
-;   uptime  src>dst  cmd  arg  length  payload
-; Lever frames are left out - at 40/s they bury everything worth reading. Our
-; own replies never appear either: the receiver is off while we transmit.
-(defun sniff-log (len xiaomi)
-    (let ((from (if xiaomi 3 4))
-          (n (if xiaomi (- len 2) len)) ; Xiaomi counts cmd and arg in the length
-          (pay ""))
-        {
-            (looprange i from (+ from (if (> n 24) 24 (if (< n 0) 0 n)))
-                (setq pay (str-merge pay (str-from-n (bufget-u8 uart-buf i) "%02x") " ")))
-            (print (str-merge
-                (str-from-n (secs-since 0) "%8.3f") "  "
-                (str-from-n (bufget-u8 uart-buf 0) "%02x")
-                (if xiaomi "   " (str-merge ">" (str-from-n (bufget-u8 uart-buf 1) "%02x")))
-                "  " (str-from-n (bufget-u8 uart-buf (if xiaomi 1 2)) "%02x")
-                "  " (str-from-n (bufget-u8 uart-buf (if xiaomi 2 3)) "%02x")
-                "  " (str-from-n len "%-2d") "  " pay
-            ))
-        }
-    )
-)
 
 ; The G2 handlebar has a horn and a turn signal button, and reports them one
 ; byte past the brake: 0x40 nothing pressed, 0x50 turn signal held for three
@@ -2407,9 +2253,6 @@
                             (uart-read-bytes uart-buf (+ len 6) 0) ; rest of the frame, overwrites the header
                             (var dst (bufget-u8 uart-buf 1))
                             (var code (bufget-u8 uart-buf 2))
-                            (if (and sniff-enable (!= code 0x65) (!= code 0x61))
-                                (trap (sniff-log len false))
-                            )
                             ; Verify only what we act on. The dash sends a steady
                             ; stream of 0x61 we have no use for, and every byte
                             ; checked costs interpreter time the lever path needs.
@@ -2492,9 +2335,6 @@
                             (if (and (> len 0) (< len 60)) ; max 64 bytes
                                 {
                                     (uart-read-bytes uart-buf (+ len 4) 0)
-                                    (if (and sniff-enable (!= (bufget-u8 uart-buf 1) 0x65))
-                                        (trap (sniff-log len true))
-                                    )
                                     (looprange i 0 len
                                         (setq crc (+ crc (bufget-u8 uart-buf i))))
                                     (if (=(+(shl(bufget-u8 uart-buf (+ len 2))8) (bufget-u8 uart-buf (+ len 1))) (bitwise-xor crc 0xFFFF))
