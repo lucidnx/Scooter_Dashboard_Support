@@ -262,8 +262,6 @@ Item {
     readonly property real calibPrepDuration: 3.0 // must match scooter_support.lisp calib-prep-duration
     readonly property real calibReleaseDuration: 3.0 // must match calib-release-duration
     property real calibRemaining: 0
-    property string calibStatusThr: "Not calibrated"
-    property string calibStatusBrk: "Not calibrated"
 
     // Shown on the button itself while that channel is running, replacing
     // "Calibrate Throttle/Brake"; falls back to the button's normal label
@@ -407,6 +405,8 @@ Item {
             + " " + lightPresses.currentIndex
             + " " + comboFromBoxes(lightBrake, lightThrottle)
             + " " + boolAtom(lightLocked)
+            + " " + secretOffPresses.currentIndex
+            + " " + comboFromBoxes(secretOffBrake, secretOffThrottle)
             + ")")
 
         queueCode("(save-misc-settings "
@@ -534,6 +534,8 @@ Item {
             pressesIndex(lightPresses, parts[9], 1)
             setBoxesFromCombo(Number.parseInt(parts[10]) || 0, lightBrake, lightThrottle)
             lightLocked.checked = parseBoolToken(parts[11])
+            pressesIndex(secretOffPresses, parts[12], 0)
+            setBoxesFromCombo(Number.parseInt(parts[13]) || 0, secretOffBrake, secretOffThrottle)
         } else if (parts[0] === "misc") {
             useMph.checked = parseBoolToken(parts[3]) // set unit before any speed field
             lightOnBoot.checked = parseBoolToken(parts[1])
@@ -951,7 +953,7 @@ Item {
 
                         RowLayout {
                             Layout.fillWidth: true
-                            Label { text: "Disable secret when locked"; Layout.fillWidth: true }
+                            Label { text: "Disable Secret when Locked"; Layout.fillWidth: true }
                             CheckBox { id: secretExitOnLock; text: "Enabled"; checked: true; spacing: 4 }
                         }
 
@@ -963,25 +965,25 @@ Item {
 
                         RowLayout {
                             Layout.fillWidth: true
-                            Label { text: "Auto headlight"; Layout.fillWidth: true }
+                            Label { text: "Auto Headlight"; Layout.fillWidth: true }
                             CheckBox { id: lightOnBoot; text: "Enabled"; spacing: 4 }
                         }
 
                         RowLayout {
                             Layout.fillWidth: true
-                            Label { text: "Always ON Tail light"; Layout.fillWidth: true; enabled: rearLightEnable.checked }
+                            Label { text: "Always ON Tail Light"; Layout.fillWidth: true; enabled: rearLightEnable.checked }
                             CheckBox { id: autoTaillight; text: "Enabled"; spacing: 4; enabled: rearLightEnable.checked }
                         }
 
                         RowLayout {
                             Layout.fillWidth: true
-                            Label { text: "Brake light"; Layout.fillWidth: true; enabled: rearLightEnable.checked }
+                            Label { text: "Brake Light"; Layout.fillWidth: true; enabled: rearLightEnable.checked }
                             ComboBox { id: brakeLightMode; Layout.preferredWidth: 100; model: ["On", "Blink", "Off"]; enabled: rearLightEnable.checked }
                         }
 
                         RowLayout {
                             Layout.fillWidth: true
-                            Label { text: "Battery on idle"; Layout.fillWidth: true }
+                            Label { text: "Battery on Idle"; Layout.fillWidth: true }
                             CheckBox { id: showBatteryInIdle; text: "Normal"; spacing: 4 }
                             CheckBox { id: showBatterySecret; text: "Secret"; checked: true; spacing: 4 }
                         }
@@ -992,7 +994,7 @@ Item {
                             CheckBox { id: alarmTone; text: "Enabled"; spacing: 4 }
                         }
 
-                        Label { text: "Gestures"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 24 }
+                        Label { text: "Gestures"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 44 }
 
                         RowLayout {
                             Layout.fillWidth: true
@@ -1035,6 +1037,16 @@ Item {
                             CheckBox { id: secretRequiresLock; text: "Locked"; spacing: 4 }
                             Item { Layout.fillWidth: true }
                             ComboBox { id: secretPresses; Layout.preferredWidth: 60; model: ["No", "1", "2", "3", "4", "5"]; currentIndex: 1 }
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 0
+                            Label { text: "Secret OFF"; Layout.preferredWidth: 54 }
+                            CheckBox { id: secretOffBrake; text: "Brake"; spacing: 4 }
+                            CheckBox { id: secretOffThrottle; text: "Throttle"; spacing: 4 }
+                            Item { Layout.fillWidth: true }
+                            ComboBox { id: secretOffPresses; Layout.preferredWidth: 60; model: ["No", "1", "2", "3", "4", "5"] }
                         }
                     }
                 }
@@ -1102,7 +1114,7 @@ Item {
                             TextField { id: sportOm; enabled: applyOm.checked; text: "1.000"; onEditingFinished: clampOm(sportOm); Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
                         }
 
-                        Label { text: "Secret"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 24 }
+                        Label { text: "Secret"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 44 }
 
                         RowLayout {
                             Layout.fillWidth: true
@@ -1180,7 +1192,7 @@ Item {
                             spacing: 4
                             enabled: !isSlave
 
-                            Label { text: "Throttle & Brake"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 24 }
+                            Label { text: "Throttle & Brake"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 44 }
 
                             RowLayout {
                                 Layout.fillWidth: true
@@ -1194,7 +1206,7 @@ Item {
                                 spacing: 4
                                 visible: softwareAdc.checked || softwareAdc2.checked
 
-                                Label { text: "Light Compensation"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 24 }
+                                Label { text: "Light Compensation"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 44 }
 
                                 Label {
                                     Layout.fillWidth: true
@@ -1234,12 +1246,6 @@ Item {
                                         onClicked: root.calibStartChannel("thr")
                                     }
 
-                                    Label {
-                                        Layout.fillWidth: true
-                                        wrapMode: Text.WordWrap
-                                        font.pointSize: Qt.application.font.pointSize > 0 ? Qt.application.font.pointSize - 1 : 10
-                                        text: root.calibStatusThr
-                                    }
 
                                 }
 
@@ -1270,24 +1276,18 @@ Item {
                                         onClicked: root.calibStartChannel("brk")
                                     }
 
-                                    Label {
-                                        Layout.fillWidth: true
-                                        wrapMode: Text.WordWrap
-                                        font.pointSize: Qt.application.font.pointSize > 0 ? Qt.application.font.pointSize - 1 : 10
-                                        text: root.calibStatusBrk
-                                    }
                                 }
                             }
 
-                            Label { text: "Gestures"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 24 }
+                            Label { text: "Gestures"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 44 }
 
                             RowLayout {
                                 Layout.fillWidth: true
-                                Label { text: "Disable button above (" + (useMph.checked ? "mph" : "km/h") + ")"; Layout.fillWidth: true }
+                                Label { text: "Disable Button above (" + (useMph.checked ? "mph" : "km/h") + ")"; Layout.fillWidth: true }
                                 TextField { id: buttonSpeed; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
                             }
 
-                            Label { text: "Temperature"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 24 }
+                            Label { text: "Temperature"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 44 }
 
                             RowLayout {
                                 Layout.fillWidth: true
@@ -1301,7 +1301,7 @@ Item {
                                 TextField { id: tempWarningFet; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
                             }
 
-                            Label { text: "Miscellaneous"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 24 }
+                            Label { text: "Miscellaneous"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 44 }
 
                             RowLayout {
                                 Layout.fillWidth: true
@@ -1317,7 +1317,7 @@ Item {
 
                             RowLayout {
                                 Layout.fillWidth: true
-                                Label { text: "Use VESC BMS for dash"; Layout.fillWidth: true }
+                                Label { text: "Use VESC BMS for Dash"; Layout.fillWidth: true }
                                 CheckBox { id: bmsSoc; text: "Enabled"; spacing: 4 }
                             }
 
@@ -1353,7 +1353,7 @@ Item {
                             }
 
                             Label {
-                                text: "MOSFET on the servo/PPM pin, PWM 200 Hz. Off leaves the pin alone entirely, so it stays free for something else. See the wiring diagram in the README."
+                                text: "Uses Servo/PPM PIN with mosfet to control Tail Light."
                                 opacity: 0.6
                                 wrapMode: Text.WordWrap
                                 Layout.fillWidth: true
@@ -1361,12 +1361,12 @@ Item {
 
                             RowLayout {
                                 Layout.fillWidth: true
-                                Label { text: "Dashboard power Control"; Layout.fillWidth: true }
+                                Label { text: "Dashboard power Control (experimental)"; Layout.fillWidth: true }
                                 ComboBox { id: dashPowerOut; Layout.preferredWidth: 100; model: ["Off", "ADC1", "ADC2"] }
                             }
 
                             Label {
-                                text: "Switches the dashboard supply from the chosen pin - 3.3V on, 0V off. Needs a step-down whose enable it drives and a 1kOhm pulldown. That pin stops working as a lever input."
+                                text: "Select pin to control power to the dashboard using mosfet. ON - 3.3V, OFF - 0V."
                                 opacity: 0.6
                                 wrapMode: Text.WordWrap
                                 Layout.fillWidth: true
@@ -1390,7 +1390,7 @@ Item {
                                 Layout.fillWidth: true
                             }
 
-                            Label { text: "Cruise control (experimental)"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 24 }
+                            Label { text: "Cruise control (experimental)"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 44 }
 
                             RowLayout {
                                 Layout.fillWidth: true
@@ -1423,13 +1423,13 @@ Item {
                             }
 
                             Label {
-                                text: "Cruise activates after holding a steady speed with the throttle for the set delay, then engages when you release the throttle. Any throttle or brake input cancels it instantly. Requires \"Cruise Control\" enabled (not inverted) under App Settings -> ADC -> Buttons, and Software ADC on."
+                                text: "Activates by holding steady speed for set time. Cancel on throttle/brake input. Requires Cruise Control enabled in VESC."
                                 opacity: 0.6
                                 wrapMode: Text.WordWrap
                                 Layout.fillWidth: true
                             }
 
-                            Label { text: "Alarm"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 24 }
+                            Label { text: "Alarm"; font.bold: true; font.pointSize: root.titleSize; Layout.topMargin: 44 }
 
                             RowLayout {
                                 Layout.fillWidth: true
@@ -1521,44 +1521,28 @@ Item {
                 // cleared later by the "calib-stage idle" message above
                 // ["calib-result", "thr"/"brk", offset, gain, offRel, offFull, onRel, onFull]
                 var rp = message.split(" ")
-                var range = "OFF " + Number(rp[4]).toFixed(2) + "→" + Number(rp[5]).toFixed(2)
-                    + "V, ON " + Number(rp[6]).toFixed(2) + "→" + Number(rp[7]).toFixed(2) + "V"
                 if (rp[1] === "thr") {
                     setOffsetV(lightOffThr, rp[2])
                     setGain(lightGainThr, rp[3])
-                    root.calibStatusThr = "Calibrated (" + range + ") - review the values above, then press Save."
                 } else {
                     setOffsetV(lightOffBrk, rp[2])
                     setGain(lightGainBrk, rp[3])
-                    root.calibStatusBrk = "Calibrated (" + range + ") - review the values above, then press Save."
                 }
                 return
             }
             if (message === "calib-refused") {
-                var refCh = root.calibRunning
                 root.calibRunning = ""
                 root.calibStage = "idle"
-                var refMsg = "Refused - scooter must be powered on and stationary."
-                if (refCh === "brk") root.calibStatusBrk = refMsg
-                else root.calibStatusThr = refMsg
                 return
             }
             if (message === "calib-aborted") {
-                var abortCh = root.calibRunning
                 root.calibRunning = ""
                 root.calibStage = "idle"
-                var abortMsg = "Cancelled - the scooter started moving or was turned off. Try again."
-                if (abortCh === "brk") root.calibStatusBrk = abortMsg
-                else root.calibStatusThr = abortMsg
                 return
             }
             if (message.startsWith("calib-error ")) {
                 root.calibRunning = ""
                 root.calibStage = "idle"
-                var errCh = message.split(" ")[1]
-                var errMsg = "Released and full-press readings were too close together. Check the lever actually moved, then try again."
-                if (errCh === "thr") root.calibStatusThr = errMsg
-                else root.calibStatusBrk = errMsg
                 return
             }
 

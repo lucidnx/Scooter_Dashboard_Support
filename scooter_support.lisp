@@ -63,6 +63,8 @@
 ; Button gestures (combo: 0=brake+throttle, 1=brake only, 2=throttle only, 3=none)
 ; presses = 0 means no button press needed, the gesture fires from levers alone
 (def secret-presses 1)
+(def secret-off-presses 0) ; a gesture that only ever leaves secret, never enters
+(def secret-off-combo 0)
 (def secret-combo 0)
 (def secret-requires-lock false) ; secret gesture only works while locked
 (def secret-exit-on-lock true) ; locking drops back to normal modes
@@ -278,7 +280,7 @@
 
 @const-start
 
-(def settings-version 404i32)
+(def settings-version 405i32)
 
 ; Persistent settings: (label . (eeprom-offset type))
 (def eeprom-addrs '(
@@ -326,6 +328,8 @@
     (apply-watts           . (40 b))
     (apply-fw              . (41 b))
     (secret-presses        . (42 i))
+    (secret-off-presses    . (89 i))
+    (secret-off-combo      . (90 i))
     (secret-combo          . (43 i))
     (secret-requires-lock  . (44 b))
     (lock-presses          . (45 i))
@@ -413,6 +417,13 @@
 ; (raw wasn't shifted by a constant volts - it scaled non-linearly with lever
 ; position). A flat offset from v308 would be WRONG under the new formula
 ; (sign-inverted at points), so it's reset here - recalibrate with Sample.
+(defun write-v405-defaults () ; settings added in v405
+    {
+        (write-setting 'secret-off-presses 0)
+        (write-setting 'secret-off-combo 0)
+    }
+)
+
 ; the ADC2-only bool becomes a pin selector
 (defun write-v404-defaults () ; settings added in v404
     (write-setting 'power-pin (if (read-setting 'dash-power-out) 2 0))
@@ -525,6 +536,7 @@
         (write-v402-defaults)
         (write-v403-defaults)
         (write-v404-defaults)
+        (write-v405-defaults)
                     (write-v402-defaults)
                     (write-v403-defaults)
                     (write-v404-defaults)
@@ -596,6 +608,7 @@
                     (if (< ver 402i32) (write-v402-defaults))
                     (if (< ver 403i32) (write-v403-defaults))
                     (if (< ver 404i32) (write-v404-defaults))
+                    (if (< ver 405i32) (write-v405-defaults))
                     (write-setting 'ver-code settings-version)
                 }
             )
@@ -620,7 +633,8 @@
             power-pin auto-taillight brake-light-mode eco-om drive-om sport-om
             secret-eco-om secret-drive-om secret-sport-om apply-om secret-apply-om
             bms-soc-enable cruise-enabled cruise-delay cruise-deviation
-            cruise-min-speed cruise-max-speed app-pin app-enable
+            cruise-min-speed cruise-max-speed app-pin app-enable secret-off-presses
+            secret-off-combo
         ) (set n (read-setting n)))
         (set 'min-speed (read-setting 'min-speed-kmh))
         (set 'eco-speed (/ (read-setting 'eco-speed-kmh) 3.6))
@@ -794,7 +808,7 @@
     }
 )
 
-(defun save-gesture-settings (s-presses s-combo s-locked l-presses l-combo m-presses m-combo m-locked li-presses li-combo li-locked)
+(defun save-gesture-settings (s-presses s-combo s-locked l-presses l-combo m-presses m-combo m-locked li-presses li-combo li-locked so-presses so-combo)
     {
         (write-setting 'secret-presses s-presses)
         (write-setting 'secret-combo s-combo)
@@ -807,6 +821,8 @@
         (write-setting 'light-presses li-presses)
         (write-setting 'light-combo li-combo)
         (write-setting 'light-requires-lock li-locked)
+        (write-setting 'secret-off-presses so-presses)
+        (write-setting 'secret-off-combo so-combo)
     }
 )
 
@@ -1107,7 +1123,9 @@
             (setting-bool 'mode-requires-lock)
             (setting-num 'light-presses "%d ")
             (setting-num 'light-combo "%d ")
-            (if (read-setting 'light-requires-lock) "true" "false")
+            (setting-bool 'light-requires-lock)
+            (setting-num 'secret-off-presses "%d ")
+            (setting-num 'secret-off-combo "%d")
         ))
         (sleep 0.05)
         (send-data (str-merge
@@ -2376,6 +2394,12 @@
                     (stats-reset) ; reset stats when turning on
                 }
             )
+            ((and unlock
+                    (> secret-off-presses 0)
+                    (= presses secret-off-presses)
+                    (combo-held secret-off-combo thr brk))
+                (toggle-secret) ; unlock is set, so this can only turn it off
+            )
             ((and secret-enabled
                     (> secret-presses 0)
                     (= presses secret-presses)
@@ -2421,6 +2445,13 @@
 
         (if (and lever-armed (> state 0) (> (secs-since lever-since) 0.5))
             (cond
+                ((and unlock (= secret-off-presses 0)
+                        (combo-state-match secret-off-combo state))
+                    {
+                        (set 'lever-armed false)
+                        (toggle-secret)
+                    }
+                )
                 ((and secret-enabled
                         (= secret-presses 0)
                         (combo-state-match secret-combo state)
