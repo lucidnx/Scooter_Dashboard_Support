@@ -836,7 +836,7 @@ Item {
                     // hits that floor, and scrolls from there.
                     readonly property real wS: Math.max(0.85, Math.min(1.25, availableWidth / 320))
                     readonly property real hS: Math.max(0.69, Math.min(1.0,
-                        (height - availableWidth - 38 - 78 * wS) / 252))
+                        (height - availableWidth * 0.759 - 36 - 78 * wS) / 252))
 
                     ColumnLayout {
                         width: parent.width
@@ -871,21 +871,22 @@ Item {
                         Item {
                             id: dial
                             Layout.fillWidth: true
-                            Layout.topMargin: 4
-                            Layout.preferredHeight: width
+                            Layout.topMargin: 2
+                            // only as tall as the arc reaches - it stops at bottom
+                            // left, so the circle's bottom quarter is dead space
+                            Layout.preferredHeight: dcy + drad * 0.7071 + dlw / 2
 
                             readonly property real dcx: width / 2
-                            readonly property real dcy: width * 0.50
-                            // as large as it goes - drad plus half the stroke has
-                            // to stay inside half the width
-                            readonly property real drad: width * 0.455
-                            readonly property real dlw: Math.max(14, drad * 0.19)
+                            readonly property real drad: width * 0.40
+                            readonly property real dlw: Math.max(12, drad * 0.19)
+                            readonly property real dcy: drad + dlw / 2
                             readonly property real srad: drad * 0.33
-                            readonly property real slw: Math.max(7, srad * 0.20)
-                            // the sub-dial sits in the corner of the big one, its
-                            // outer edges flush with the bottom and the right
+                            readonly property real slw: Math.max(6, srad * 0.20)
+                            readonly property real ccd: width * 0.085
+                            // the sub-dial tucks into the opening, its outer edges
+                            // flush with where the arc bottoms out and with the right
                             readonly property real subx: dcx + drad + dlw / 2 - srad - slw / 2
-                            readonly property real suby: dcy + drad + dlw / 2 - srad - slw / 2
+                            readonly property real suby: dcy + drad * 0.7071 + dlw / 2 - srad - slw / 2
 
                             readonly property real shown: useMph.checked ? (root.stSpeed * 0.621371) : root.stSpeed
                             readonly property real shownMax: Math.max(1, useMph.checked ? (root.stMax * 0.621371) : root.stMax)
@@ -912,7 +913,7 @@ Item {
                                     ctx.lineCap = "round"
 
                                     var cx = dial.dcx, cy = dial.dcy, r = dial.drad
-                                    var a0 = Math.PI * 0.5          // bottom
+                                    var a0 = Math.PI * 0.75         // bottom left
                                     var a1 = Math.PI * (330 / 180)  // top right
 
                                     ctx.lineWidth = dial.dlw
@@ -957,7 +958,7 @@ Item {
                                 anchors.verticalCenter: parent.top
                                 anchors.verticalCenterOffset: dial.dcy
                                 text: Math.round(dial.shown)
-                                font.pixelSize: dial.drad * 0.55
+                                font.pixelSize: dial.drad * 0.50
                                 font.bold: true
                             }
                             Label {
@@ -1037,13 +1038,56 @@ Item {
                                 radius: width / 2
                                 x: dial.width - width
                                 y: dial.dcy - dial.drad
+                                color: gearTouch2.pressed ? "#3a3a44" : "#2b2b31"
+                                Behavior on color { ColorAnimation { duration: 140 } }
+
+                                Canvas {
+                                    anchors.fill: parent
+                                    onPaint: {
+                                        var ctx = getContext("2d")
+                                        ctx.reset()
+                                        var c = width / 2
+                                        var ri = width * 0.16
+                                        var ro = width * 0.30
+                                        ctx.strokeStyle = "#c8c8d0"
+                                        ctx.lineWidth = Math.max(1.6, width * 0.075)
+                                        ctx.lineCap = "round"
+                                        ctx.beginPath()
+                                        ctx.arc(c, c, ri, 0, Math.PI * 2)
+                                        ctx.stroke()
+                                        for (var i = 0; i < 8; i++) {
+                                            var a = i * Math.PI / 4
+                                            ctx.beginPath()
+                                            ctx.moveTo(c + Math.cos(a) * (ri + width * 0.05),
+                                                       c + Math.sin(a) * (ri + width * 0.05))
+                                            ctx.lineTo(c + Math.cos(a) * ro, c + Math.sin(a) * ro)
+                                            ctx.stroke()
+                                        }
+                                    }
+                                }
+                                MouseArea {
+                                    id: gearTouch2
+                                    anchors.fill: parent
+                                    anchors.margins: -6
+                                    onClicked: swipeView.currentIndex = 1
+                                }
+                            }
+
+                            // cruise sits inside the ring, on the right, flush with
+                            // the dial's own edge
+                            Rectangle {
+                                width: dial.ccd
+                                height: width
+                                radius: width / 2
+                                x: dial.dcx + dial.drad + dial.dlw / 2 - width
+                                y: dial.dcy - dial.drad * 0.20 - width / 2
                                 color: root.stCruise ? "#21aabb" : "#2b2b31"
                                 Behavior on color { ColorAnimation { duration: 200 } }
                                 Label {
                                     anchors.centerIn: parent
                                     text: "CC"
                                     font.bold: true
-                                    font.pixelSize: dial.width * 0.045
+                                    font.pixelSize: dial.ccd * 0.42
                                     color: root.stCruise ? "#12262a" : "#6e6e76"
                                     Behavior on color { ColorAnimation { duration: 200 } }
                                 }
@@ -1273,11 +1317,17 @@ Item {
                         spacing: 4
 
                         Label { text: "General"; font.bold: true; font.pointSize: root.titleSize * 0.82; font.capitalization: Font.AllUppercase; font.letterSpacing: 1; opacity: 0.55; Layout.topMargin: 12; Layout.leftMargin: 4 }
-                        Pane {
+                        Rectangle {
                             Layout.fillWidth: true
-                            padding: 14
-                            background: Rectangle { color: "#26262b"; radius: 14 }
+                            Layout.preferredHeight: card1.implicitHeight + 28
+                            radius: 14
+                            color: "#26262b"
                             ColumnLayout {
+                                id: card1
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.top: parent.top
+                                anchors.margins: 14
                                 spacing: 8
 
                                 RowLayout {
@@ -1353,11 +1403,17 @@ Item {
                             }
                         }
                         Label { text: "Gestures"; font.bold: true; font.pointSize: root.titleSize * 0.82; font.capitalization: Font.AllUppercase; font.letterSpacing: 1; opacity: 0.55; Layout.topMargin: 26; Layout.leftMargin: 4 }
-                        Pane {
+                        Rectangle {
                             Layout.fillWidth: true
-                            padding: 14
-                            background: Rectangle { color: "#26262b"; radius: 14 }
+                            Layout.preferredHeight: card2.implicitHeight + 28
+                            radius: 14
+                            color: "#26262b"
                             ColumnLayout {
+                                id: card2
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.top: parent.top
+                                anchors.margins: 14
                                 spacing: 8
 
                                 RowLayout {
@@ -1432,11 +1488,17 @@ Item {
                         spacing: 4
 
                         Label { text: "Normal"; font.bold: true; font.pointSize: root.titleSize * 0.82; font.capitalization: Font.AllUppercase; font.letterSpacing: 1; opacity: 0.55; Layout.topMargin: 12; Layout.leftMargin: 4 }
-                        Pane {
+                        Rectangle {
                             Layout.fillWidth: true
-                            padding: 14
-                            background: Rectangle { color: "#26262b"; radius: 14 }
+                            Layout.preferredHeight: card3.implicitHeight + 28
+                            radius: 14
+                            color: "#26262b"
                             ColumnLayout {
+                                id: card3
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.top: parent.top
+                                anchors.margins: 14
                                 spacing: 8
 
                                 RowLayout {
@@ -1490,11 +1552,17 @@ Item {
                             }
                         }
                         Label { text: "Secret"; font.bold: true; font.pointSize: root.titleSize * 0.82; font.capitalization: Font.AllUppercase; font.letterSpacing: 1; opacity: 0.55; Layout.topMargin: 26; Layout.leftMargin: 4 }
-                        Pane {
+                        Rectangle {
                             Layout.fillWidth: true
-                            padding: 14
-                            background: Rectangle { color: "#26262b"; radius: 14 }
+                            Layout.preferredHeight: card4.implicitHeight + 28
+                            radius: 14
+                            color: "#26262b"
                             ColumnLayout {
+                                id: card4
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.top: parent.top
+                                anchors.margins: 14
                                 spacing: 8
 
                                 RowLayout {
@@ -1560,13 +1628,18 @@ Item {
                         width: parent.width
                         spacing: 4
 
-                        Pane {
+                        Rectangle {
                             Layout.fillWidth: true
                             Layout.topMargin: 12
-                            padding: 14
-                            background: Rectangle { color: "#26262b"; radius: 14 }
+                            Layout.preferredHeight: card0.implicitHeight + 28
+                            radius: 14
+                            color: "#26262b"
                                 RowLayout {
-                                    Layout.fillWidth: true
+                                    id: card0
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.top: parent.top
+                                    anchors.margins: 14
                                     Label { text: "Model"; font.bold: true; Layout.fillWidth: true }
                                     ComboBox {
                                         id: modelBox
@@ -1582,11 +1655,17 @@ Item {
                             enabled: !isSlave
 
                             Label { text: "Throttle & Brake"; font.bold: true; font.pointSize: root.titleSize * 0.82; font.capitalization: Font.AllUppercase; font.letterSpacing: 1; opacity: 0.55; Layout.topMargin: 12; Layout.leftMargin: 4 }
-                            Pane {
+                            Rectangle {
                                 Layout.fillWidth: true
-                                padding: 14
-                                background: Rectangle { color: "#26262b"; radius: 14 }
+                                Layout.preferredHeight: card5.implicitHeight + 28
+                                radius: 14
+                                color: "#26262b"
                                 ColumnLayout {
+                                    id: card5
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.top: parent.top
+                                    anchors.margins: 14
                                     spacing: 8
 
                                     RowLayout {
@@ -1679,11 +1758,17 @@ Item {
                                 }
                             }
                             Label { text: "Gestures"; font.bold: true; font.pointSize: root.titleSize * 0.82; font.capitalization: Font.AllUppercase; font.letterSpacing: 1; opacity: 0.55; Layout.topMargin: 26; Layout.leftMargin: 4 }
-                            Pane {
+                            Rectangle {
                                 Layout.fillWidth: true
-                                padding: 14
-                                background: Rectangle { color: "#26262b"; radius: 14 }
+                                Layout.preferredHeight: card6.implicitHeight + 28
+                                radius: 14
+                                color: "#26262b"
                                 ColumnLayout {
+                                    id: card6
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.top: parent.top
+                                    anchors.margins: 14
                                     spacing: 8
 
                                     RowLayout {
@@ -1695,11 +1780,17 @@ Item {
                                 }
                             }
                             Label { text: "Temperature"; font.bold: true; font.pointSize: root.titleSize * 0.82; font.capitalization: Font.AllUppercase; font.letterSpacing: 1; opacity: 0.55; Layout.topMargin: 26; Layout.leftMargin: 4 }
-                            Pane {
+                            Rectangle {
                                 Layout.fillWidth: true
-                                padding: 14
-                                background: Rectangle { color: "#26262b"; radius: 14 }
+                                Layout.preferredHeight: card7.implicitHeight + 28
+                                radius: 14
+                                color: "#26262b"
                                 ColumnLayout {
+                                    id: card7
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.top: parent.top
+                                    anchors.margins: 14
                                     spacing: 8
 
                                     RowLayout {
@@ -1717,11 +1808,17 @@ Item {
                                 }
                             }
                             Label { text: "Miscellaneous"; font.bold: true; font.pointSize: root.titleSize * 0.82; font.capitalization: Font.AllUppercase; font.letterSpacing: 1; opacity: 0.55; Layout.topMargin: 26; Layout.leftMargin: 4 }
-                            Pane {
+                            Rectangle {
                                 Layout.fillWidth: true
-                                padding: 14
-                                background: Rectangle { color: "#26262b"; radius: 14 }
+                                Layout.preferredHeight: card8.implicitHeight + 28
+                                radius: 14
+                                color: "#26262b"
                                 ColumnLayout {
+                                    id: card8
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.top: parent.top
+                                    anchors.margins: 14
                                     spacing: 8
 
                                     RowLayout {
@@ -1814,11 +1911,17 @@ Item {
                                 }
                             }
                             Label { text: "Cruise control (experimental)"; font.bold: true; font.pointSize: root.titleSize * 0.82; font.capitalization: Font.AllUppercase; font.letterSpacing: 1; opacity: 0.55; Layout.topMargin: 26; Layout.leftMargin: 4 }
-                            Pane {
+                            Rectangle {
                                 Layout.fillWidth: true
-                                padding: 14
-                                background: Rectangle { color: "#26262b"; radius: 14 }
+                                Layout.preferredHeight: card9.implicitHeight + 28
+                                radius: 14
+                                color: "#26262b"
                                 ColumnLayout {
+                                    id: card9
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.top: parent.top
+                                    anchors.margins: 14
                                     spacing: 8
 
                                     RowLayout {
@@ -1865,11 +1968,17 @@ Item {
                                 }
                             }
                             Label { text: "Alarm"; font.bold: true; font.pointSize: root.titleSize * 0.82; font.capitalization: Font.AllUppercase; font.letterSpacing: 1; opacity: 0.55; Layout.topMargin: 26; Layout.leftMargin: 4 }
-                            Pane {
+                            Rectangle {
                                 Layout.fillWidth: true
-                                padding: 14
-                                background: Rectangle { color: "#26262b"; radius: 14 }
+                                Layout.preferredHeight: card10.implicitHeight + 28
+                                radius: 14
+                                color: "#26262b"
                                 ColumnLayout {
+                                    id: card10
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.top: parent.top
+                                    anchors.margins: 14
                                     spacing: 8
 
                                     RowLayout {
