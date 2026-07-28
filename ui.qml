@@ -838,7 +838,7 @@ Item {
                                 anchors.verticalCenter: parent.top
                                 anchors.verticalCenterOffset: dial.dcy
                                 text: Math.round(dial.shown)
-                                font.pointSize: root.titleSize * 3.9
+                                font.pixelSize: dial.drad * 0.55
                                 font.bold: true
                             }
                             Label {
@@ -846,7 +846,7 @@ Item {
                                 anchors.top: speedNum.bottom
                                 anchors.topMargin: -6
                                 text: useMph.checked ? "mph" : "km/h"
-                                font.pointSize: root.titleSize * 0.95
+                                font.pixelSize: dial.drad * 0.13
                                 opacity: 0.55
                             }
 
@@ -857,7 +857,7 @@ Item {
                                 anchors.verticalCenter: parent.top
                                 anchors.verticalCenterOffset: dial.suby
                                 text: Math.round(root.stWatts)
-                                font.pointSize: root.titleSize * 1.35
+                                font.pixelSize: dial.srad * 0.55
                                 font.bold: true
                             }
                             Label {
@@ -865,7 +865,7 @@ Item {
                                 anchors.top: wattNum.bottom
                                 anchors.topMargin: -4
                                 text: "W"
-                                font.pointSize: root.titleSize * 0.72
+                                font.pixelSize: dial.srad * 0.28
                                 opacity: 0.5
                             }
 
@@ -924,7 +924,7 @@ Item {
                                     anchors.centerIn: parent
                                     text: "CC"
                                     font.bold: true
-                                    font.pointSize: root.titleSize * 0.78
+                                    font.pixelSize: dial.width * 0.045
                                     color: root.stCruise ? "#00232a" : "#6e6e76"
                                     Behavior on color { ColorAnimation { duration: 200 } }
                                 }
