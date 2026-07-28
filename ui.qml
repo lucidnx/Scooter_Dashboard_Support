@@ -335,6 +335,7 @@ Item {
             + " " + boolAtom(showBatterySecret)
             + " " + readSpeed(minSpeed, 1)
             + " " + boolAtom(appEnable)
+            + " " + idleDisplay.currentIndex
             + ")")
 
         queueCode("(save-temp-settings "
@@ -474,6 +475,7 @@ Item {
             showBatterySecret.checked = parseBoolToken(parts[4])
             setSpeed(minSpeed, parts[5], 1)
             appEnable.checked = parseBoolToken(parts[6])
+            idleDisplay.currentIndex = Number.parseInt(parts[7]) || 0
         } else if (parts[0] === "temps") {
             setReal(tempWarningMotor, parts[1], 1)
             setReal(tempWarningFet, parts[2], 1)
@@ -985,9 +987,24 @@ Item {
 
                         RowLayout {
                             Layout.fillWidth: true
-                            Label { text: "Battery on Idle"; Layout.fillWidth: true }
+                            Label { text: "Show Idle Display"; Layout.fillWidth: true }
                             CheckBox { id: showBatteryInIdle; text: "Normal"; spacing: 4 }
                             CheckBox { id: showBatterySecret; text: "Secret"; checked: true; spacing: 4 }
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Label {
+                                text: "Idle Display"
+                                Layout.fillWidth: true
+                                enabled: showBatteryInIdle.checked || showBatterySecret.checked
+                            }
+                            ComboBox {
+                                id: idleDisplay
+                                Layout.preferredWidth: 170
+                                enabled: showBatteryInIdle.checked || showBatterySecret.checked
+                                model: ["Battery %", "Battery V", "VESC \u00B0C", "Motor \u00B0C"]
+                            }
                         }
 
                         RowLayout {

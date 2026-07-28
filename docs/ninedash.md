@@ -178,11 +178,11 @@ serial-read burst that follows a real pairing looks like a better discriminator.
 
 ### What is `0xDA`?
 
-The one register we cannot account for, and it is not in any community documentation — the
-published register table stops at `0xCE`.
+The one register we cannot account for, and it is not in any community
+documentation — the published register table stops at `0xCE`.
 
-All three apps read it, always exactly **12 bytes**, so it is a block of six registers
-`0xDA`–`0xDF`. What differs is how hard they poll it:
+All three apps read it, always exactly **12 bytes**, so it is a block of six
+registers `0xDA`–`0xDF`. What differs is how hard they poll it:
 
 | app | rate |
 |---|---|
@@ -190,17 +190,24 @@ All three apps read it, always exactly **12 bytes**, so it is a block of six reg
 | m365 Tools | 1.2 /s |
 | NineDash | 2.2 /s |
 
-The official app treating it as something to read once or twice suggests it is static
-information rather than telemetry. If that is right, polling it at 2.2 Hz is the single
-easiest saving available — it is 3 of your 15.6 requests per second, most of the way to the
-budget above on its own.
+The official app reading it two or three times a session suggests static
+information rather than telemetry. If that is right, polling it at 2.2 Hz is the
+easiest saving available to you — 3 of your 15.6 requests per second, most of the
+way to the budget above on its own.
 
-The package answers twelve zero bytes and all three apps work normally, so whatever it
-carries is either optional or is being displayed somewhere without anything looking wrong.
-If you know the field layout we will populate it properly.
+**Ruled out:** twelve bytes is twenty-four hex characters, and NineDash shows a
+24-character controller ID, so we filled the block with a recognisable pattern
+(`0102030405060708090a0b0c`) to see whether that field was a hex dump of it. The
+ID stayed at zeros and nothing else in the app changed, so `0xDA` is not what
+feeds it.
 
-For reference, these are also read and answered with zeros without complaint: ESC `0xBE`,
-`0xE4`, `0xE7`, `0x23`, `0x7F`, `0x69`, and BMS `0x1B`, `0x8B`.
+The package answers twelve zero bytes and all three apps work normally, so
+whatever it carries is either optional or is displayed somewhere without looking
+wrong. If you know the field layout we will populate it properly.
+
+For reference, these are also read and answered with zeros without complaint: ESC
+`0xE4`, `0xE7`, `0x23`, `0x7F`, `0x69`, and BMS `0x1B`, `0x8B`. `0xBE` is now
+answered with the last alarm code.
 
 
 ### Two smaller things

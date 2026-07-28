@@ -7,7 +7,9 @@
 (def adc-touch 0.02)
 (def temp-warning-motor 80) ; temperature warning for motor in degree celsius
 (def temp-warning-fet 80) ; temperature warning for fet in degree celsius
-(def show-batt-in-idle false) ; battery instead of speed at idle, normal modes
+(def show-batt-in-idle false) ; show idle-display instead of speed at idle, normal modes
+(def idle-display 0) ; 0 battery %, 1 battery V, 2 controller C, 3 motor C
+(def last-alarm-code 0) ; the code the app reads back after an alarm has cleared
 (def show-batt-idle-secret true) ; same but in secret modes
 (def min-speed 1) ; minimum speed in km/h to enable throttle and brake
 (def button-safety-speed (/ 0.1 3.6)) ; disabling button above 0.1 km/h (due to safety reasons)
@@ -281,7 +283,7 @@
 
 @const-start
 
-(def settings-version 406i32)
+(def settings-version 407i32)
 
 ; Persistent settings: (label . (eeprom-offset type))
 (def eeprom-addrs '(
@@ -332,6 +334,7 @@
     (secret-off-presses    . (89 i))
     (secret-off-combo      . (90 i))
     (secret-off-requires-lock . (91 b))
+    (idle-display          . (92 i))
     (secret-combo          . (43 i))
     (secret-requires-lock  . (44 b))
     (lock-presses          . (45 i))
@@ -420,6 +423,10 @@
 ; position). A flat offset from v308 would be WRONG under the new formula
 ; (sign-inverted at points), so it's reset here - recalibrate with Sample.
 ; the secret-off gesture only shipped as a default nobody had reason to keep
+(defun write-v407-defaults () ; settings added in v407
+    (write-setting 'idle-display 0)
+)
+
 (defun write-v406-defaults () ; settings added in v406
     {
         (write-setting 'secret-off-presses 3)
@@ -549,6 +556,7 @@
         (write-v404-defaults)
         (write-v405-defaults)
         (write-v406-defaults)
+        (write-v407-defaults)
                     (write-v402-defaults)
                     (write-v403-defaults)
                     (write-v404-defaults)
@@ -622,6 +630,7 @@
                     (if (< ver 404i32) (write-v404-defaults))
                     (if (< ver 405i32) (write-v405-defaults))
                     (if (< ver 406i32) (write-v406-defaults))
+                    (if (< ver 407i32) (write-v407-defaults))
                     (write-setting 'ver-code settings-version)
                 }
             )
@@ -647,7 +656,7 @@
             secret-eco-om secret-drive-om secret-sport-om apply-om secret-apply-om
             bms-soc-enable cruise-enabled cruise-delay cruise-deviation
             cruise-min-speed cruise-max-speed app-pin app-enable secret-off-presses
-            secret-off-combo secret-off-requires-lock
+            secret-off-combo secret-off-requires-lock idle-display
         ) (set n (read-setting n)))
         (set 'min-speed (read-setting 'min-speed-kmh))
         (set 'eco-speed (/ (read-setting 'eco-speed-kmh) 3.6))
@@ -737,12 +746,13 @@
     }
 )
 
-(defun save-general-settings (adc adc2 show-batt show-batt-secret min-speed-kmh app)
+(defun save-general-settings (adc adc2 show-batt show-batt-secret min-speed-kmh app idle)
     {
         (write-setting 'app-enable app)
         (write-setting 'software-adc adc)
         (write-setting 'software-adc2 adc2)
         (write-setting 'show-batt-in-idle show-batt)
+        (write-setting 'idle-display idle)
         (write-setting 'show-batt-idle-secret show-batt-secret)
         (write-setting 'min-speed-kmh min-speed-kmh)
     }
@@ -1062,7 +1072,8 @@
             (setting-bool 'show-batt-in-idle)
             (setting-bool 'show-batt-idle-secret)
             (setting-num 'min-speed-kmh "%.1f ")
-            (if (read-setting 'app-enable) "true" "false")
+            (setting-bool 'app-enable)
+            (setting-num 'idle-display "%d")
         ))
         (sleep 0.05)
         (send-data (str-merge
@@ -1587,6 +1598,26 @@
             }
 )
 
+; What the dashboard shows instead of the speed while standing still.
+(defun highest-temp (local canget)
+    (let ((hi local))
+        {
+            (loopforeach i (can-list-devs)
+                (let ((c (canget i))) (if (> c hi) (setq hi c))))
+            hi
+        }
+    )
+)
+
+(defun idle-value ()
+    (cond
+        ((= idle-display 1) (to-i cur-vin))
+        ((= idle-display 2) (to-i (highest-temp cur-fet canget-temp-fet)))
+        ((= idle-display 3) (to-i (highest-temp cur-mot canget-temp-motor)))
+        (t (to-i cur-batt))
+    )
+)
+
 (defun build-dash-frame () ; contents of the 0x64 reply
     {
         (var current-speed (abs cur-speed-kmh))
@@ -1633,7 +1664,7 @@
                 (if (if unlock show-batt-idle-secret show-batt-in-idle)
                     (if (> current-speed 1)
                         (bufset-u8 tx-frame (+ tx-base 4) disp-speed)
-                        (bufset-u8 tx-frame (+ tx-base 4) battery))
+                        (bufset-u8 tx-frame (+ tx-base 4) (idle-value)))
                     (bufset-u8 tx-frame (+ tx-base 4) disp-speed)
                 )
             )
@@ -1986,6 +2017,7 @@
         ((= reg 0xb9) (app-clamp16 (/ (app-trip-m) 10)))
         ((= reg 0xba) (to-i (secs-since app-boot-time)))
         ((= reg 0xbb) (app-fet-01))
+        ((= reg 0xbe) last-alarm-code) ; the alarm that just cleared
         ((= reg 0xbc) (+ (bitwise-and (to-i cur-maxkmh) 0xFF) ; low: current limit, high: full speed
                          (shl (bitwise-and (to-i cur-maxkmh) 0xFF) 8)))
         (t 0)
@@ -2026,11 +2058,6 @@
             ((= reg 0x65) (app-speed-01))
             ((or (= reg 0x66) (= reg 0x67) (= reg 0x68)) app-ver)
             ((or (= reg 0x72) (= reg 0x73) (= reg 0x74)) (app-clamp16 (* cur-maxkmh 10)))
-            ; TEST: 0xDA is 12 bytes and NineDash shows a 24-character controller
-            ; ID, so it is probably a hex dump of exactly this. Each byte carries
-            ; its own position, which also shows whether the app swaps the words.
-            ((and (>= reg 0xda) (< reg 0xe0))
-                (let ((i (* 2 (- reg 0xda)))) (+ (shl (+ i 2) 8) (+ i 1))))
             ((= reg 0x7a) (if light 1 0))
             ((= reg 0x90) (if light 1 0))
             ((or (= reg 0x91) (= reg 0x92)) (if alarm-tone 1 0))
@@ -2136,6 +2163,7 @@
         ((= reg 0xb8) (shr cur-odo 16))
         ((= reg 0xb9) (app-clamp16 (/ (app-trip-m) 10)))
         ((= reg 0xbb) (app-fet-01))
+        ((= reg 0xbe) last-alarm-code) ; the alarm that just cleared
         (t 0)
     )
 )
@@ -2568,6 +2596,7 @@
     (if (= alarm 0)
         {
             (set 'alarm 1)
+            (set 'last-alarm-code 9) ; ALARM_CODE_LOCKED, kept for 0xBE
             (set 'alarm-time (systime))
             (print "Alarm started")
         }
