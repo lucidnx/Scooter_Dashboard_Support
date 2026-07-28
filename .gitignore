@@ -10,3 +10,4 @@ tools/*
 *.log
 bus_sniff.py
 build/
+padded.lisp
