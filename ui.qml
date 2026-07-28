@@ -57,6 +57,7 @@ Item {
     property bool stCruise: false
     property bool stCruiseEn: false
     property bool stCruiseAllow: false
+    property bool stImgOk: true
 
     function applyStateLine(line) {
         var p = line.split(" ")
@@ -76,6 +77,7 @@ Item {
         stCruise = parseBoolToken(p[14])
         stCruiseEn = parseBoolToken(p[15])
         stCruiseAllow = parseBoolToken(p[16])
+        stImgOk = parseBoolToken(p[17])
     }
 
     function ctrlCode(str) {
@@ -704,6 +706,16 @@ Item {
                     ColumnLayout {
                         width: parent.width
                         spacing: 6
+
+                        Label {
+                            visible: !root.stImgOk
+                            text: "WARNING! Script too big to save - it will not start after a reboot."
+                            color: "#ff5252"
+                            font.bold: true
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                            Layout.topMargin: 12
+                        }
 
                         Item {
                             Layout.fillWidth: true

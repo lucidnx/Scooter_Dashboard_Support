@@ -1004,7 +1004,8 @@
         (str-from-n (send-state-maxkmh) "%.0f ")
         (if cruising "true " "false ")
         (if cruise-enabled "true " "false ")
-        (if cruise-allow "true" "false")
+        (if cruise-allow "true " "false ")
+        (if img-ok "true" "false")
     ))
 )
 
@@ -2988,5 +2989,11 @@
 ; rewrites the const heap from the same base pointer each time - the second boot
 ; then collides with the first. With one, main is found in the restored
 ; environment and only (main) runs.
-(image-save)
+;
+; image-save returns nil when the script has outgrown the const heap. Nothing
+; breaks until the next boot, so catch it here: true is what goes into the image,
+; so a boot that came from one always reports success.
+(def img-ok true)
+(set 'img-ok (image-save))
+(if (not img-ok) (print "image-save failed - script too big, will not boot"))
 (main)
