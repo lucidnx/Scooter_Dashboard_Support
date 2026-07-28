@@ -199,7 +199,7 @@
 ; means a flash write - either stalls the lever frames for as long as it takes,
 ; and the app repeats every write several times. Writes only record what
 ; changed; the button loop carries it out.
-(def app-todo 0) ; 1 cruise, 2 taillight, 4 buzzer, 8 pin, 16 apply-mode, 32 lock
+(def app-todo 0) ; 1 cruise, 2 taillight, 4 buzzer, 8 pin, 16 apply-mode, 32 lock, 64 power off
 ; A reply of 20 bytes or more holds the line long enough to lose a lever frame,
 ; and the cell voltage read alone is over one a second. Those are diagnostics,
 ; not riding data, so they wait until the levers are released.
@@ -1936,6 +1936,10 @@
                 (build-app-frame app-f-7b 0x7b 6)
             })))
         ((= reg 0x90) (set 'light (!= val 0)))
+        ; 0x79 powerdown: the dashboard is powered separately from a VESC, so
+        ; this turns it off the same way the appUI button and a long press do,
+        ; rather than cutting the whole vehicle
+        ((= reg 0x79) (if (!= val 0) (set 'app-todo (bitwise-or app-todo 64))))
         ((= reg 0x7e) (if (!= val 0) (set 'feedback 3))) ; find my scooter
         ((or (= reg 0x91) (= reg 0x92)) (let ((v (!= val 0)))
             (if (not (eq v alarm-tone)) {
@@ -1955,6 +1959,7 @@
         (let ((td app-todo))
             {
                 (set 'app-todo 0)
+                (if (= (bitwise-and td 64) 64) (ctrl-power false)) ; speed guarded there
                 (if (= (bitwise-and td 32) 32) (toggle-lock))
                 (if (= (bitwise-and td 16) 16) (apply-mode))
                 (if (= (bitwise-and td 1) 1) (write-setting 'cruise-enabled cruise-enabled))

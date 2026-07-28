@@ -22,10 +22,10 @@ stock release and every `version >= x` check passes.
 
 ## What a VESC cannot do
 
-**Shutdown (`0x79`)** is acknowledged and ignored. On a stock scooter the ESC powers down
-the whole vehicle including the dash; on a VESC the dash is powered separately, so a
-shutdown would cut the display and the BLE link while the controller stayed live. Please
-hide or disable the power control when a VESC is detected.
+**Shutdown (`0x79`)** works, with one difference worth knowing. On a stock scooter the ESC
+powers down the whole vehicle; on a VESC the dashboard is powered separately, so the
+command switches the dashboard off exactly as the package's own power button and a long
+press of the scooter button do. The controller stays live. Refused above walking pace.
 
 **KERS (`0x7B`)** has no VESC equivalent — regenerative braking is configured in VESC Tool
 and is not a three-level setting.
@@ -110,7 +110,7 @@ Four registers account for 12.8 of the 15.6 requests per second:
 |---|---|---|
 | BMS `0x33` | 3.4 Hz | current + voltage |
 | ESC `0xB4` | 3.3 Hz | speed + battery |
-| ESC `0xDA` | 3.2 Hz | unknown |
+| ESC `0xDA` | 3.2 Hz | unknown — see below |
 | BMS `0x35` | 2.9 Hz | temperatures |
 
 Two ways to get under the limits, both proven on this hardware:
@@ -127,57 +127,81 @@ A "reduce polling while riding" option would help every user on every controller
 
 ## Other notes
 
-### A headlight toggle on `0x7A`
 
-Beyond the borrowed `0x76` mapping above, `0x7A` is marked **Reserved** in the Ninebot ES
-protocol document, so it is free for a properly labelled headlight switch. Same shape as
-your Back light switch — `cmd 0x03`, one payload byte, `0` off and non-zero on — and
-readable at the same address for the state. The package implements it already.
+### The headlight change is the pairing signal, and it disconnects you
 
-### Something in NineDash reacts to the headlight
+This one is now measured rather than suspected.
 
-On this setup, **changing the headlight state has been observed to end NineDash's BLE
-session**, within one dash cycle, regardless of how it is triggered. Confirmed four ways:
+**The Segway app's pairing confirmation is a headlight state change, not a button press.**
+Its instruction says "press the button" because on a stock scooter that is what toggles the
+headlight — but the light change is what it watches for. Confirmed two ways: pairing
+completes when the light is toggled from the package's own UI with the button never
+touched, and in the pairing capture the pairing reads follow the light change rather than
+the button:
 
-- app writes `0x7B` mapped to the headlight → disconnect
-- app writes `0x7D` mapped to the headlight → disconnect
-- headlight toggled by the scooter's own button gesture, app untouched → disconnect
-- headlight state never changes → 15 writes over 120 s, no disconnect
+```
+light byte  00 -> 01 at  8.85    serial reads at  9.16, 9.27, 9.83
+light byte  01 -> 00 at 10.70    serial reads at 11.83, 11.98
+button                4.79, 24.08, 25.05   (no light change, no pairing reads)
+```
 
-The dash itself is unaffected — no flicker, no reset — and the supply is a 3 A buck
-converter with a capacitor, so it is not a brownout. The ESC stays healthy throughout: it
-keeps answering the dash at 10/s and lever frames return to 40/s the moment the app drops.
-The bus capture shows a completely clean exchange right up to the silence.
+The dashboard does report the button separately — byte 4 of the `0x64`/`0x65` lever frames,
+high for about 100 ms per press — but it is not what drives pairing.
 
-The only thing that changes on the wire is bit 2 of the dash frame payload (`20>21 cmd 0x64`),
-which carries the headlight state. Does the app react to that bit?
+**NineDash disconnects on that same signal.** In two captures the last app frame arrives one
+dash cycle after the light byte changes:
 
-**The official Segway app and m365 Tools do not disconnect** when the headlight is toggled
-on the same scooter and the same firmware, which is what points at something app-side.
+```
+11.955  3e>20 cmd 03 reg 7b 01     app writes the register mapped to the headlight
+12.006  20>21 cmd 64  light 00 -> 01
+12.110  last app frame, ever
+```
 
-One caveat: all four observations above predate the timing work described earlier, when
-replies were sometimes hundreds of milliseconds late — and NineDash was the app driving
-the bus into that state, so a plain timeout has not been fully ruled out either. The
-headlight now sits on `0x76` (Direct power control) and can be re-tested directly.
+The other capture is identical with the light going the other way. Five writes to `0x76` in
+the same session did **not** disconnect it, because they did not change the light byte — so
+it is the byte, not the write.
+
+**And the link is fine.** m365 Tools, same scooter, same firmware, rode through five light
+changes at 90.05, 96.21, 103.43, 111.45 and 117.07 s with no gap in its traffic at all. The
+dashboard does not reset, the BLE module does not drop the link, and there is no reconnect
+to miss. NineDash closes the connection itself.
+
+Which is reasonable behaviour on a stock scooter: a pairing event invalidates the previous
+session. The problem is that the signal cannot distinguish a pairing from someone switching
+their headlight on, so on a VESC — where the headlight is used normally — it fires all the
+time. A stock G30 does the same thing; there has just never been a reason to notice.
+
+There is nothing the package can send to prevent it. The signal *is* the headlight state,
+and it cannot stop reporting that without breaking the dashboard's light indicator. The
+serial-read burst that follows a real pairing looks like a better discriminator.
+
 
 ### What is `0xDA`?
 
-The one register we cannot account for. Across every capture we have — NineDash, m365
-Tools and the official Segway app — `0xDA` was read **628 times**, more than any register
-except `0xB4`. All three apps ask for it, always 12 bytes, at around 3 Hz.
+The one register we cannot account for, and it is not in any community documentation — the
+published register table stops at `0xCE`.
 
-It appears in no Ninebot or Xiaomi protocol reference we can find, and no open-source
-project we looked at decodes it. The package answers twelve zero bytes and **all three apps
-work normally**, so whatever it carries is either optional or is being displayed somewhere
-without anything looking obviously wrong.
+All three apps read it, always exactly **12 bytes**, so it is a block of six registers
+`0xDA`–`0xDF`. What differs is how hard they poll it:
 
-Since you poll it more often than almost anything else, you presumably know what you expect
-back. If you can tell us the field layout we will populate it properly; if it turns out to
-be dead weight, dropping it removes 3 requests/s on its own — most of the way to the
-5 requests/s budget above.
+| app | rate |
+|---|---|
+| Segway Ninebot (official) | 0.04 – 0.08 /s — two or three reads in a whole session |
+| m365 Tools | 1.2 /s |
+| NineDash | 2.2 /s |
 
-For reference, these registers are also read and answered with zeros, with no complaint
-from any app: ESC `0xBE`, `0xE4`, `0xE7`, `0x23`, `0x7F`, `0x69`, and BMS `0x1B`, `0x8B`.
+The official app treating it as something to read once or twice suggests it is static
+information rather than telemetry. If that is right, polling it at 2.2 Hz is the single
+easiest saving available — it is 3 of your 15.6 requests per second, most of the way to the
+budget above on its own.
+
+The package answers twelve zero bytes and all three apps work normally, so whatever it
+carries is either optional or is being displayed somewhere without anything looking wrong.
+If you know the field layout we will populate it properly.
+
+For reference, these are also read and answered with zeros without complaint: ESC `0xBE`,
+`0xE4`, `0xE7`, `0x23`, `0x7F`, `0x69`, and BMS `0x1B`, `0x8B`.
+
 
 ### Two smaller things
 
