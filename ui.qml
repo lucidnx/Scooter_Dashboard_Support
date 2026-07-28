@@ -720,7 +720,7 @@ Item {
                     // hits that floor, and scrolls from there.
                     readonly property real wS: Math.max(0.85, Math.min(1.25, availableWidth / 320))
                     readonly property real hS: Math.max(0.69, Math.min(1.0,
-                        (height - availableWidth - 62 - 78 * wS) / 280))
+                        (height - availableWidth - 38 - 78 * wS) / 252))
 
                     ColumnLayout {
                         width: parent.width
@@ -807,8 +807,8 @@ Item {
 
                                     if (sAnim > 0.004) {
                                         var g = ctx.createLinearGradient(cx - r, cy + r, cx + r, cy - r)
-                                        g.addColorStop(0, "#e6b155")
-                                        g.addColorStop(1, "#d4703f")
+                                        g.addColorStop(0, "#f4ba2a")
+                                        g.addColorStop(1, "#ec6e1c")
                                         ctx.strokeStyle = g
                                         ctx.beginPath()
                                         ctx.arc(cx, cy, r, a0, a0 + (a1 - a0) * sAnim, false)
@@ -826,7 +826,7 @@ Item {
                                     ctx.stroke()
 
                                     if (wAnim > 0.004) {
-                                        ctx.strokeStyle = root.stWatts < 0 ? "#6a9e6e" : "#6ba8c9"
+                                        ctx.strokeStyle = root.stWatts < 0 ? "#68ae6c" : "#5cb7e2"
                                         ctx.beginPath()
                                         ctx.arc(dial.subx, dial.suby, sr, b0, b0 + (b1 - b0) * wAnim, false)
                                         ctx.stroke()
@@ -881,7 +881,7 @@ Item {
                                 width: dial.width * 0.105
                                 height: width
                                 radius: width / 2
-                                color: root.stOff ? "#2b2b31" : "#3c6b48"
+                                color: root.stOff ? "#2b2b31" : "#34753c"
                                 scale: powerTouch.pressed ? 0.94 : 1.0
                                 Behavior on color { ColorAnimation { duration: 180 } }
                                 Behavior on scale { NumberAnimation { duration: 90 } }
@@ -921,7 +921,7 @@ Item {
                                 radius: width / 2
                                 x: dial.width - width
                                 y: dial.dcy - dial.drad
-                                color: root.stCruise ? "#4a949d" : "#2b2b31"
+                                color: root.stCruise ? "#21aabb" : "#2b2b31"
                                 Behavior on color { ColorAnimation { duration: 200 } }
                                 Label {
                                     anchors.centerIn: parent
@@ -954,7 +954,7 @@ Item {
                                     width: Math.max(height, battTrack.width * Math.max(0, Math.min(1, root.stBatt / 100)))
                                     // full green down to 60%, amber through the
                                     // thirties, red only when the pack is really low
-                                    color: Qt.hsla(0.333 * Math.max(0, Math.min(1, (root.stBatt - 8) / 52)), 0.5, 0.42, 1)
+                                    color: Qt.hsla(0.333 * Math.max(0, Math.min(1, (root.stBatt - 8) / 52)), 0.62, 0.40, 1)
                                     Behavior on width { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
                                     Behavior on color { ColorAnimation { duration: 320 } }
                                 }
@@ -1024,7 +1024,7 @@ Item {
 
                                     Row {
                                         anchors.centerIn: parent
-                                        spacing: 4
+                                        spacing: 2
                                         Label {
                                             anchors.verticalCenter: parent.verticalCenter
                                             text: modelData.val
@@ -1046,8 +1046,8 @@ Item {
                         // active mode instead of three buttons lighting up
                         Item {
                             Layout.fillWidth: true
-                            Layout.topMargin: Math.round(14 * ctlScroll.hS)
-                            Layout.preferredHeight: Math.round(56 * ctlScroll.hS)
+                            Layout.topMargin: Math.round(20 * ctlScroll.hS)
+                            Layout.preferredHeight: Math.round(48 * ctlScroll.hS)
 
                             Rectangle {
                                 id: modeTrack
@@ -1060,7 +1060,7 @@ Item {
                                     height: parent.height
                                     radius: parent.radius
                                     x: root.stMode === 2 ? 0 : (root.stMode === 1 ? modeTrack.width / 3 : modeTrack.width * 2 / 3)
-                                    color: root.stMode === 2 ? "#4a7fae" : (root.stMode === 1 ? "#4d8a56" : "#b05a54")
+                                    color: root.stMode === 2 ? "#3284cc" : (root.stMode === 1 ? "#48964e" : "#cd4843")
                                     Behavior on x { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
                                     Behavior on color { ColorAnimation { duration: 220 } }
                                 }
@@ -1095,26 +1095,27 @@ Item {
 
                         GridLayout {
                             Layout.fillWidth: true
-                            Layout.topMargin: Math.round(12 * ctlScroll.hS)
+                            Layout.topMargin: Math.round(20 * ctlScroll.hS)
+                            Layout.bottomMargin: 14
                             columns: 2
                             rowSpacing: Math.round(10 * ctlScroll.hS)
                             columnSpacing: 10
 
                             Repeater {
                                 model: [
-                                    { t: "LOCK", on: root.stLock, col: "#a34a4a", fg: "#ffffff",
+                                    { t: "LOCK", on: root.stLock, col: "#b63737", fg: "#ffffff",
                                       cmd: "(ctrl-lock " + (root.stLock ? "false" : "true") + ")", live: true },
-                                    { t: "SECRET", on: root.stSecret, col: "#6d4a86", fg: "#ffffff",
+                                    { t: "SECRET", on: root.stSecret, col: "#753295", fg: "#ffffff",
                                       cmd: "(ctrl-secret " + (root.stSecret ? "false" : "true") + ")", live: true },
-                                    { t: "LIGHT", on: root.stLight, col: "#c39b4a", fg: root.stLight ? "#1e1a10" : "#ffffff",
+                                    { t: "LIGHT", on: root.stLight, col: "#e1a236", fg: root.stLight ? "#1e1a10" : "#ffffff",
                                       cmd: "(ctrl-light " + (root.stLight ? "false" : "true") + ")", live: true },
-                                    { t: "CRUISE", on: root.stCruiseEn, col: "#3d7a72", fg: "#ffffff",
+                                    { t: "CRUISE", on: root.stCruiseEn, col: "#1b8277", fg: "#ffffff",
                                       cmd: "(ctrl-cruise " + (root.stCruiseEn ? "false" : "true") + ")", live: root.stCruiseAllow }
                                 ]
                                 Rectangle {
                                     Layout.fillWidth: true
                                     Layout.preferredWidth: 1
-                                    Layout.preferredHeight: Math.round(66 * ctlScroll.hS)
+                                    Layout.preferredHeight: Math.round(58 * ctlScroll.hS)
                                     radius: 14
                                     color: modelData.on ? modelData.col : "#2b2b31"
                                     opacity: modelData.live ? 1.0 : 0.35
@@ -1138,17 +1139,6 @@ Item {
                                     }
                                 }
                             }
-                        }
-
-                        Label {
-                            Layout.topMargin: Math.round(18 * ctlScroll.hS)
-                            Layout.bottomMargin: 14
-                            Layout.fillWidth: true
-                            horizontalAlignment: Text.AlignHCenter
-                            text: "Lock, unlock and power off only react at standstill."
-                            font.pointSize: Qt.application.font.pointSize > 0 ? Qt.application.font.pointSize - 1 : 10
-                            opacity: 0.45
-                            wrapMode: Text.WordWrap
                         }
                     }
                 }
