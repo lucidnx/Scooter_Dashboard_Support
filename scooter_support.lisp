@@ -1363,8 +1363,11 @@
         ; gain=1/offset=0 (uncalibrated default) makes this a no-op.
         (var throttle (if light (/ (- thr-raw-v light-offset-thr) light-gain-thr) thr-raw-v))
         (var brake (if light (/ (- brk-raw-v light-offset-brk) light-gain-brk) brk-raw-v))
-        (if (< dash-thr-raw thr-rest) (set 'thr-rest dash-thr-raw))
-        (if (< dash-brk-raw brk-rest) (set 'brk-rest dash-brk-raw))
+        ; a dash that is not powered up yet reports both levers at 0x0a, far
+        ; under any real rest position - taking that as the rest would leave the
+        ; levers looking active for good and starve the app of its bulk reads
+        (if (and (> dash-thr-raw 16) (< dash-thr-raw thr-rest)) (set 'thr-rest dash-thr-raw))
+        (if (and (> dash-brk-raw 16) (< dash-brk-raw brk-rest)) (set 'brk-rest dash-brk-raw))
         (set 'levers-active (or (> dash-thr-raw (+ thr-rest 10))
                                 (> dash-brk-raw (+ brk-rest 10))))
 
@@ -1625,15 +1628,17 @@
         (var battery cur-batt)
 
         ; mode field (1=drive, 2=eco, 4=sport, 8=charge, 16=off, 32=lock,
-        ; 64=mph on the G2, 128=overheat)
-        (var mode-extra (if (and (= model 3) use-mph) 64 0))
+        ; 64=mph on the G2, 128=overheat). A stock G2 cycles 2 -> 0 -> 4, so
+        ; drive is no bit set there, not bit 0.
+        (var mode-base (+ (if (and (= model 3) (= speedmode 1)) 0 speedmode)
+                          (if (and (= model 3) use-mph) 64 0)))
         (if off
             (bufset-u8 tx-frame tx-base 16)
             (if lock
                 (bufset-u8 tx-frame tx-base 32) ; lock display
                 (if (or (> (get-temp-fet) temp-warning-fet) (> (get-temp-mot) temp-warning-motor) bms-warn) ; temp icon will show up above warning degree
-                    (bufset-u8 tx-frame tx-base (+ 128 speedmode mode-extra))
-                    (bufset-u8 tx-frame tx-base (+ speedmode mode-extra))
+                    (bufset-u8 tx-frame tx-base (+ 128 mode-base))
+                    (bufset-u8 tx-frame tx-base mode-base)
                 )
             )
         )
@@ -1644,12 +1649,13 @@
             (bufset-u8 tx-frame (+ tx-base 1) battery)
         )
 
-        ; light field - the G2 packs headlight, park and cruise into one byte
+        ; light field - the G2 packs headlight, park and cruise into one byte,
+        ; and its headlight is bit 4, the only bit a stock G2 was seen to set
         (if (not off)
             (if (> alarm 4)
                 (bufset-u8 tx-frame (+ tx-base 2) 1) ; alarm on
                 (bufset-u8 tx-frame (+ tx-base 2) (if (= model 3)
-                    (+ (if light 1 0) (if lock 2 0) (if cruising 4 0))
+                    (+ (if light 16 0) (if lock 2 0) (if cruising 4 0))
                     (if light 1 0)
                 ))
             )
@@ -2915,11 +2921,11 @@
                 (bufset-u8 tx-frame 2 (if (= model 3) 0x08 0x06)) ;Payload length
                 (bufset-u16 tx-frame 3 0x2021) ; Packet is from ESC to BLE
                 (bufset-u16 tx-frame 5 0x6400) ; Packet is from ESC to BLE
-                ; the G2 reply carries two more payload bytes, both constant -
-                ; what they mean is not known, the reference sends them fixed too
+                ; the G2 reply carries two more payload bytes - what they mean is
+                ; not known, these are what a stock G2 sends once it has booted
                 (if (= model 3) {
-                    (bufset-u8 tx-frame 13 0x06)
-                    (bufset-u8 tx-frame 14 0x2e)
+                    (bufset-u8 tx-frame 13 0x04)
+                    (bufset-u8 tx-frame 14 0x91)
                 })
                 (set 'tx-base 7)
                 (set 'thr-idx 5)
