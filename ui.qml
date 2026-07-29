@@ -710,6 +710,7 @@ Item {
 
     Dialog {
         id: resetDialog
+        background: Rectangle { radius: 16; color: "#3a3a42" }
         // centred from bindings that re-run when the size changes. anchors.centerIn
         // settles once, while the content is still resolving its width, and the
         // offset it lands on then sticks for every later open.
@@ -728,10 +729,29 @@ Item {
         }
     }
 
+    // Material's own item delegate draws a square highlight inside our rounded
+    // popup. ListView.isCurrentItem is what the popup binds to highlightedIndex,
+    // so one delegate serves every dropdown without knowing which one it is in.
+    Component {
+        id: comboItem
+        ItemDelegate {
+            id: comboCell
+            width: ListView.view ? ListView.view.width : implicitWidth
+            height: 38
+            text: modelData
+            highlighted: ListView.isCurrentItem
+            background: Rectangle {
+                radius: 10
+                color: comboCell.highlighted ? "#3d3d48" : "transparent"
+            }
+        }
+    }
+
     // VESC Tool's QML has no way to write a file on the phone or the desktop, so a
     // backup travels as text through the clipboard - paste it wherever you keep it.
     Dialog {
         id: exportDialog
+        background: Rectangle { radius: 16; color: "#3a3a42" }
         // centred from bindings that re-run when the size changes. anchors.centerIn
         // settles once, while the content is still resolving its width, and the
         // offset it lands on then sticks for every later open.
@@ -791,6 +811,7 @@ Item {
 
     Dialog {
         id: importDialog
+        background: Rectangle { radius: 16; color: "#3a3a42" }
         // centred from bindings that re-run when the size changes. anchors.centerIn
         // settles once, while the content is still resolving its width, and the
         // offset it lands on then sticks for every later open.
@@ -1644,6 +1665,8 @@ Item {
                                         currentIndex: 1
                                         background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 42 }
                                         popup.background: Rectangle { radius: 12; color: "#2b2b31"; border.width: 1; border.color: "#43434c" }
+                                        popup.padding: 6
+                                        delegate: comboItem
                                     }
                                 }
 
@@ -1682,6 +1705,8 @@ Item {
                                         enabled: rearLightEnable.checked
                                         background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 42 }
                                         popup.background: Rectangle { radius: 12; color: "#2b2b31"; border.width: 1; border.color: "#43434c" }
+                                        popup.padding: 6
+                                        delegate: comboItem
                                     }
                                 }
 
@@ -1704,6 +1729,8 @@ Item {
                                         id: idleDisplay
                                         background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 42 }
                                         popup.background: Rectangle { radius: 12; color: "#2b2b31"; border.width: 1; border.color: "#43434c" }
+                                        popup.padding: 6
+                                        delegate: comboItem
                                         Layout.preferredWidth: 170
                                         enabled: showBatteryInIdle.checked || showBatterySecret.checked
                                         model: ["Battery %", "Battery V", "VESC \u00B0C", "Motor \u00B0C"]
@@ -1746,6 +1773,8 @@ Item {
                                             currentIndex: 1
                                             background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 42 }
                                             popup.background: Rectangle { radius: 12; color: "#2b2b31"; border.width: 1; border.color: "#43434c" }
+                                            popup.padding: 6
+                                            delegate: comboItem
                                         }
                                     }
 
@@ -1773,6 +1802,8 @@ Item {
                                             currentIndex: 2
                                             background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 42 }
                                             popup.background: Rectangle { radius: 12; color: "#2b2b31"; border.width: 1; border.color: "#43434c" }
+                                            popup.padding: 6
+                                            delegate: comboItem
                                         }
                                     }
 
@@ -1801,6 +1832,8 @@ Item {
                                             currentIndex: 1
                                             background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 42 }
                                             popup.background: Rectangle { radius: 12; color: "#2b2b31"; border.width: 1; border.color: "#43434c" }
+                                            popup.padding: 6
+                                            delegate: comboItem
                                         }
                                     }
 
@@ -1830,6 +1863,8 @@ Item {
                                             currentIndex: 1
                                             background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 42 }
                                             popup.background: Rectangle { radius: 12; color: "#2b2b31"; border.width: 1; border.color: "#43434c" }
+                                            popup.padding: 6
+                                            delegate: comboItem
                                         }
                                     }
 
@@ -1859,6 +1894,8 @@ Item {
                                             currentIndex: 3
                                             background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 42 }
                                             popup.background: Rectangle { radius: 12; color: "#2b2b31"; border.width: 1; border.color: "#43434c" }
+                                            popup.padding: 6
+                                            delegate: comboItem
                                         }
                                     }
 
@@ -2073,6 +2110,8 @@ Item {
                                         id: modelBox
                                         background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 42 }
                                         popup.background: Rectangle { radius: 12; color: "#2b2b31"; border.width: 1; border.color: "#43434c" }
+                                        popup.padding: 6
+                                        delegate: comboItem
                                         Layout.preferredWidth: 170
                                         model: ["G30", "M365/1S/PRO2", "Slave", "G2 (untested)"]
                                         currentIndex: 2
@@ -2328,6 +2367,8 @@ Item {
                                             model: ["Off", "ADC1", "ADC2"]
                                             background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 42 }
                                             popup.background: Rectangle { radius: 12; color: "#2b2b31"; border.width: 1; border.color: "#43434c" }
+                                            popup.padding: 6
+                                            delegate: comboItem
                                         }
                                     }
 
