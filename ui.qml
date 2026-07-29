@@ -62,9 +62,9 @@ Item {
     property real stMot: 0
     // The three colours everything coloured is drawn from, so the battery bar
     // reads as part of the same set as the buttons rather than its own scheme.
-    readonly property color palRed: "#ac3c38"
-    readonly property color palAmber: "#bd882d"
-    readonly property color palGreen: "#3c7e42"
+    readonly property color palRed: "#c44440"
+    readonly property color palAmber: "#d79b33"
+    readonly property color palGreen: "#44904b"
 
     function mixColor(a, b, t) {
         return Qt.rgba(a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t,
@@ -688,7 +688,7 @@ Item {
                 width: 40
                 height: 38
                 radius: 12
-                color: backTouch.pressed ? "#3a3a44" : "#303034"
+                color: backTouch.pressed ? "#3a3a44" : "#26262b"
                 Behavior on color { ColorAnimation { duration: 140 } }
 
                 Canvas {
@@ -886,7 +886,7 @@ Item {
                                     var a1 = Math.PI * (330 / 180)  // top right
 
                                     ctx.lineWidth = dial.dlw
-                                    ctx.strokeStyle = "#383838"
+                                    ctx.strokeStyle = "#26262b"
                                     ctx.beginPath()
                                     ctx.arc(cx, cy, r, a0, a1, false)
                                     ctx.stroke()
@@ -906,13 +906,13 @@ Item {
                                     var b1 = a1
 
                                     ctx.lineWidth = dial.slw
-                                    ctx.strokeStyle = "#383838"
+                                    ctx.strokeStyle = "#26262b"
                                     ctx.beginPath()
                                     ctx.arc(dial.subx, dial.suby, sr, b0, b1, false)
                                     ctx.stroke()
 
                                     if (wAnim > 0.004) {
-                                        ctx.strokeStyle = root.stWatts < 0 ? "#68ae6c" : "#5cb7e2"
+                                        ctx.strokeStyle = root.stWatts < 0 ? "#77c67b" : "#69d1ff"
                                         ctx.beginPath()
                                         ctx.arc(dial.subx, dial.suby, sr, b0, b0 + (b1 - b0) * wAnim, false)
                                         ctx.stroke()
@@ -967,7 +967,7 @@ Item {
                                 width: dial.width * 0.105
                                 height: width
                                 radius: width / 2
-                                color: root.stOff ? "#303034" : "#2a6b34"
+                                color: root.stOff ? "#303034" : "#307a3b"
                                 scale: powerTouch.pressed ? 0.94 : 1.0
                                 Behavior on color { ColorAnimation { duration: 180 } }
                                 Behavior on scale { NumberAnimation { duration: 90 } }
@@ -1010,7 +1010,7 @@ Item {
                                 radius: width / 2
                                 x: dial.pad
                                 y: dial.dcy - dial.drad - dial.dlw / 2 + dial.pad
-                                color: gearTouch2.pressed ? "#3a3a44" : "#303034"
+                                color: gearTouch2.pressed ? "#3a3a44" : "#26262b"
                                 Behavior on color { ColorAnimation { duration: 140 } }
 
                                 Canvas {
@@ -1053,7 +1053,7 @@ Item {
                                 radius: width / 2
                                 x: dial.dcx + dial.drad + dial.dlw / 2 - width
                                 y: dial.dcy - dial.drad * 0.05 - width / 2
-                                color: root.stCruise ? "#1c8f9d" : "#26262b"
+                                color: root.stCruise ? "#20a3b3" : "#26262b"
                                 Behavior on color { ColorAnimation { duration: 200 } }
                                 Label {
                                     anchors.centerIn: parent
@@ -1133,11 +1133,11 @@ Item {
 
                             Repeater {
                                 model: [
-                                    { cap: "V", val: String(Math.round(root.stVin)), warn: false },
-                                    { cap: "A", val: String(Math.round(root.stAmps)), warn: false },
-                                    { cap: "C °C", val: String(Math.round(root.stFet)),
+                                    { cap: "V", icon: "", val: String(Math.round(root.stVin)), warn: false },
+                                    { cap: "A", icon: "", val: String(Math.round(root.stAmps)), warn: false },
+                                    { cap: "°C", icon: "chip", val: String(Math.round(root.stFet)),
                                       warn: root.stFet > (Number.parseFloat(tempWarningFet.text) || 999) },
-                                    { cap: "M °C", val: String(Math.round(root.stMot)),
+                                    { cap: "°C", icon: "motor", val: String(Math.round(root.stMot)),
                                       warn: root.stMot > (Number.parseFloat(tempWarningMotor.text) || 999) }
                                 ]
                                 Rectangle {
@@ -1172,13 +1172,60 @@ Item {
                                         font.bold: true
                                         font.pointSize: root.titleSize * 1.05
                                     }
-                                    Label {
+                                    // The unit sits on the bottom of the figure. The two
+                                    // temperatures stack what they measure above the
+                                    // degrees, so the row reads without the letters C and
+                                    // M having to stand for anything.
+                                    Column {
                                         anchors.left: chipVal.right
-                                        anchors.leftMargin: 2
-                                        anchors.baseline: chipVal.baseline
-                                        text: modelData.cap
-                                        font.pointSize: root.titleSize * 0.6
+                                        anchors.leftMargin: 3
+                                        anchors.bottom: chipVal.bottom
+                                        anchors.bottomMargin: 2
+                                        spacing: 0
                                         opacity: 0.5
+
+                                        Canvas {
+                                            anchors.horizontalCenter: parent.horizontalCenter
+                                            visible: modelData.icon !== ""
+                                            width: Math.round(root.titleSize * 0.95)
+                                            height: width
+                                            onPaint: {
+                                                var ctx = getContext("2d")
+                                                ctx.reset()
+                                                ctx.strokeStyle = "#e8e8ea"
+                                                ctx.lineWidth = Math.max(1, width * 0.11)
+                                                ctx.lineCap = "round"
+                                                if (modelData.icon === "chip") {
+                                                    var m = width * 0.26
+                                                    ctx.strokeRect(m, m, width - 2 * m, height - 2 * m)
+                                                    for (var i = 0; i < 3; i++) {
+                                                        var y = m + (height - 2 * m) * (i + 0.5) / 3
+                                                        ctx.beginPath()
+                                                        ctx.moveTo(0, y)
+                                                        ctx.lineTo(m, y)
+                                                        ctx.stroke()
+                                                        ctx.beginPath()
+                                                        ctx.moveTo(width - m, y)
+                                                        ctx.lineTo(width, y)
+                                                        ctx.stroke()
+                                                    }
+                                                } else {
+                                                    ctx.beginPath()
+                                                    ctx.arc(width * 0.40, height / 2, width * 0.30,
+                                                            0, Math.PI * 2)
+                                                    ctx.stroke()
+                                                    ctx.beginPath()
+                                                    ctx.moveTo(width * 0.72, height / 2)
+                                                    ctx.lineTo(width, height / 2)
+                                                    ctx.stroke()
+                                                }
+                                            }
+                                        }
+                                        Label {
+                                            anchors.horizontalCenter: parent.horizontalCenter
+                                            text: modelData.cap
+                                            font.pointSize: root.titleSize * 0.6
+                                        }
                                     }
                                 }
                             }
@@ -1202,7 +1249,7 @@ Item {
                                     height: parent.height
                                     radius: parent.radius
                                     x: root.stMode === 2 ? 0 : (root.stMode === 1 ? modeTrack.width / 3 : modeTrack.width * 2 / 3)
-                                    color: root.stMode === 2 ? "#2a6fab" : (root.stMode === 1 ? "#3c7e42" : "#ac3c38")
+                                    color: root.stMode === 2 ? "#307fc3" : (root.stMode === 1 ? "#44904b" : "#c44440")
                                     Behavior on x { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
                                     Behavior on color { ColorAnimation { duration: 220 } }
                                 }
@@ -1245,13 +1292,13 @@ Item {
 
                             Repeater {
                                 model: [
-                                    { t: "LOCK", on: root.stLock, col: "#992e2e", fg: "#ffffff",
+                                    { t: "LOCK", on: root.stLock, col: "#ae3434", fg: "#ffffff",
                                       cmd: "(ctrl-lock " + (root.stLock ? "false" : "true") + ")", live: true },
-                                    { t: "SECRET", on: root.stSecret, col: "#622a7d", fg: "#ffffff",
+                                    { t: "SECRET", on: root.stSecret, col: "#70308e", fg: "#ffffff",
                                       cmd: "(ctrl-secret " + (root.stSecret ? "false" : "true") + ")", live: true },
-                                    { t: "LIGHT", on: root.stLight, col: "#bd882d", fg: root.stLight ? "#1e1a10" : "#ffffff",
+                                    { t: "LIGHT", on: root.stLight, col: "#d79b33", fg: root.stLight ? "#1e1a10" : "#ffffff",
                                       cmd: "(ctrl-light " + (root.stLight ? "false" : "true") + ")", live: true },
-                                    { t: "CRUISE", on: root.stCruiseEn, col: "#176d64", fg: "#ffffff",
+                                    { t: "CRUISE", on: root.stCruiseEn, col: "#1a7c72", fg: "#ffffff",
                                       cmd: "(ctrl-cruise " + (root.stCruiseEn ? "false" : "true") + ")", live: root.stCruiseAllow }
                                 ]
                                 Rectangle {
@@ -1806,7 +1853,7 @@ Item {
                                                 Material.foreground: root.calibRunning === "thr" ? "#d0faff" : "#ffffff"
                                                 background: Rectangle {
                                                     radius: 14
-                                                    color: root.calibRunning === "thr" ? "#176d64" : "#33333a"
+                                                    color: root.calibRunning === "thr" ? "#1a7c72" : "#33333a"
                                                 }
                                                 onClicked: root.calibStartChannel("thr")
                                             }
@@ -1841,7 +1888,7 @@ Item {
                                                 Material.foreground: root.calibRunning === "brk" ? "#d0faff" : "#ffffff"
                                                 background: Rectangle {
                                                     radius: 14
-                                                    color: root.calibRunning === "brk" ? "#176d64" : "#33333a"
+                                                    color: root.calibRunning === "brk" ? "#1a7c72" : "#33333a"
                                                 }
                                                 onClicked: root.calibStartChannel("brk")
                                             }
@@ -2126,7 +2173,7 @@ Item {
                     Layout.preferredWidth: 1
                     Layout.preferredHeight: 46
                     radius: 14
-                    color: modelData.accent ? "#2c6232" : "#26262b"
+                    color: modelData.accent ? "#327039" : "#26262b"
                     opacity: modelData.on ? 1.0 : 0.4
                     scale: actTouch.pressed && modelData.on ? 0.975 : 1.0
                     Behavior on opacity { NumberAnimation { duration: 150 } }
