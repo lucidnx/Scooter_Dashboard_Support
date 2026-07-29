@@ -1133,11 +1133,11 @@ Item {
 
                             Repeater {
                                 model: [
-                                    { cap: "V", val: String(Math.round(root.stVin)), warn: false },
-                                    { cap: "A", val: String(Math.round(root.stAmps)), warn: false },
-                                    { cap: "\u00b0E", val: String(Math.round(root.stFet)),
+                                    { cap: "V", deg: false, val: String(Math.round(root.stVin)), warn: false },
+                                    { cap: "A", deg: false, val: String(Math.round(root.stAmps)), warn: false },
+                                    { cap: "E", deg: true, val: Math.round(root.stFet) + "\u00b0",
                                       warn: root.stFet > (Number.parseFloat(tempWarningFet.text) || 999) },
-                                    { cap: "\u00b0M", val: String(Math.round(root.stMot)),
+                                    { cap: "M", deg: true, val: Math.round(root.stMot) + "\u00b0",
                                       warn: root.stMot > (Number.parseFloat(tempWarningMotor.text) || 999) }
                                 ]
                                 Rectangle {
@@ -1163,14 +1163,16 @@ Item {
                                     clip: true
 
                                     // A two digit figure lands centred in the card and
-                                    // the unit hangs outside it, so the digits are what is
-                                    // centred rather than the pair. The right edge is what
-                                    // is pinned, so a third digit grows leftwards into the
-                                    // empty half and the units stay in a column.
+                                    // the unit hangs outside it, so what is centred is the
+                                    // digits rather than the whole reading. The pin moves
+                                    // out by a degree sign's width where there is one, so
+                                    // the digits stay put and the sign rides beyond them.
+                                    // The right edge is what is pinned, so a third digit
+                                    // grows leftwards into the empty half.
                                     Label {
                                         id: chipVal
                                         anchors.right: parent.horizontalCenter
-                                        anchors.rightMargin: -Math.round(root.titleSize * 0.75)
+                                        anchors.rightMargin: -Math.round(root.titleSize * (modelData.deg ? 1.12 : 0.75))
                                         anchors.verticalCenter: parent.verticalCenter
                                         text: modelData.val
                                         font.bold: true
