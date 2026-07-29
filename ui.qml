@@ -1019,22 +1019,29 @@ Item {
                                         var ctx = getContext("2d")
                                         ctx.reset()
                                         var c = width / 2
-                                        var ri = width * 0.16
-                                        var ro = width * 0.30
+                                        var rm = width * 0.145      // ring the teeth stand on
+                                        var ro = width * 0.215      // tip of a tooth
                                         ctx.strokeStyle = "#c8c8d0"
-                                        ctx.lineWidth = Math.max(1.6, width * 0.075)
-                                        ctx.lineCap = "round"
-                                        ctx.beginPath()
-                                        ctx.arc(c, c, ri, 0, Math.PI * 2)
-                                        ctx.stroke()
+                                        // square tips and a stroke about as wide as the gap
+                                        // between teeth reads as a cog - thin long rays
+                                        // read as a sun
+                                        ctx.lineCap = "butt"
+                                        ctx.lineWidth = Math.max(2, width * 0.085)
                                         for (var i = 0; i < 8; i++) {
                                             var a = i * Math.PI / 4
                                             ctx.beginPath()
-                                            ctx.moveTo(c + Math.cos(a) * (ri + width * 0.05),
-                                                       c + Math.sin(a) * (ri + width * 0.05))
+                                            ctx.moveTo(c + Math.cos(a) * rm, c + Math.sin(a) * rm)
                                             ctx.lineTo(c + Math.cos(a) * ro, c + Math.sin(a) * ro)
                                             ctx.stroke()
                                         }
+                                        ctx.lineWidth = Math.max(2, width * 0.075)
+                                        ctx.beginPath()
+                                        ctx.arc(c, c, rm, 0, Math.PI * 2)
+                                        ctx.stroke()
+                                        ctx.lineWidth = Math.max(1, width * 0.045)
+                                        ctx.beginPath()
+                                        ctx.arc(c, c, width * 0.062, 0, Math.PI * 2)
+                                        ctx.stroke()
                                     }
                                 }
                                 MouseArea {
@@ -1135,9 +1142,9 @@ Item {
                                 model: [
                                     { cap: "V", deg: false, val: String(Math.round(root.stVin)), warn: false },
                                     { cap: "A", deg: false, val: String(Math.round(root.stAmps)), warn: false },
-                                    { cap: "E", deg: true, val: Math.round(root.stFet) + "\u00b0",
+                                    { cap: "\u00b0E", deg: true, val: String(Math.round(root.stFet)),
                                       warn: root.stFet > (Number.parseFloat(tempWarningFet.text) || 999) },
-                                    { cap: "M", deg: true, val: Math.round(root.stMot) + "\u00b0",
+                                    { cap: "\u00b0M", deg: true, val: String(Math.round(root.stMot)),
                                       warn: root.stMot > (Number.parseFloat(tempWarningMotor.text) || 999) }
                                 ]
                                 Rectangle {
@@ -1164,15 +1171,14 @@ Item {
 
                                     // A two digit figure lands centred in the card and
                                     // the unit hangs outside it, so what is centred is the
-                                    // digits rather than the whole reading. The pin moves
-                                    // out by a degree sign's width where there is one, so
-                                    // the digits stay put and the sign rides beyond them.
-                                    // The right edge is what is pinned, so a third digit
+                                    // digits rather than the whole reading, degree sign
+                                    // included - it is dim like the letter, so it belongs
+                                    // with it. The right edge is what is pinned, so a third
                                     // grows leftwards into the empty half.
                                     Label {
                                         id: chipVal
                                         anchors.right: parent.horizontalCenter
-                                        anchors.rightMargin: -Math.round(root.titleSize * (modelData.deg ? 1.12 : 0.75))
+                                        anchors.rightMargin: -Math.round(root.titleSize * 0.75)
                                         anchors.verticalCenter: parent.verticalCenter
                                         text: modelData.val
                                         font.bold: true
@@ -1180,7 +1186,8 @@ Item {
                                     }
                                     Label {
                                         anchors.left: chipVal.right
-                                        anchors.leftMargin: 4
+                                        // the degree hugs the digits, a letter alone breathes
+                                        anchors.leftMargin: modelData.deg ? 1 : 4
                                         anchors.bottom: chipVal.bottom
                                         text: modelData.cap
                                         font.bold: true
