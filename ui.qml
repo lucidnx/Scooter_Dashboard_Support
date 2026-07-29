@@ -819,7 +819,7 @@ Item {
                     // hits that floor, and scrolls from there.
                     readonly property real wS: Math.max(0.85, Math.min(1.25, availableWidth / 320))
                     readonly property real hS: Math.max(0.69, Math.min(1.0,
-                        (height - availableWidth * 0.767 - 16 - 68 * wS) / 250))
+                        (height - availableWidth * 0.767 - 24 - 68 * wS) / 250))
 
                     ColumnLayout {
                         width: parent.width
@@ -854,7 +854,7 @@ Item {
                         Item {
                             id: dial
                             Layout.fillWidth: true
-                            Layout.topMargin: 2
+                            Layout.topMargin: 10
                             // only as tall as the arc reaches - it stops at bottom
                             // left, so the circle's bottom quarter is dead space
                             Layout.preferredHeight: dcy + drad * 0.7071 + dlw / 2
@@ -979,9 +979,11 @@ Item {
                             // empty, level with the top of the dial
                             Rectangle {
                                 id: powerBtn
-                                x: dial.width - width - dial.pad
-                                y: dial.dcy - dial.drad - dial.dlw / 2 + dial.pad
-                                width: dial.width * 0.105
+                                // whole pixels - a canvas on a fractional bound rounds its
+                                // render target and the glyph drifts off the circle it sits in
+                                x: Math.round(dial.width - width - dial.pad)
+                                y: Math.round(dial.dcy - dial.drad - dial.dlw / 2 + dial.pad)
+                                width: Math.round(dial.width * 0.105)
                                 height: width
                                 radius: width / 2
                                 color: powerTouch.pressed ? "#3a3a44" : "#26262b"
@@ -1028,11 +1030,11 @@ Item {
                             }
 
                             Rectangle {
-                                width: dial.width * 0.105
+                                width: Math.round(dial.width * 0.105)
                                 height: width
                                 radius: width / 2
-                                x: dial.pad
-                                y: dial.dcy - dial.drad - dial.dlw / 2 + dial.pad
+                                x: Math.round(dial.pad)
+                                y: Math.round(dial.dcy - dial.drad - dial.dlw / 2 + dial.pad)
                                 color: gearTouch2.pressed ? "#3a3a44" : "#26262b"
                                 Behavior on color { ColorAnimation { duration: 140 } }
 
@@ -1043,7 +1045,11 @@ Item {
                                     onPaint: {
                                         var ctx = getContext("2d")
                                         ctx.reset()
-                                        var c = width / 2
+                                        // seven teeth put no tooth due west, so the path
+                                        // reaches 0.0042 further east than west - take that
+                                        // back off so the drawn shape is what gets centred
+                                        var c = width / 2 - width * 0.0042
+                                        var cy = width / 2
                                         // A solid cog: seven trapezoid teeth walked as
                                         // alternating arcs at the tip and root radius, the
                                         // corners rounded by stroking the same path, then the
@@ -1055,8 +1061,8 @@ Item {
                                         ctx.beginPath()
                                         for (var i = 0; i < 7; i++) {
                                             var a = i * pitch
-                                            ctx.arc(c, c, width * 0.269, a - half, a + half, false)
-                                            ctx.arc(c, c, width * 0.170, a + half * 1.35,
+                                            ctx.arc(c, cy, width * 0.269, a - half, a + half, false)
+                                            ctx.arc(c, cy, width * 0.170, a + half * 1.35,
                                                     a + pitch - half * 1.35, false)
                                         }
                                         ctx.closePath()
@@ -1067,7 +1073,7 @@ Item {
                                         ctx.strokeStyle = "#ffffff"
                                         ctx.stroke()
                                         ctx.beginPath()
-                                        ctx.arc(c, c, width * 0.104, 0, Math.PI * 2)
+                                        ctx.arc(c, cy, width * 0.104, 0, Math.PI * 2)
                                         ctx.fillStyle = hub
                                         ctx.fill()
                                     }
@@ -1237,7 +1243,11 @@ Item {
                                         Label {
                                             id: chipCap
                                             anchors.right: parent.right
-                                            anchors.bottom: chipVal.bottom
+                                            // one baseline for all three. Aligning boxes
+                                            // instead drops the smaller font by the
+                                            // difference in descent, and V, A, E and M have
+                                            // no descender for it to buy anything
+                                            anchors.baseline: chipVal.baseline
                                             text: modelData.cap
                                             font.bold: true
                                             font.pointSize: root.titleSize * 0.78
