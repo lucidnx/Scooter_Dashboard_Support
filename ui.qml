@@ -40,6 +40,18 @@ Item {
     }
     property real titleSize: Qt.application.font.pointSize > 0 ? Qt.application.font.pointSize + 3 : 14
 
+    // The figure cards are laid out from real glyph widths, not from titleSize -
+    // that is a point size, while an anchor margin is in pixels, and the two are
+    // only the same number on a desktop. Widest case for each slot, so the four
+    // cards hold a column whatever they happen to be showing.
+    FontMetrics { id: chipValFm; font.bold: true; font.pointSize: root.titleSize * 1.05 }
+    FontMetrics { id: chipCapFm; font.bold: true; font.pointSize: root.titleSize * 0.78 }
+    readonly property real chipDigW: chipValFm.advanceWidth("000")
+    readonly property real chipDegW: chipValFm.advanceWidth("°")
+    readonly property real chipCapW: chipCapFm.advanceWidth("M")
+    readonly property real chipGap: Math.round(chipValFm.height * 0.10)
+    readonly property real chipGrpW: chipDigW + chipDegW + chipGap + chipCapW
+
     // Live scooter state for the Control tab
     property bool stOff: false
     property bool stLock: false
@@ -969,7 +981,7 @@ Item {
                                 width: dial.width * 0.105
                                 height: width
                                 radius: width / 2
-                                color: root.stOff ? "#303034" : "#1b8f2c"
+                                color: powerTouch.pressed ? "#3a3a44" : "#26262b"
                                 scale: powerTouch.pressed ? 0.94 : 1.0
                                 Behavior on color { ColorAnimation { duration: 180 } }
                                 Behavior on scale { NumberAnimation { duration: 90 } }
@@ -980,13 +992,16 @@ Item {
                                     // by a rounded pixel, and the stem made it sit high,
                                     // so the ring drops by half of what the stem sticks out
                                     anchors.fill: parent
+                                    // the badge is neutral now, so the mark carries the state
+                                    property color ink: root.stOff ? "#6e6e76" : "#ffffff"
+                                    onInkChanged: requestPaint()
                                     onPaint: {
                                         var ctx = getContext("2d")
                                         ctx.reset()
                                         var c = width / 2
                                         var r = width * 0.225
                                         var cy = c + r * 0.11
-                                        ctx.strokeStyle = "#ffffff"
+                                        ctx.strokeStyle = ink
                                         ctx.lineWidth = Math.max(2, width * 0.075)
                                         ctx.lineCap = "round"
                                         ctx.beginPath()
@@ -1200,39 +1215,47 @@ Item {
 
                                     clip: true
 
-                                    // Right to left off the card's own edge. The letter is
-                                    // pinned there, so its gap to the edge is the same on all
-                                    // four. The degree keeps its slot whether it is drawn or
-                                    // not, at the value's size and baseline but dim - so the
-                                    // digits end at one x on every card, a third digit grows
-                                    // leftwards, and a two digit reading lands centred.
-                                    Label {
-                                        id: chipCap
-                                        anchors.right: parent.right
-                                        anchors.rightMargin: Math.round(root.titleSize * 0.55)
-                                        anchors.bottom: chipVal.bottom
-                                        text: modelData.cap
-                                        font.bold: true
-                                        font.pointSize: root.titleSize * 0.78
-                                        opacity: 0.5
-                                    }
-                                    Label {
-                                        id: chipDeg
-                                        anchors.right: chipCap.left
-                                        anchors.rightMargin: Math.round(root.titleSize * 0.14)
-                                        anchors.baseline: chipVal.baseline
-                                        text: "\u00b0"
-                                        font.bold: true
-                                        font.pointSize: root.titleSize * 1.05
-                                        opacity: modelData.deg ? 0.45 : 0
-                                    }
-                                    Label {
-                                        id: chipVal
-                                        anchors.right: chipDeg.left
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: modelData.val
-                                        font.bold: true
-                                        font.pointSize: root.titleSize * 1.05
+                                    // Reading, degree and unit share one group centred in the
+                                    // card, each slot as wide as its widest case. So the group
+                                    // is balanced however wide the card gets, the letters hold
+                                    // a column across the four, the digits end at one x whether
+                                    // or not a degree is drawn, and a third digit grows into
+                                    // room already reserved for it.
+                                    Item {
+                                        id: chipGrp
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        anchors.top: parent.top
+                                        anchors.bottom: parent.bottom
+                                        width: root.chipGrpW
+
+                                        Label {
+                                            id: chipCap
+                                            anchors.right: parent.right
+                                            anchors.bottom: chipVal.bottom
+                                            text: modelData.cap
+                                            font.bold: true
+                                            font.pointSize: root.titleSize * 0.78
+                                            opacity: 0.5
+                                        }
+                                        Label {
+                                            id: chipDeg
+                                            anchors.right: parent.right
+                                            anchors.rightMargin: root.chipCapW + root.chipGap
+                                            anchors.baseline: chipVal.baseline
+                                            text: "\u00b0"
+                                            font.bold: true
+                                            font.pointSize: root.titleSize * 1.05
+                                            opacity: modelData.deg ? 0.45 : 0
+                                        }
+                                        Label {
+                                            id: chipVal
+                                            anchors.right: parent.right
+                                            anchors.rightMargin: root.chipCapW + root.chipGap + root.chipDegW
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: modelData.val
+                                            font.bold: true
+                                            font.pointSize: root.titleSize * 1.05
+                                        }
                                     }
                                 }
                             }
