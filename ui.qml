@@ -710,7 +710,11 @@ Item {
 
     Dialog {
         id: resetDialog
-        anchors.centerIn: parent
+        // centred from bindings that re-run when the size changes. anchors.centerIn
+        // settles once, while the content is still resolving its width, and the
+        // offset it lands on then sticks for every later open.
+        x: Math.round((parent.width - width) / 2)
+        y: Math.round((parent.height - height) / 2)
         width: Math.min(parent.width - 40, 360)
         modal: true
         title: "Reset all settings?"
@@ -728,7 +732,11 @@ Item {
     // backup travels as text through the clipboard - paste it wherever you keep it.
     Dialog {
         id: exportDialog
-        anchors.centerIn: parent
+        // centred from bindings that re-run when the size changes. anchors.centerIn
+        // settles once, while the content is still resolving its width, and the
+        // offset it lands on then sticks for every later open.
+        x: Math.round((parent.width - width) / 2)
+        y: Math.round((parent.height - height) / 2)
         width: Math.min(parent.width - 40, 420)
         modal: true
         title: "Export settings"
@@ -740,6 +748,7 @@ Item {
 
             Label {
                 Layout.fillWidth: true
+                Layout.preferredWidth: 1
                 wrapMode: Text.WordWrap
                 text: "This is everything saved on the ESC except the model. Copy it and "
                       + "keep it somewhere - a note, a file, a message to yourself."
@@ -782,7 +791,11 @@ Item {
 
     Dialog {
         id: importDialog
-        anchors.centerIn: parent
+        // centred from bindings that re-run when the size changes. anchors.centerIn
+        // settles once, while the content is still resolving its width, and the
+        // offset it lands on then sticks for every later open.
+        x: Math.round((parent.width - width) / 2)
+        y: Math.round((parent.height - height) / 2)
         width: Math.min(parent.width - 40, 420)
         modal: true
         title: "Import settings"
@@ -794,6 +807,7 @@ Item {
 
             Label {
                 Layout.fillWidth: true
+                Layout.preferredWidth: 1
                 wrapMode: Text.WordWrap
                 text: "Paste a backup here. It only fills in the fields - press Save "
                       + "afterwards to write it to the ESC."
