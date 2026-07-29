@@ -60,6 +60,17 @@ Item {
     property bool stImgOk: true
     property real stFet: 0
     property real stMot: 0
+    // The three colours everything coloured is drawn from, so the battery bar
+    // reads as part of the same set as the buttons rather than its own scheme.
+    readonly property color palRed: "#ac3c38"
+    readonly property color palAmber: "#bd882d"
+    readonly property color palGreen: "#3c7e42"
+
+    function mixColor(a, b, t) {
+        return Qt.rgba(a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t,
+                       a.b + (b.b - a.b) * t, 1)
+    }
+
     // Highest draw seen this session, the fallback when nothing caps watts.
     property real stWattPeak: 500
     // The sub-dial scales to the watt limit set for the mode that is running, so
@@ -875,7 +886,7 @@ Item {
                                     var a1 = Math.PI * (330 / 180)  // top right
 
                                     ctx.lineWidth = dial.dlw
-                                    ctx.strokeStyle = "#3a3a44"
+                                    ctx.strokeStyle = "#383838"
                                     ctx.beginPath()
                                     ctx.arc(cx, cy, r, a0, a1, false)
                                     ctx.stroke()
@@ -895,7 +906,7 @@ Item {
                                     var b1 = a1
 
                                     ctx.lineWidth = dial.slw
-                                    ctx.strokeStyle = "#3a3a44"
+                                    ctx.strokeStyle = "#383838"
                                     ctx.beginPath()
                                     ctx.arc(dial.subx, dial.suby, sr, b0, b1, false)
                                     ctx.stroke()
@@ -956,29 +967,32 @@ Item {
                                 width: dial.width * 0.105
                                 height: width
                                 radius: width / 2
-                                color: root.stOff ? "#303034" : "#34753c"
+                                color: root.stOff ? "#303034" : "#2a6b34"
                                 scale: powerTouch.pressed ? 0.94 : 1.0
                                 Behavior on color { ColorAnimation { duration: 180 } }
                                 Behavior on scale { NumberAnimation { duration: 90 } }
 
                                 Canvas {
-                                    anchors.centerIn: parent
-                                    width: parent.width * 0.52
-                                    height: width
+                                    // fills the badge and works from its own centre -
+                                    // centerIn on a half-width canvas left the glyph off
+                                    // by a rounded pixel, and the stem made it sit high,
+                                    // so the ring drops by half of what the stem sticks out
+                                    anchors.fill: parent
                                     onPaint: {
                                         var ctx = getContext("2d")
                                         ctx.reset()
                                         var c = width / 2
-                                        var r = width * 0.40
+                                        var r = width * 0.205
+                                        var cy = c + r * 0.11
                                         ctx.strokeStyle = "#ffffff"
-                                        ctx.lineWidth = Math.max(2, width * 0.13)
+                                        ctx.lineWidth = Math.max(2, width * 0.068)
                                         ctx.lineCap = "round"
                                         ctx.beginPath()
-                                        ctx.arc(c, c, r, Math.PI * -0.30, Math.PI * 1.30, false)
+                                        ctx.arc(c, cy, r, Math.PI * -0.28, Math.PI * 1.28, false)
                                         ctx.stroke()
                                         ctx.beginPath()
-                                        ctx.moveTo(c, c - r * 1.15)
-                                        ctx.lineTo(c, c - r * 0.05)
+                                        ctx.moveTo(c, cy - r * 1.22)
+                                        ctx.lineTo(c, cy - r * 0.10)
                                         ctx.stroke()
                                     }
                                 }
@@ -1039,7 +1053,7 @@ Item {
                                 radius: width / 2
                                 x: dial.dcx + dial.drad + dial.dlw / 2 - width
                                 y: dial.dcy - dial.drad * 0.05 - width / 2
-                                color: root.stCruise ? "#21aabb" : "#26262b"
+                                color: root.stCruise ? "#1c8f9d" : "#26262b"
                                 Behavior on color { ColorAnimation { duration: 200 } }
                                 Label {
                                     anchors.centerIn: parent
@@ -1071,8 +1085,13 @@ Item {
                                     radius: parent.radius
                                     width: Math.max(height, battTrack.width * Math.max(0, Math.min(1, root.stBatt / 100)))
                                     // full green down to 60%, amber through the
-                                    // thirties, red only when the pack is really low
-                                    color: Qt.hsla(0.333 * Math.max(0, Math.min(1, (root.stBatt - 8) / 52)), 0.62, 0.40, 1)
+                                    // thirties, red only when the pack is really low -
+                                    // the same three colours the buttons are drawn from
+                                    color: {
+                                        var t = Math.max(0, Math.min(1, (root.stBatt - 8) / 52))
+                                        return t < 0.5 ? root.mixColor(root.palRed, root.palAmber, t * 2)
+                                                       : root.mixColor(root.palAmber, root.palGreen, (t - 0.5) * 2)
+                                    }
                                     Behavior on width { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
                                     Behavior on color { ColorAnimation { duration: 320 } }
                                 }
@@ -1183,7 +1202,7 @@ Item {
                                     height: parent.height
                                     radius: parent.radius
                                     x: root.stMode === 2 ? 0 : (root.stMode === 1 ? modeTrack.width / 3 : modeTrack.width * 2 / 3)
-                                    color: root.stMode === 2 ? "#3284cc" : (root.stMode === 1 ? "#48964e" : "#cd4843")
+                                    color: root.stMode === 2 ? "#2a6fab" : (root.stMode === 1 ? "#3c7e42" : "#ac3c38")
                                     Behavior on x { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
                                     Behavior on color { ColorAnimation { duration: 220 } }
                                 }
@@ -1222,17 +1241,17 @@ Item {
                             Layout.bottomMargin: 14
                             columns: 2
                             rowSpacing: Math.round(16 * ctlScroll.hS)
-                            columnSpacing: 10
+                            columnSpacing: Math.round(14 * ctlScroll.hS)
 
                             Repeater {
                                 model: [
-                                    { t: "LOCK", on: root.stLock, col: "#b63737", fg: "#ffffff",
+                                    { t: "LOCK", on: root.stLock, col: "#992e2e", fg: "#ffffff",
                                       cmd: "(ctrl-lock " + (root.stLock ? "false" : "true") + ")", live: true },
-                                    { t: "SECRET", on: root.stSecret, col: "#753295", fg: "#ffffff",
+                                    { t: "SECRET", on: root.stSecret, col: "#622a7d", fg: "#ffffff",
                                       cmd: "(ctrl-secret " + (root.stSecret ? "false" : "true") + ")", live: true },
-                                    { t: "LIGHT", on: root.stLight, col: "#e1a236", fg: root.stLight ? "#1e1a10" : "#ffffff",
+                                    { t: "LIGHT", on: root.stLight, col: "#bd882d", fg: root.stLight ? "#1e1a10" : "#ffffff",
                                       cmd: "(ctrl-light " + (root.stLight ? "false" : "true") + ")", live: true },
-                                    { t: "CRUISE", on: root.stCruiseEn, col: "#1b8277", fg: "#ffffff",
+                                    { t: "CRUISE", on: root.stCruiseEn, col: "#176d64", fg: "#ffffff",
                                       cmd: "(ctrl-cruise " + (root.stCruiseEn ? "false" : "true") + ")", live: root.stCruiseAllow }
                                 ]
                                 Rectangle {
@@ -1787,7 +1806,7 @@ Item {
                                                 Material.foreground: root.calibRunning === "thr" ? "#d0faff" : "#ffffff"
                                                 background: Rectangle {
                                                     radius: 14
-                                                    color: root.calibRunning === "thr" ? "#1b8277" : "#33333a"
+                                                    color: root.calibRunning === "thr" ? "#176d64" : "#33333a"
                                                 }
                                                 onClicked: root.calibStartChannel("thr")
                                             }
@@ -1822,7 +1841,7 @@ Item {
                                                 Material.foreground: root.calibRunning === "brk" ? "#d0faff" : "#ffffff"
                                                 background: Rectangle {
                                                     radius: 14
-                                                    color: root.calibRunning === "brk" ? "#1b8277" : "#33333a"
+                                                    color: root.calibRunning === "brk" ? "#176d64" : "#33333a"
                                                 }
                                                 onClicked: root.calibStartChannel("brk")
                                             }
@@ -2107,7 +2126,7 @@ Item {
                     Layout.preferredWidth: 1
                     Layout.preferredHeight: 46
                     radius: 14
-                    color: modelData.accent ? "#34753c" : "#26262b"
+                    color: modelData.accent ? "#2c6232" : "#26262b"
                     opacity: modelData.on ? 1.0 : 0.4
                     scale: actTouch.pressed && modelData.on ? 0.975 : 1.0
                     Behavior on opacity { NumberAnimation { duration: 150 } }
