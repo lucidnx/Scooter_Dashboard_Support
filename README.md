@@ -21,7 +21,7 @@ and stored on the ESC.
 <tr>
 <td valign="top"><img src="screenshots/setup2.jpg" alt="Setup 2" width="107"></td>
 <td valign="top"><img src="screenshots/setup3.jpg" alt="Setup 3" width="107"></td>
-<td></td>
+<td valign="top"><img src="screenshots/setup4.jpg" alt="Setup 4" width="107"></td>
 </tr>
 </table>
 
