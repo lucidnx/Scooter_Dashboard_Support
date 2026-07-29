@@ -1157,13 +1157,13 @@ Item {
                     // hS is solved so the page fills the height exactly until it
                     // hits that floor, and scrolls from there.
                     readonly property real wS: Math.max(0.85, Math.min(1.25, availableWidth / 320))
-                    // 64 is the height nothing scales: four 6px column gaps, the dial
-                    // card's 10px top margin, 10 above plus 15 below the dial inside it,
-                    // and the 5 the battery bar carries so trimming the card did not
-                    // close the gap. 240 is what hS moves. 68 is the battery bar and the figure
+                    // 98 is the height nothing scales: three 6px gaps between the three
+                    // cards, 10 above the dial card, 10 and 15 around the dial inside it,
+                    // the 5 the readings card carries, and 20 of padding in each of the
+                    // other two. 240 is what hS moves. 68 is the battery bar and the figure
                     // cards, which follow the width; 250 is everything hS does move.
                     readonly property real hS: Math.max(0.69, Math.min(1.0,
-                        (height - availableWidth * 0.767 - 64 - 68 * wS) / 240))
+                        (height - availableWidth * 0.767 - 98 - 68 * wS) / 240))
 
                     ColumnLayout {
                         id: ctlCol
@@ -1495,265 +1495,298 @@ Item {
                         }
                         }
 
-                        Item {
+                        // Charge and the four readings are one card: they are one glance.
+                        Rectangle {
                             Layout.fillWidth: true
                             Layout.topMargin: Math.round(8 * ctlScroll.hS) + 5
-                            Layout.preferredHeight: Math.round(28 * ctlScroll.wS)
+                            Layout.preferredHeight: ctlReadCol.implicitHeight + 20
+                            radius: 18
+                            color: "#26262b"
 
-                            Rectangle {
-                                id: battTrack
+                            ColumnLayout {
+                                id: ctlReadCol
                                 anchors.left: parent.left
                                 anchors.right: parent.right
-                                anchors.verticalCenter: parent.verticalCenter
-                                height: Math.round(27 * ctlScroll.wS)
-                                radius: height / 2
-                                color: "#26262b"
+                                anchors.top: parent.top
+                                anchors.margins: 10
+                                spacing: 0
+
+                            Item {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: Math.round(28 * ctlScroll.wS)
 
                                 Rectangle {
-                                    height: parent.height
-                                    radius: parent.radius
-                                    width: Math.max(height, battTrack.width * Math.max(0, Math.min(1, root.stBatt / 100)))
-                                    // full green down to 60%, amber through the
-                                    // thirties, red only when the pack is really low -
-                                    // the same three colours the buttons are drawn from
-                                    color: {
-                                        var t = Math.max(0, Math.min(1, (root.stBatt - 8) / 52))
-                                        return t < 0.5 ? root.mixColor(root.palRed, root.palAmber, t * 2)
-                                                       : root.mixColor(root.palAmber, root.palGreen, (t - 0.5) * 2)
-                                    }
-                                    Behavior on width { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
-                                    Behavior on color { ColorAnimation { duration: 320 } }
-                                }
-
-                                // The bar already shows the charge, so the figure on it
-                                // alternates with what people actually want from it.
-                                Timer {
-                                    interval: 3000
-                                    repeat: true
-                                    running: swipeView.currentIndex === 0
-                                    onTriggered: root.battShowRange = !root.battShowRange
-                                }
-
-                                Label {
-                                    anchors.centerIn: parent
-                                    text: root.battShowRange
-                                        ? "~" + Math.round(useMph.checked ? (root.stRange * 0.621371)
-                                                                          : root.stRange)
-                                          + (useMph.checked ? " mi" : " km")
-                                        : Math.round(root.stBatt) + " %"
-                                    font.bold: true
-                                    font.pointSize: root.titleSize * 1.05
-                                    color: "#ffffff"
-                                }
-                            }
-                        }
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            Layout.topMargin: Math.round(12 * ctlScroll.hS)
-                            spacing: 8
-
-                            Repeater {
-                                model: [
-                                    { cap: "V", deg: false, val: String(Math.round(root.stVin)), warn: false },
-                                    { cap: "A", deg: false, val: String(Math.round(root.stAmps)), warn: false },
-                                    { cap: "E", deg: true, val: String(Math.round(root.stFet)),
-                                      warn: root.stFet > (Number.parseFloat(tempWarningFet.text) || 999) },
-                                    { cap: "M", deg: true, val: String(Math.round(root.stMot)),
-                                      warn: root.stMot > (Number.parseFloat(tempWarningMotor.text) || 999) }
-                                ]
-                                Rectangle {
-                                    Layout.fillWidth: true
-                                    Layout.preferredWidth: 1
-                                    Layout.preferredHeight: Math.round(40 * ctlScroll.wS)
-                                    radius: 12
-                                    color: "#26262b"
+                                    id: battTrack
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    height: Math.round(27 * ctlScroll.wS)
+                                    radius: height / 2
+                                    color: "#33333a"
 
                                     Rectangle {
-                                        anchors.fill: parent
+                                        height: parent.height
                                         radius: parent.radius
-                                        color: "#8e3b3b"
-                                        visible: modelData.warn
-                                        SequentialAnimation on opacity {
-                                            running: true
-                                            loops: Animation.Infinite
-                                            NumberAnimation { from: 0; to: 0.85; duration: 520; easing.type: Easing.InOutQuad }
-                                            NumberAnimation { from: 0.85; to: 0; duration: 520; easing.type: Easing.InOutQuad }
+                                        width: Math.max(height, battTrack.width * Math.max(0, Math.min(1, root.stBatt / 100)))
+                                        // full green down to 60%, amber through the
+                                        // thirties, red only when the pack is really low -
+                                        // the same three colours the buttons are drawn from
+                                        color: {
+                                            var t = Math.max(0, Math.min(1, (root.stBatt - 8) / 52))
+                                            return t < 0.5 ? root.mixColor(root.palRed, root.palAmber, t * 2)
+                                                           : root.mixColor(root.palAmber, root.palGreen, (t - 0.5) * 2)
                                         }
+                                        Behavior on width { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
+                                        Behavior on color { ColorAnimation { duration: 320 } }
                                     }
 
-                                    clip: true
-
-                                    // Reading, degree and unit share one group centred in the
-                                    // card, each slot as wide as its widest case. So the group
-                                    // is balanced however wide the card gets, the letters hold
-                                    // a column across the four, the digits end at one x whether
-                                    // or not a degree is drawn, and a third digit grows into
-                                    // room already reserved for it.
-                                    Item {
-                                        id: chipGrp
-                                        anchors.horizontalCenter: parent.horizontalCenter
-                                        // shift right by half the degree and the letter, so
-                                        // what centres is the reading and not the group -
-                                        // clamped to keep 4px of card to the right of it
-                                        anchors.horizontalCenterOffset: Math.min(
-                                            Math.round((root.chipDegW + root.chipGap
-                                                        + root.chipCapW) / 2),
-                                            Math.round(parent.width / 2 - root.chipGrpW / 2 - 4))
-                                        anchors.top: parent.top
-                                        anchors.bottom: parent.bottom
-                                        width: root.chipGrpW
-
-                                        Label {
-                                            id: chipCap
-                                            anchors.right: parent.right
-                                            // A slot as wide as the widest letter, with the
-                                            // glyph centred in it. Right anchoring it at its
-                                            // own width is what left M snug against the degree
-                                            // and E four pixels clear of it: everything else
-                                            // is positioned from M's width, so a narrower
-                                            // letter handed the difference back as gap.
-                                            width: root.chipCapW
-                                            horizontalAlignment: Text.AlignHCenter
-                                            // one baseline for all three. Aligning boxes
-                                            // instead drops the smaller font by the
-                                            // difference in descent, and V, A, E and M have
-                                            // no descender for it to buy anything
-                                            anchors.baseline: chipVal.baseline
-                                            text: modelData.cap
-                                            font.bold: true
-                                            font.pointSize: root.titleSize * 0.83
-                                            opacity: 0.5
-                                        }
-                                        Label {
-                                            id: chipDeg
-                                            anchors.right: parent.right
-                                            anchors.rightMargin: root.chipCapW + root.chipGap
-                                            anchors.baseline: chipVal.baseline
-                                            text: "\u00b0"
-                                            font.bold: true
-                                            font.pointSize: root.titleSize * 1.09
-                                            opacity: modelData.deg ? 0.45 : 0
-                                        }
-                                        Label {
-                                            id: chipVal
-                                            anchors.right: parent.right
-                                            anchors.rightMargin: root.chipCapW + root.chipGap + root.chipDegW
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            text: modelData.val
-                                            font.bold: true
-                                            font.pointSize: root.titleSize * 1.09
-                                        }
+                                    // The bar already shows the charge, so the figure on it
+                                    // alternates with what people actually want from it.
+                                    Timer {
+                                        interval: 3000
+                                        repeat: true
+                                        running: swipeView.currentIndex === 0
+                                        onTriggered: root.battShowRange = !root.battShowRange
                                     }
-                                }
-                            }
-                        }
-
-                        // Segmented mode picker - the highlight slides to the
-                        // active mode instead of three buttons lighting up
-                        Item {
-                            Layout.fillWidth: true
-                            Layout.topMargin: Math.round(14 * ctlScroll.hS)
-                            Layout.preferredHeight: Math.round(48 * ctlScroll.hS)
-
-                            Rectangle {
-                                id: modeTrack
-                                anchors.fill: parent
-                                enabled: !root.isSlave
-                                opacity: root.isSlave ? 0.3 : 1.0
-                                radius: 14
-                                color: "#26262b"
-
-                                Rectangle {
-                                    width: modeTrack.width / 3
-                                    height: parent.height
-                                    radius: parent.radius
-                                    x: root.stMode === 2 ? 0 : (root.stMode === 1 ? modeTrack.width / 3 : modeTrack.width * 2 / 3)
-                                    color: root.stMode === 2 ? "#25af32" : (root.stMode === 1 ? "#1e80d5" : "#dc2e28")
-                                    Behavior on x { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
-                                    Behavior on color { ColorAnimation { duration: 220 } }
-                                }
-
-                                Row {
-                                    anchors.fill: parent
-                                    Repeater {
-                                        model: [
-                                            { t: "ECO", m: 2 },
-                                            { t: "DRIVE", m: 1 },
-                                            { t: "SPORT", m: 4 }
-                                        ]
-                                        Item {
-                                            width: modeTrack.width / 3
-                                            height: modeTrack.height
-                                            Label {
-                                                anchors.centerIn: parent
-                                                text: modelData.t
-                                                font.bold: true
-                                                color: root.stMode === modelData.m ? "#ffffff" : "#8e8e96"
-                                                Behavior on color { ColorAnimation { duration: 220 } }
-                                            }
-                                            MouseArea {
-                                                anchors.fill: parent
-                                                onClicked: ctrlCode("(ctrl-mode " + modelData.m + ")")
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        GridLayout {
-                            Layout.fillWidth: true
-                            Layout.topMargin: Math.round(14 * ctlScroll.hS)
-                            Layout.bottomMargin: 14
-                            enabled: !root.isSlave
-                            opacity: root.isSlave ? 0.3 : 1.0
-                            columns: 2
-                            rowSpacing: Math.round(16 * ctlScroll.hS)
-                            columnSpacing: Math.round(14 * ctlScroll.hS)
-
-                            Repeater {
-                                model: [
-                                    { t: "LOCK", on: root.stLock, col: "#c31f1f", fg: "#ffffff",
-                                      cmd: "(ctrl-lock " + (root.stLock ? "false" : "true") + ")", live: true },
-                                    { t: "SECRET", on: root.stSecret, col: "#771ca2", fg: "#ffffff",
-                                      cmd: "(ctrl-secret " + (root.stSecret ? "false" : "true") + ")",
-                                      live: root.stSecretAllow },
-                                    { t: "LIGHT", on: root.stLight, col: "#e49e26", fg: root.stLight ? "#1e1a10" : "#ffffff",
-                                      cmd: "(ctrl-light " + (root.stLight ? "false" : "true") + ")", live: true },
-                                    { t: "CRUISE", on: root.stCruiseEn, col: "#118579", fg: "#ffffff",
-                                      cmd: "(ctrl-cruise " + (root.stCruiseEn ? "false" : "true") + ")", live: root.stCruiseAllow }
-                                ]
-                                Rectangle {
-                                    Layout.fillWidth: true
-                                    Layout.preferredWidth: 1
-                                    Layout.preferredHeight: Math.round(64 * ctlScroll.hS)
-                                    radius: 14
-                                    // a switched off function reads as off, not as dimmed
-                                    // colour - the state it was left in says nothing once
-                                    // the function itself is gone
-                                    readonly property bool lit: modelData.live && modelData.on
-                                    color: lit ? modelData.col : "#26262b"
-                                    opacity: modelData.live ? 1.0 : 0.35
-                                    scale: cellTouch.pressed ? 0.975 : 1.0
-                                    Behavior on color { ColorAnimation { duration: 180 } }
-                                    Behavior on opacity { NumberAnimation { duration: 180 } }
-                                    Behavior on scale { NumberAnimation { duration: 90 } }
 
                                     Label {
                                         anchors.centerIn: parent
-                                        text: modelData.t
+                                        text: root.battShowRange
+                                            ? "~" + Math.round(useMph.checked ? (root.stRange * 0.621371)
+                                                                              : root.stRange)
+                                              + (useMph.checked ? " mi" : " km")
+                                            : Math.round(root.stBatt) + " %"
                                         font.bold: true
-                                        font.pointSize: root.titleSize
-                                        color: parent.lit ? modelData.fg : "#ffffff"
-                                    }
-                                    MouseArea {
-                                        id: cellTouch
-                                        anchors.fill: parent
-                                        enabled: modelData.live
-                                        onClicked: ctrlCode(modelData.cmd)
+                                        font.pointSize: root.titleSize * 1.05
+                                        color: "#ffffff"
                                     }
                                 }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Layout.topMargin: Math.round(12 * ctlScroll.hS)
+                                spacing: 8
+
+                                Repeater {
+                                    model: [
+                                        { cap: "V", deg: false, val: String(Math.round(root.stVin)), warn: false },
+                                        { cap: "A", deg: false, val: String(Math.round(root.stAmps)), warn: false },
+                                        { cap: "E", deg: true, val: String(Math.round(root.stFet)),
+                                          warn: root.stFet > (Number.parseFloat(tempWarningFet.text) || 999) },
+                                        { cap: "M", deg: true, val: String(Math.round(root.stMot)),
+                                          warn: root.stMot > (Number.parseFloat(tempWarningMotor.text) || 999) }
+                                    ]
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        Layout.preferredWidth: 1
+                                        Layout.preferredHeight: Math.round(40 * ctlScroll.wS)
+                                        radius: 12
+                                        color: "#33333a"
+
+                                        Rectangle {
+                                            anchors.fill: parent
+                                            radius: parent.radius
+                                            color: "#8e3b3b"
+                                            visible: modelData.warn
+                                            SequentialAnimation on opacity {
+                                                running: true
+                                                loops: Animation.Infinite
+                                                NumberAnimation { from: 0; to: 0.85; duration: 520; easing.type: Easing.InOutQuad }
+                                                NumberAnimation { from: 0.85; to: 0; duration: 520; easing.type: Easing.InOutQuad }
+                                            }
+                                        }
+
+                                        clip: true
+
+                                        // Reading, degree and unit share one group centred in the
+                                        // card, each slot as wide as its widest case. So the group
+                                        // is balanced however wide the card gets, the letters hold
+                                        // a column across the four, the digits end at one x whether
+                                        // or not a degree is drawn, and a third digit grows into
+                                        // room already reserved for it.
+                                        Item {
+                                            id: chipGrp
+                                            anchors.horizontalCenter: parent.horizontalCenter
+                                            // shift right by half the degree and the letter, so
+                                            // what centres is the reading and not the group -
+                                            // clamped to keep 4px of card to the right of it
+                                            anchors.horizontalCenterOffset: Math.min(
+                                                Math.round((root.chipDegW + root.chipGap
+                                                            + root.chipCapW) / 2),
+                                                Math.round(parent.width / 2 - root.chipGrpW / 2 - 4))
+                                            anchors.top: parent.top
+                                            anchors.bottom: parent.bottom
+                                            width: root.chipGrpW
+
+                                            Label {
+                                                id: chipCap
+                                                anchors.right: parent.right
+                                                // A slot as wide as the widest letter, with the
+                                                // glyph centred in it. Right anchoring it at its
+                                                // own width is what left M snug against the degree
+                                                // and E four pixels clear of it: everything else
+                                                // is positioned from M's width, so a narrower
+                                                // letter handed the difference back as gap.
+                                                width: root.chipCapW
+                                                horizontalAlignment: Text.AlignHCenter
+                                                // one baseline for all three. Aligning boxes
+                                                // instead drops the smaller font by the
+                                                // difference in descent, and V, A, E and M have
+                                                // no descender for it to buy anything
+                                                anchors.baseline: chipVal.baseline
+                                                text: modelData.cap
+                                                font.bold: true
+                                                font.pointSize: root.titleSize * 0.83
+                                                opacity: 0.5
+                                            }
+                                            Label {
+                                                id: chipDeg
+                                                anchors.right: parent.right
+                                                anchors.rightMargin: root.chipCapW + root.chipGap
+                                                anchors.baseline: chipVal.baseline
+                                                text: "\u00b0"
+                                                font.bold: true
+                                                font.pointSize: root.titleSize * 1.09
+                                                opacity: modelData.deg ? 0.45 : 0
+                                            }
+                                            Label {
+                                                id: chipVal
+                                                anchors.right: parent.right
+                                                anchors.rightMargin: root.chipCapW + root.chipGap + root.chipDegW
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                text: modelData.val
+                                                font.bold: true
+                                                font.pointSize: root.titleSize * 1.09
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            }
+                        }
+
+                        // The mode picker and the four controls share a card, as on every other screen.
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.topMargin: Math.round(14 * ctlScroll.hS)
+                            Layout.preferredHeight: ctlBtnCol.implicitHeight + 20
+                            radius: 18
+                            color: "#26262b"
+
+                            ColumnLayout {
+                                id: ctlBtnCol
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.top: parent.top
+                                anchors.margins: 10
+                                spacing: 0
+
+                            // Segmented mode picker - the highlight slides to the
+                            // active mode instead of three buttons lighting up
+                            Item {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: Math.round(48 * ctlScroll.hS)
+
+                                Rectangle {
+                                    id: modeTrack
+                                    anchors.fill: parent
+                                    enabled: !root.isSlave
+                                    opacity: root.isSlave ? 0.3 : 1.0
+                                    radius: 14
+                                    color: "#33333a"
+
+                                    Rectangle {
+                                        width: modeTrack.width / 3
+                                        height: parent.height
+                                        radius: parent.radius
+                                        x: root.stMode === 2 ? 0 : (root.stMode === 1 ? modeTrack.width / 3 : modeTrack.width * 2 / 3)
+                                        color: root.stMode === 2 ? "#25af32" : (root.stMode === 1 ? "#1e80d5" : "#dc2e28")
+                                        Behavior on x { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+                                        Behavior on color { ColorAnimation { duration: 220 } }
+                                    }
+
+                                    Row {
+                                        anchors.fill: parent
+                                        Repeater {
+                                            model: [
+                                                { t: "ECO", m: 2 },
+                                                { t: "DRIVE", m: 1 },
+                                                { t: "SPORT", m: 4 }
+                                            ]
+                                            Item {
+                                                width: modeTrack.width / 3
+                                                height: modeTrack.height
+                                                Label {
+                                                    anchors.centerIn: parent
+                                                    text: modelData.t
+                                                    font.bold: true
+                                                    color: root.stMode === modelData.m ? "#ffffff" : "#8e8e96"
+                                                    Behavior on color { ColorAnimation { duration: 220 } }
+                                                }
+                                                MouseArea {
+                                                    anchors.fill: parent
+                                                    onClicked: ctrlCode("(ctrl-mode " + modelData.m + ")")
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            GridLayout {
+                                Layout.fillWidth: true
+                                Layout.topMargin: Math.round(14 * ctlScroll.hS)
+                                enabled: !root.isSlave
+                                opacity: root.isSlave ? 0.3 : 1.0
+                                columns: 2
+                                rowSpacing: Math.round(16 * ctlScroll.hS)
+                                columnSpacing: Math.round(14 * ctlScroll.hS)
+
+                                Repeater {
+                                    model: [
+                                        { t: "LOCK", on: root.stLock, col: "#c31f1f", fg: "#ffffff",
+                                          cmd: "(ctrl-lock " + (root.stLock ? "false" : "true") + ")", live: true },
+                                        { t: "SECRET", on: root.stSecret, col: "#771ca2", fg: "#ffffff",
+                                          cmd: "(ctrl-secret " + (root.stSecret ? "false" : "true") + ")",
+                                          live: root.stSecretAllow },
+                                        { t: "LIGHT", on: root.stLight, col: "#e49e26", fg: root.stLight ? "#1e1a10" : "#ffffff",
+                                          cmd: "(ctrl-light " + (root.stLight ? "false" : "true") + ")", live: true },
+                                        { t: "CRUISE", on: root.stCruiseEn, col: "#118579", fg: "#ffffff",
+                                          cmd: "(ctrl-cruise " + (root.stCruiseEn ? "false" : "true") + ")", live: root.stCruiseAllow }
+                                    ]
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        Layout.preferredWidth: 1
+                                        Layout.preferredHeight: Math.round(64 * ctlScroll.hS)
+                                        radius: 14
+                                        // a switched off function reads as off, not as dimmed
+                                        // colour - the state it was left in says nothing once
+                                        // the function itself is gone
+                                        readonly property bool lit: modelData.live && modelData.on
+                                        color: lit ? modelData.col : "#33333a"
+                                        opacity: modelData.live ? 1.0 : 0.35
+                                        scale: cellTouch.pressed ? 0.975 : 1.0
+                                        Behavior on color { ColorAnimation { duration: 180 } }
+                                        Behavior on opacity { NumberAnimation { duration: 180 } }
+                                        Behavior on scale { NumberAnimation { duration: 90 } }
+
+                                        Label {
+                                            anchors.centerIn: parent
+                                            text: modelData.t
+                                            font.bold: true
+                                            font.pointSize: root.titleSize
+                                            color: parent.lit ? modelData.fg : "#ffffff"
+                                        }
+                                        MouseArea {
+                                            id: cellTouch
+                                            anchors.fill: parent
+                                            enabled: modelData.live
+                                            onClicked: ctrlCode(modelData.cmd)
+                                        }
+                                    }
+                                }
+                            }
                             }
                         }
                     }
