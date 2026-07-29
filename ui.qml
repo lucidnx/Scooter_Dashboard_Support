@@ -666,7 +666,7 @@ Item {
                 width: 40
                 height: 38
                 radius: 12
-                color: backTouch.pressed ? "#3a3a44" : "#2b2b31"
+                color: backTouch.pressed ? "#3a3a44" : "#303034"
                 Behavior on color { ColorAnimation { duration: 140 } }
 
                 Canvas {
@@ -945,7 +945,7 @@ Item {
                                 width: dial.width * 0.105
                                 height: width
                                 radius: width / 2
-                                color: root.stOff ? "#2b2b31" : "#34753c"
+                                color: root.stOff ? "#303034" : "#34753c"
                                 scale: powerTouch.pressed ? 0.94 : 1.0
                                 Behavior on color { ColorAnimation { duration: 180 } }
                                 Behavior on scale { NumberAnimation { duration: 90 } }
@@ -985,7 +985,7 @@ Item {
                                 radius: width / 2
                                 x: dial.pad
                                 y: dial.dcy - dial.drad - dial.dlw / 2 + dial.pad
-                                color: gearTouch2.pressed ? "#3a3a44" : "#2b2b31"
+                                color: gearTouch2.pressed ? "#3a3a44" : "#303034"
                                 Behavior on color { ColorAnimation { duration: 140 } }
 
                                 Canvas {
@@ -1026,9 +1026,9 @@ Item {
                                 width: dial.ccd
                                 height: width
                                 radius: width / 2
-                                x: dial.dcx + dial.drad * 0.866 + dial.dlw / 2 - width
+                                x: dial.dcx + dial.drad + dial.dlw / 2 - width
                                 y: dial.dcy - dial.drad * 0.05 - width / 2
-                                color: root.stCruise ? "#21aabb" : "#2b2b31"
+                                color: root.stCruise ? "#21aabb" : "#303034"
                                 Behavior on color { ColorAnimation { duration: 200 } }
                                 Label {
                                     anchors.centerIn: parent
@@ -1044,16 +1044,16 @@ Item {
                         Item {
                             Layout.fillWidth: true
                             Layout.topMargin: Math.round(18 * ctlScroll.hS)
-                            Layout.preferredHeight: Math.round(32 * ctlScroll.wS)
+                            Layout.preferredHeight: Math.round(28 * ctlScroll.wS)
 
                             Rectangle {
                                 id: battTrack
                                 anchors.left: parent.left
                                 anchors.right: parent.right
                                 anchors.verticalCenter: parent.verticalCenter
-                                height: Math.round(30 * ctlScroll.wS)
+                                height: Math.round(27 * ctlScroll.wS)
                                 radius: height / 2
-                                color: "#2b2b31"
+                                color: "#303034"
 
                                 Rectangle {
                                     height: parent.height
@@ -1070,6 +1070,7 @@ Item {
                                     anchors.centerIn: parent
                                     text: Math.round(root.stBatt) + " %"
                                     font.bold: true
+                                    font.pointSize: root.titleSize * 1.05
                                     color: "#ffffff"
                                 }
                             }
@@ -1077,7 +1078,7 @@ Item {
 
                         Item {
                             Layout.fillWidth: true
-                            Layout.topMargin: Math.round(8 * ctlScroll.hS)
+                            Layout.topMargin: 3
                             Layout.preferredHeight: whkmLabel.height
 
                             Label {
@@ -1224,7 +1225,7 @@ Item {
                                     Layout.preferredWidth: 1
                                     Layout.preferredHeight: Math.round(64 * ctlScroll.hS)
                                     radius: 14
-                                    color: modelData.on ? modelData.col : "#2b2b31"
+                                    color: modelData.on ? modelData.col : "#303034"
                                     opacity: modelData.live ? 1.0 : 0.35
                                     scale: cellTouch.pressed ? 0.975 : 1.0
                                     Behavior on color { ColorAnimation { duration: 180 } }
@@ -1280,7 +1281,7 @@ Item {
                                 RowLayout {
                                     Layout.fillWidth: true
                                     Label { text: "Startup Mode"; Layout.fillWidth: true }
-                                    ComboBox { id: bootMode; Layout.preferredWidth: 100; model: ["Eco", "Drive", "Sport"]; currentIndex: 1; background: Rectangle { radius: 10; color: "#33333a" } }
+                                    ComboBox { id: bootMode; Layout.preferredWidth: 100; model: ["Eco", "Drive", "Sport"]; currentIndex: 1; background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 42 } }
                                 }
 
                                 RowLayout {
@@ -1316,7 +1317,7 @@ Item {
                                 RowLayout {
                                     Layout.fillWidth: true
                                     Label { text: "Brake Light"; Layout.fillWidth: true; enabled: rearLightEnable.checked }
-                                    ComboBox { id: brakeLightMode; Layout.preferredWidth: 100; model: ["On", "Blink", "Off"]; enabled: rearLightEnable.checked; background: Rectangle { radius: 10; color: "#33333a" } }
+                                    ComboBox { id: brakeLightMode; Layout.preferredWidth: 100; model: ["On", "Blink", "Off"]; enabled: rearLightEnable.checked; background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 42 } }
                                 }
 
                                 RowLayout {
@@ -1335,7 +1336,7 @@ Item {
                                     }
                                     ComboBox {
                                         id: idleDisplay
-                                        background: Rectangle { radius: 10; color: "#33333a" }
+                                        background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 42 }
                                         Layout.preferredWidth: 170
                                         enabled: showBatteryInIdle.checked || showBatterySecret.checked
                                         model: ["Battery %", "Battery V", "VESC \u00B0C", "Motor \u00B0C"]
@@ -1371,7 +1372,7 @@ Item {
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Label { text: "Lock"; font.bold: true; Layout.fillWidth: true }
-                                        ComboBox { id: lockPresses; Layout.preferredWidth: 84; model: ["1", "2", "3", "4", "5"]; currentIndex: 1; background: Rectangle { radius: 10; color: "#33333a" } }
+                                        ComboBox { id: lockPresses; Layout.preferredWidth: 84; model: ["1", "2", "3", "4", "5"]; currentIndex: 1; background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 42 } }
                                     }
 
                                     RowLayout {
@@ -1391,7 +1392,7 @@ Item {
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Label { text: "Modes"; font.bold: true; Layout.fillWidth: true }
-                                        ComboBox { id: modePresses; Layout.preferredWidth: 84; model: ["No", "1", "2", "3", "4", "5"]; currentIndex: 2; background: Rectangle { radius: 10; color: "#33333a" } }
+                                        ComboBox { id: modePresses; Layout.preferredWidth: 84; model: ["No", "1", "2", "3", "4", "5"]; currentIndex: 2; background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 42 } }
                                     }
 
                                     RowLayout {
@@ -1412,7 +1413,7 @@ Item {
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Label { text: "Headlight"; font.bold: true; Layout.fillWidth: true }
-                                        ComboBox { id: lightPresses; Layout.preferredWidth: 84; model: ["No", "1", "2", "3", "4", "5"]; currentIndex: 1; background: Rectangle { radius: 10; color: "#33333a" } }
+                                        ComboBox { id: lightPresses; Layout.preferredWidth: 84; model: ["No", "1", "2", "3", "4", "5"]; currentIndex: 1; background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 42 } }
                                     }
 
                                     RowLayout {
@@ -1433,7 +1434,7 @@ Item {
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Label { text: "Secret"; font.bold: true; Layout.fillWidth: true }
-                                        ComboBox { id: secretPresses; Layout.preferredWidth: 84; model: ["No", "1", "2", "3", "4", "5"]; currentIndex: 1; background: Rectangle { radius: 10; color: "#33333a" } }
+                                        ComboBox { id: secretPresses; Layout.preferredWidth: 84; model: ["No", "1", "2", "3", "4", "5"]; currentIndex: 1; background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 42 } }
                                     }
 
                                     RowLayout {
@@ -1454,7 +1455,7 @@ Item {
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Label { text: "Secret OFF"; font.bold: true; Layout.fillWidth: true }
-                                        ComboBox { id: secretOffPresses; Layout.preferredWidth: 84; model: ["No", "1", "2", "3", "4", "5"]; currentIndex: 3; background: Rectangle { radius: 10; color: "#33333a" } }
+                                        ComboBox { id: secretOffPresses; Layout.preferredWidth: 84; model: ["No", "1", "2", "3", "4", "5"]; currentIndex: 3; background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 42 } }
                                     }
 
                                     RowLayout {
@@ -1640,7 +1641,7 @@ Item {
                                     Label { text: "Model"; font.bold: true; Layout.fillWidth: true }
                                     ComboBox {
                                         id: modelBox
-                                        background: Rectangle { radius: 10; color: "#33333a" }
+                                        background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 42 }
                                         Layout.preferredWidth: 170
                                         model: ["G30", "M365/1S/PRO2", "Slave", "G2 (untested)"]
                                     }
@@ -1879,7 +1880,7 @@ Item {
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Label { text: "Dashboard power Control (experimental)"; Layout.fillWidth: true }
-                                        ComboBox { id: dashPowerOut; Layout.preferredWidth: 100; model: ["Off", "ADC1", "ADC2"]; background: Rectangle { radius: 10; color: "#33333a" } }
+                                        ComboBox { id: dashPowerOut; Layout.preferredWidth: 100; model: ["Off", "ADC1", "ADC2"]; background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 42 } }
                                     }
 
                                     Label {
@@ -2024,7 +2025,7 @@ Item {
                     Layout.preferredWidth: 1
                     Layout.preferredHeight: 46
                     radius: 14
-                    color: modelData.accent ? "#34753c" : "#2b2b31"
+                    color: modelData.accent ? "#34753c" : "#303034"
                     opacity: modelData.on ? 1.0 : 0.4
                     scale: actTouch.pressed && modelData.on ? 0.975 : 1.0
                     Behavior on opacity { NumberAnimation { duration: 150 } }
