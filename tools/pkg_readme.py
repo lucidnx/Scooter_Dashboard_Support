@@ -13,11 +13,12 @@ import sys
 
 REPO = "https://github.com/lucidnx/vesc_scooter_support"
 
-# VESC Tool renders the description as markdown, which takes the underscores in
-# a bare URL for emphasis and drops them - vesc_scooter_support arrived as
-# vescscootersupport. A link destination is never parsed that way, so the target
-# is safe either side of the escape; only text the reader sees needs it.
-REPO_MD = "[" + REPO.replace("_", "\\_") + "](" + REPO + ")"
+# VESC Tool's renderer eats an underscore as emphasis and does not honour a
+# backslash escape either - escaping only swapped the missing underscores for
+# visible backslashes. So nothing the reader sees may contain one. A link
+# destination is never parsed for emphasis, so the target is safe; the label
+# carries no underscore to lose.
+REPO_MD = "[VESC Scooter Support on GitHub](" + REPO + ")"
 
 
 def is_image(line):
@@ -83,10 +84,12 @@ def strip_images(src):
     return re.sub(r"\n{3,}", "\n\n", text)
 
 
-def escape_bare_urls(src):
-    """Same trap as REPO_MD, for the URLs the README writes out in full."""
-    return re.sub(r"(?<![(\[<])\bhttps?://\S*_\S*",
-                  lambda m: m.group(0).replace("_", "\\_"), src)
+def code_bare_urls(src):
+    """Same trap as REPO_MD, for URLs the README writes out in full rather than
+    hiding behind a label. A code span is literal in every markdown flavour, so
+    the underscores survive - at the cost of not being clickable."""
+    return re.sub(r"(?<![(\[<`])\bhttps?://\S*_\S*",
+                  lambda m: "`" + m.group(0) + "`", src)
 
 
 def add_link(src):
@@ -100,7 +103,7 @@ def add_link(src):
 
 def main():
     src = open(sys.argv[1]).read()
-    dst = add_link(escape_bare_urls(strip_images(src)))
+    dst = add_link(code_bare_urls(strip_images(src)))
     open(sys.argv[2], "w").write(dst)
     print(f"pkg_readme: {len(src)} -> {len(dst)} bytes, "
           f"{sum(1 for l in src.split(chr(10)) if is_image(l))} images dropped")

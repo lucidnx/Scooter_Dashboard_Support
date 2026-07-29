@@ -61,6 +61,17 @@ def inline_object_semicolon(src):
     return bad
 
 
+def duplicate_ids(src):
+    """Two objects with one id - the engine refuses to build the whole file."""
+    seen, dup = set(), []
+    for m in re.finditer(r"\bid:\s*([A-Za-z_]\w*)", src):
+        name = m.group(1)
+        if name in seen:
+            dup.append(f"{name} (line {src.count(chr(10), 0, m.start()) + 1})")
+        seen.add(name)
+    return dup
+
+
 def undeclared(src):
     ids = set(re.findall(r"\bid:\s*([A-Za-z_][A-Za-z0-9_]*)", src))
     params = set()
@@ -80,6 +91,9 @@ def main():
     if bad:
         raise SystemExit("check_qml: object assignment followed by ';' at line "
                          + ", ".join(str(b) for b in bad))
+    dup = duplicate_ids(src)
+    if dup:
+        raise SystemExit("check_qml: id used twice: " + ", ".join(dup))
     missing = undeclared(src)
     if missing:
         raise SystemExit(f"check_qml: referenced but never declared: {', '.join(missing)}")

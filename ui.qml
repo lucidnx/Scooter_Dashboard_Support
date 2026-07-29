@@ -2438,11 +2438,11 @@ Item {
                             Label { text: "Backup"; font.bold: true; font.pointSize: root.titleSize * 0.82; font.capitalization: Font.AllUppercase; font.letterSpacing: 1; opacity: 0.55; Layout.topMargin: 26; Layout.leftMargin: 4 }
                             Rectangle {
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: card10.implicitHeight + 28
+                                Layout.preferredHeight: card11.implicitHeight + 28
                                 radius: 14
                                 color: "#26262b"
                                 ColumnLayout {
-                                    id: card10
+                                    id: card11
                                     anchors.left: parent.left
                                     anchors.right: parent.right
                                     anchors.top: parent.top
