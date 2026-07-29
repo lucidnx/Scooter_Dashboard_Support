@@ -836,7 +836,7 @@ Item {
                     // hits that floor, and scrolls from there.
                     readonly property real wS: Math.max(0.85, Math.min(1.25, availableWidth / 320))
                     readonly property real hS: Math.max(0.69, Math.min(1.0,
-                        (height - availableWidth * 0.759 - 36 - 78 * wS) / 252))
+                        (height - availableWidth * 0.767 - 36 - 78 * wS) / 258))
 
                     ColumnLayout {
                         width: parent.width
@@ -878,15 +878,17 @@ Item {
 
                             readonly property real dcx: width / 2
                             readonly property real drad: width * 0.40
-                            readonly property real dlw: Math.max(12, drad * 0.19)
+                            readonly property real dlw: Math.max(12, drad * 0.21)
                             readonly property real dcy: drad + dlw / 2
                             readonly property real srad: drad * 0.33
                             readonly property real slw: Math.max(6, srad * 0.20)
                             readonly property real ccd: width * 0.085
-                            // the sub-dial tucks into the opening, its outer edges
-                            // flush with where the arc bottoms out and with the right
-                            readonly property real subx: dcx + drad + dlw / 2 - srad - slw / 2
-                            readonly property real suby: dcy + drad * 0.7071 + dlw / 2 - srad - slw / 2
+                            // Both arcs stop at 135 and 330 degrees, so what the eye
+                            // reads as their bottom and right is 0.7071 and 0.866 of the
+                            // radius from centre, not the radius. Line the sub-dial up
+                            // with those, or it sits short of both edges.
+                            readonly property real subx: dcx + drad * 0.866 + dlw / 2 - srad * 0.866 - slw / 2
+                            readonly property real suby: dcy + drad * 0.7071 + dlw / 2 - srad * 0.7071 - slw / 2
 
                             readonly property real shown: useMph.checked ? (root.stSpeed * 0.621371) : root.stSpeed
                             readonly property real shownMax: Math.max(1, useMph.checked ? (root.stMax * 0.621371) : root.stMax)
@@ -994,7 +996,7 @@ Item {
                             Rectangle {
                                 id: powerBtn
                                 x: 0
-                                y: dial.dcy - dial.drad
+                                y: dial.dcy - dial.drad - dial.dlw / 2
                                 width: dial.width * 0.105
                                 height: width
                                 radius: width / 2
@@ -1037,7 +1039,7 @@ Item {
                                 height: width
                                 radius: width / 2
                                 x: dial.width - width
-                                y: dial.dcy - dial.drad
+                                y: dial.dcy - dial.drad - dial.dlw / 2
                                 color: gearTouch2.pressed ? "#3a3a44" : "#2b2b31"
                                 Behavior on color { ColorAnimation { duration: 140 } }
 
@@ -1079,8 +1081,8 @@ Item {
                                 width: dial.ccd
                                 height: width
                                 radius: width / 2
-                                x: dial.dcx + dial.drad + dial.dlw / 2 - width
-                                y: dial.dcy - dial.drad * 0.20 - width / 2
+                                x: dial.dcx + dial.drad * 0.866 + dial.dlw / 2 - width
+                                y: dial.dcy - dial.drad * 0.05 - width / 2
                                 color: root.stCruise ? "#21aabb" : "#2b2b31"
                                 Behavior on color { ColorAnimation { duration: 200 } }
                                 Label {
@@ -1206,7 +1208,7 @@ Item {
                         // active mode instead of three buttons lighting up
                         Item {
                             Layout.fillWidth: true
-                            Layout.topMargin: Math.round(20 * ctlScroll.hS)
+                            Layout.topMargin: Math.round(14 * ctlScroll.hS)
                             Layout.preferredHeight: Math.round(48 * ctlScroll.hS)
 
                             Rectangle {
@@ -1255,7 +1257,7 @@ Item {
 
                         GridLayout {
                             Layout.fillWidth: true
-                            Layout.topMargin: Math.round(20 * ctlScroll.hS)
+                            Layout.topMargin: Math.round(14 * ctlScroll.hS)
                             Layout.bottomMargin: 14
                             columns: 2
                             rowSpacing: Math.round(16 * ctlScroll.hS)
@@ -1275,7 +1277,7 @@ Item {
                                 Rectangle {
                                     Layout.fillWidth: true
                                     Layout.preferredWidth: 1
-                                    Layout.preferredHeight: Math.round(58 * ctlScroll.hS)
+                                    Layout.preferredHeight: Math.round(64 * ctlScroll.hS)
                                     radius: 14
                                     color: modelData.on ? modelData.col : "#2b2b31"
                                     opacity: modelData.live ? 1.0 : 0.35
