@@ -2392,9 +2392,7 @@ Item {
                                         spacing: 4
                                         visible: softwareAdc.checked || softwareAdc2.checked
 
-                                        Rectangle { Layout.fillWidth: true; Layout.topMargin: 14; height: 1; color: "#3a3a42" }
-
-                                        Label { text: "Light Compensation"; font.bold: true; opacity: 0.75; Layout.topMargin: 8 }
+                                        Label { text: "Light Compensation"; font.bold: true; font.pointSize: root.titleSize * 0.92; font.capitalization: Font.AllUppercase; font.letterSpacing: 1; opacity: 0.8; Layout.topMargin: 10 }
 
                                         Label {
                                             Layout.fillWidth: true
