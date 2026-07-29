@@ -72,8 +72,12 @@ def duplicate_ids(src):
     return dup
 
 
+# scope names the engine supplies, so never a mistyped id
+BUILTIN_SCOPE = {"parent", "modelData", "model", "control"}
+
+
 def undeclared(src):
-    ids = set(re.findall(r"\bid:\s*([A-Za-z_][A-Za-z0-9_]*)", src))
+    ids = set(re.findall(r"\bid:\s*([A-Za-z_][A-Za-z0-9_]*)", src)) | BUILTIN_SCOPE
     params = set()
     for args in re.findall(r"function\s+\w+\s*\(([^)]*)\)", src):
         params |= {a.strip() for a in args.split(",") if a.strip()}
