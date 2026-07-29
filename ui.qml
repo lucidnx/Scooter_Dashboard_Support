@@ -60,9 +60,20 @@ Item {
     property bool stImgOk: true
     property real stFet: 0
     property real stMot: 0
-    // no configured power ceiling reaches the UI, so the sub-dial scales to the
-    // highest draw seen this session
+    // Highest draw seen this session, the fallback when nothing caps watts.
     property real stWattPeak: 500
+    // The sub-dial scales to the watt limit set for the mode that is running, so
+    // a given sweep means the same thing every session instead of rescaling
+    // itself the first time you pull hard.
+    readonly property real stWattMax: {
+        var on = stSecret ? secretApplyWatts.checked : applyWatts.checked
+        if (!on)
+            return stWattPeak
+        var f = stSecret ? (stMode === 2 ? secretEcoWatts : (stMode === 1 ? secretDriveWatts : secretSportWatts))
+                         : (stMode === 2 ? ecoWatts : (stMode === 1 ? driveWatts : sportWatts))
+        var v = Number.parseFloat(f.text)
+        return v > 0 ? v : stWattPeak
+    }
 
     function applyStateLine(line) {
         var p = line.split(" ")
@@ -780,7 +791,7 @@ Item {
                     // hits that floor, and scrolls from there.
                     readonly property real wS: Math.max(0.85, Math.min(1.25, availableWidth / 320))
                     readonly property real hS: Math.max(0.69, Math.min(1.0,
-                        (height - availableWidth * 0.767 - 36 - 78 * wS) / 258))
+                        (height - availableWidth * 0.767 - 39 - 68 * wS) / 250))
 
                     ColumnLayout {
                         width: parent.width
@@ -843,7 +854,7 @@ Item {
                                 anchors.fill: parent
 
                                 property real sFrac: Math.max(0, Math.min(1, dial.shown / dial.shownMax))
-                                property real wFrac: Math.max(0, Math.min(1, Math.abs(root.stWatts) / root.stWattPeak))
+                                property real wFrac: Math.max(0, Math.min(1, Math.abs(root.stWatts) / root.stWattMax))
                                 property real sAnim: 0
                                 property real wAnim: 0
                                 Behavior on sAnim { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
@@ -864,7 +875,7 @@ Item {
                                     var a1 = Math.PI * (330 / 180)  // top right
 
                                     ctx.lineWidth = dial.dlw
-                                    ctx.strokeStyle = "#4a4a56"
+                                    ctx.strokeStyle = "#3a3a44"
                                     ctx.beginPath()
                                     ctx.arc(cx, cy, r, a0, a1, false)
                                     ctx.stroke()
@@ -884,7 +895,7 @@ Item {
                                     var b1 = a1
 
                                     ctx.lineWidth = dial.slw
-                                    ctx.strokeStyle = "#4a4a56"
+                                    ctx.strokeStyle = "#3a3a44"
                                     ctx.beginPath()
                                     ctx.arc(dial.subx, dial.suby, sr, b0, b1, false)
                                     ctx.stroke()
@@ -1028,9 +1039,7 @@ Item {
                                 radius: width / 2
                                 x: dial.dcx + dial.drad + dial.dlw / 2 - width
                                 y: dial.dcy - dial.drad * 0.05 - width / 2
-                                color: root.stCruise ? "#21aabb" : "#303034"
-                                border.width: root.stCruise ? 0 : 1
-                                border.color: "#43434c"
+                                color: root.stCruise ? "#21aabb" : "#26262b"
                                 Behavior on color { ColorAnimation { duration: 200 } }
                                 Label {
                                     anchors.centerIn: parent
@@ -1055,7 +1064,7 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 height: Math.round(27 * ctlScroll.wS)
                                 radius: height / 2
-                                color: "#303034"
+                                color: "#26262b"
 
                                 Rectangle {
                                     height: parent.height
@@ -1105,8 +1114,8 @@ Item {
 
                             Repeater {
                                 model: [
-                                    { cap: "V", val: root.stVin.toFixed(1), warn: false },
-                                    { cap: "A", val: root.stAmps.toFixed(1), warn: false },
+                                    { cap: "V", val: String(Math.round(root.stVin)), warn: false },
+                                    { cap: "A", val: String(Math.round(root.stAmps)), warn: false },
                                     { cap: "C °C", val: String(Math.round(root.stFet)),
                                       warn: root.stFet > (Number.parseFloat(tempWarningFet.text) || 999) },
                                     { cap: "M °C", val: String(Math.round(root.stMot)),
@@ -1115,7 +1124,7 @@ Item {
                                 Rectangle {
                                     Layout.fillWidth: true
                                     Layout.preferredWidth: 1
-                                    Layout.preferredHeight: Math.round(46 * ctlScroll.wS)
+                                    Layout.preferredHeight: Math.round(40 * ctlScroll.wS)
                                     radius: 12
                                     color: "#26262b"
 
@@ -1133,22 +1142,24 @@ Item {
                                     }
 
                                     clip: true
-                                    Row {
+
+                                    // the figure sits on the centre of the card and
+                                    // the unit hangs off it, so the numbers line up
+                                    // across the row whatever their unit is called
+                                    Label {
+                                        id: chipVal
                                         anchors.centerIn: parent
-                                        spacing: 2
-                                        Label {
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            text: modelData.val
-                                            font.bold: true
-                                            // shrink rather than spill out of the card
-                                            font.pointSize: root.titleSize * (modelData.val.length > 4 ? 0.86 : 1.0)
-                                        }
-                                        Label {
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            text: modelData.cap
-                                            font.pointSize: root.titleSize * 0.62
-                                            opacity: 0.5
-                                        }
+                                        text: modelData.val
+                                        font.bold: true
+                                        font.pointSize: root.titleSize * 1.05
+                                    }
+                                    Label {
+                                        anchors.left: chipVal.right
+                                        anchors.leftMargin: 2
+                                        anchors.baseline: chipVal.baseline
+                                        text: modelData.cap
+                                        font.pointSize: root.titleSize * 0.6
+                                        opacity: 0.5
                                     }
                                 }
                             }
@@ -1229,9 +1240,7 @@ Item {
                                     Layout.preferredWidth: 1
                                     Layout.preferredHeight: Math.round(64 * ctlScroll.hS)
                                     radius: 14
-                                    color: modelData.on ? modelData.col : "#303034"
-                                    border.width: modelData.on ? 0 : 1
-                                    border.color: "#43434c"
+                                    color: modelData.on ? modelData.col : "#26262b"
                                     opacity: modelData.live ? 1.0 : 0.35
                                     scale: cellTouch.pressed ? 0.975 : 1.0
                                     Behavior on color { ColorAnimation { duration: 180 } }
@@ -2098,9 +2107,7 @@ Item {
                     Layout.preferredWidth: 1
                     Layout.preferredHeight: 46
                     radius: 14
-                    color: modelData.accent ? "#34753c" : "#303034"
-                    border.width: modelData.accent ? 0 : 1
-                    border.color: "#43434c"
+                    color: modelData.accent ? "#34753c" : "#26262b"
                     opacity: modelData.on ? 1.0 : 0.4
                     scale: actTouch.pressed && modelData.on ? 0.975 : 1.0
                     Behavior on opacity { NumberAnimation { duration: 150 } }
