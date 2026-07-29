@@ -1019,28 +1019,24 @@ Item {
                                         var ctx = getContext("2d")
                                         ctx.reset()
                                         var c = width / 2
-                                        var rm = width * 0.145      // ring the teeth stand on
-                                        var ro = width * 0.215      // tip of a tooth
+                                        var rm = width * 0.150      // ring the teeth stand on
+                                        var ro = width * 0.235      // tip of a tooth
                                         ctx.strokeStyle = "#c8c8d0"
-                                        // square tips and a stroke about as wide as the gap
-                                        // between teeth reads as a cog - thin long rays
-                                        // read as a sun
+                                        // six teeth, each wider than the gap beside it, with
+                                        // square tips - fewer and fatter than eight thin rays,
+                                        // which read as a sun rather than a cog
                                         ctx.lineCap = "butt"
-                                        ctx.lineWidth = Math.max(2, width * 0.085)
-                                        for (var i = 0; i < 8; i++) {
-                                            var a = i * Math.PI / 4
+                                        ctx.lineWidth = Math.max(2, width * 0.105)
+                                        for (var i = 0; i < 6; i++) {
+                                            var a = i * Math.PI / 3
                                             ctx.beginPath()
                                             ctx.moveTo(c + Math.cos(a) * rm, c + Math.sin(a) * rm)
                                             ctx.lineTo(c + Math.cos(a) * ro, c + Math.sin(a) * ro)
                                             ctx.stroke()
                                         }
-                                        ctx.lineWidth = Math.max(2, width * 0.075)
+                                        ctx.lineWidth = Math.max(2, width * 0.085)
                                         ctx.beginPath()
                                         ctx.arc(c, c, rm, 0, Math.PI * 2)
-                                        ctx.stroke()
-                                        ctx.lineWidth = Math.max(1, width * 0.045)
-                                        ctx.beginPath()
-                                        ctx.arc(c, c, width * 0.062, 0, Math.PI * 2)
                                         ctx.stroke()
                                     }
                                 }
@@ -1142,9 +1138,9 @@ Item {
                                 model: [
                                     { cap: "V", deg: false, val: String(Math.round(root.stVin)), warn: false },
                                     { cap: "A", deg: false, val: String(Math.round(root.stAmps)), warn: false },
-                                    { cap: "\u00b0E", deg: true, val: String(Math.round(root.stFet)),
+                                    { cap: "E", deg: true, val: String(Math.round(root.stFet)),
                                       warn: root.stFet > (Number.parseFloat(tempWarningFet.text) || 999) },
-                                    { cap: "\u00b0M", deg: true, val: String(Math.round(root.stMot)),
+                                    { cap: "M", deg: true, val: String(Math.round(root.stMot)),
                                       warn: root.stMot > (Number.parseFloat(tempWarningMotor.text) || 999) }
                                 ]
                                 Rectangle {
@@ -1171,9 +1167,8 @@ Item {
 
                                     // A two digit figure lands centred in the card and
                                     // the unit hangs outside it, so what is centred is the
-                                    // digits rather than the whole reading, degree sign
-                                    // included - it is dim like the letter, so it belongs
-                                    // with it. The right edge is what is pinned, so a third
+                                    // digits rather than the whole reading. The right
+                                    // edge is what is pinned, so a third
                                     // grows leftwards into the empty half.
                                     Label {
                                         id: chipVal
@@ -1184,10 +1179,22 @@ Item {
                                         font.bold: true
                                         font.pointSize: root.titleSize * 1.05
                                     }
+                                    // The degree is part of the reading - the value's own
+                                    // size, set apart only by being dim - but it is its own
+                                    // label so it carries no weight in where the digits sit.
+                                    // Empty where there is none, so it costs no width.
                                     Label {
+                                        id: chipDeg
                                         anchors.left: chipVal.right
-                                        // the degree hugs the digits, a letter alone breathes
-                                        anchors.leftMargin: modelData.deg ? 1 : 4
+                                        anchors.baseline: chipVal.baseline
+                                        text: modelData.deg ? "\u00b0" : ""
+                                        font.bold: true
+                                        font.pointSize: root.titleSize * 1.05
+                                        opacity: 0.45
+                                    }
+                                    Label {
+                                        anchors.left: chipDeg.right
+                                        anchors.leftMargin: 3
                                         anchors.bottom: chipVal.bottom
                                         text: modelData.cap
                                         font.bold: true
