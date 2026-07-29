@@ -718,14 +718,57 @@ Item {
         y: Math.round((parent.height - height) / 2)
         width: Math.min(parent.width - 40, 360)
         modal: true
-        title: "Reset all settings?"
-        standardButtons: Dialog.Yes | Dialog.No
-        onAccepted: { resetSettingsLoad(); sendCode("(restore-settings-ui)") }
+        // No title and no standardButtons: either one makes Material build a header
+        // or footer with an opaque background of its own, drawn over the rounded
+        // one - which is what banded the top and bottom. The title and the buttons
+        // are part of the content instead, and match the rest of the UI.
 
-        Label {
+        ColumnLayout {
             width: resetDialog.availableWidth
-            wrapMode: Text.WordWrap
-            text: "This restores every setting to defaults, including the model, which goes back to Slave. The script restarts. This cannot be undone."
+            spacing: 10
+
+            Label {
+                Layout.fillWidth: true
+                text: "Reset all settings?"
+                font.bold: true
+                font.pointSize: root.titleSize * 1.1
+            }
+
+            Label {
+                Layout.fillWidth: true
+                Layout.preferredWidth: 1
+                wrapMode: Text.WordWrap
+                text: "This restores every setting to defaults, including the model, "
+                      + "which goes back to Slave. The script restarts. This cannot be undone."
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.topMargin: 4
+                spacing: 8
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredWidth: 1
+                    Layout.preferredHeight: 44
+                    radius: 12
+                    color: resetNo.pressed ? "#3a3a44" : "#33333a"
+                    Label { anchors.centerIn: parent; text: "Cancel"; font.bold: true; color: "#ffffff" }
+                    MouseArea { id: resetNo; anchors.fill: parent; onClicked: resetDialog.close() }
+                }
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredWidth: 1
+                    Layout.preferredHeight: 44
+                    radius: 12
+                    color: resetYes.pressed ? "#d43a34" : "#c31f1f"
+                    Label { anchors.centerIn: parent; text: "Reset"; font.bold: true; color: "#ffffff" }
+                    MouseArea { id: resetYes; anchors.fill: parent; onClicked: {
+                        resetDialog.close()
+                        resetSettingsLoad()
+                        sendCode("(restore-settings-ui)")
+                    } }
+                }
+            }
         }
     }
 
@@ -759,12 +802,21 @@ Item {
         y: Math.round((parent.height - height) / 2)
         width: Math.min(parent.width - 40, 420)
         modal: true
-        title: "Export settings"
-        standardButtons: Dialog.Close
+        // No title and no standardButtons: either one makes Material build a header
+        // or footer with an opaque background of its own, drawn over the rounded
+        // one - which is what banded the top and bottom. The title and the buttons
+        // are part of the content instead, and match the rest of the UI.
 
         ColumnLayout {
             width: exportDialog.availableWidth
             spacing: 8
+
+            Label {
+                Layout.fillWidth: true
+                text: "Export settings"
+                font.bold: true
+                font.pointSize: root.titleSize * 1.1
+            }
 
             Label {
                 Layout.fillWidth: true
@@ -789,20 +841,35 @@ Item {
                     background: Item {}
                 }
             }
-            Rectangle {
+            RowLayout {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 44
-                radius: 12
-                color: copyTouch.pressed ? "#1f9c2e" : "#1b8728"
-                Label { anchors.centerIn: parent; text: "Copy to clipboard"; font.bold: true; color: "#ffffff" }
-                MouseArea {
-                    id: copyTouch
-                    anchors.fill: parent
-                    onClicked: {
-                        exportText.selectAll()
-                        exportText.copy()
-                        exportText.deselect()
-                        VescIf.emitStatusMessage("Settings copied to clipboard.", true)
+                Layout.topMargin: 2
+                spacing: 8
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredWidth: 1
+                    Layout.preferredHeight: 44
+                    radius: 12
+                    color: closeTouch.pressed ? "#3a3a44" : "#33333a"
+                    Label { anchors.centerIn: parent; text: "Close"; font.bold: true }
+                    MouseArea { id: closeTouch; anchors.fill: parent; onClicked: exportDialog.close() }
+                }
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredWidth: 2
+                    Layout.preferredHeight: 44
+                    radius: 12
+                    color: copyTouch.pressed ? "#1f9c2e" : "#1b8728"
+                    Label { anchors.centerIn: parent; text: "Copy"; font.bold: true; color: "#ffffff" }
+                    MouseArea {
+                        id: copyTouch
+                        anchors.fill: parent
+                        onClicked: {
+                            exportText.selectAll()
+                            exportText.copy()
+                            exportText.deselect()
+                            VescIf.emitStatusMessage("Settings copied to clipboard.", true)
+                        }
                     }
                 }
             }
@@ -819,12 +886,21 @@ Item {
         y: Math.round((parent.height - height) / 2)
         width: Math.min(parent.width - 40, 420)
         modal: true
-        title: "Import settings"
-        standardButtons: Dialog.Cancel
+        // No title and no standardButtons: either one makes Material build a header
+        // or footer with an opaque background of its own, drawn over the rounded
+        // one - which is what banded the top and bottom. The title and the buttons
+        // are part of the content instead, and match the rest of the UI.
 
         ColumnLayout {
             width: importDialog.availableWidth
             spacing: 8
+
+            Label {
+                Layout.fillWidth: true
+                text: "Import settings"
+                font.bold: true
+                font.pointSize: root.titleSize * 1.1
+            }
 
             Label {
                 Layout.fillWidth: true
@@ -850,7 +926,17 @@ Item {
             }
             RowLayout {
                 Layout.fillWidth: true
+                Layout.topMargin: 2
                 spacing: 8
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredWidth: 1
+                    Layout.preferredHeight: 44
+                    radius: 12
+                    color: cancelTouch.pressed ? "#3a3a44" : "#33333a"
+                    Label { anchors.centerIn: parent; text: "Cancel"; font.bold: true }
+                    MouseArea { id: cancelTouch; anchors.fill: parent; onClicked: importDialog.close() }
+                }
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredWidth: 1
@@ -1680,7 +1766,7 @@ Item {
                                 RowLayout {
                                     Layout.fillWidth: true
                                     Label { text: "Start Speed (" + (useMph.checked ? "mph" : "km/h") + ")"; Layout.fillWidth: true }
-                                    TextField { id: minSpeed; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                                    TextField { id: minSpeed; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
                                 }
 
                                 RowLayout {
@@ -1961,41 +2047,41 @@ Item {
                                 RowLayout {
                                     Layout.fillWidth: true
                                     CheckBox { id: applySpeed; text: "Speed"; checked: true; Layout.preferredWidth: 110 }
-                                    TextField { id: ecoSpeed; horizontalAlignment: TextInput.AlignHCenter; enabled: applySpeed.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
-                                    TextField { id: driveSpeed; horizontalAlignment: TextInput.AlignHCenter; enabled: applySpeed.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
-                                    TextField { id: sportSpeed; horizontalAlignment: TextInput.AlignHCenter; enabled: applySpeed.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                                    TextField { id: ecoSpeed; horizontalAlignment: TextInput.AlignHCenter; enabled: applySpeed.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
+                                    TextField { id: driveSpeed; horizontalAlignment: TextInput.AlignHCenter; enabled: applySpeed.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
+                                    TextField { id: sportSpeed; horizontalAlignment: TextInput.AlignHCenter; enabled: applySpeed.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
                                 }
 
                                 RowLayout {
                                     Layout.fillWidth: true
                                     CheckBox { id: applyCurrent; text: "Current %"; checked: true; Layout.preferredWidth: 110 }
-                                    TextField { id: ecoCurrent; horizontalAlignment: TextInput.AlignHCenter; enabled: applyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampPct(ecoCurrent) }
-                                    TextField { id: driveCurrent; horizontalAlignment: TextInput.AlignHCenter; enabled: applyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampPct(driveCurrent) }
-                                    TextField { id: sportCurrent; horizontalAlignment: TextInput.AlignHCenter; enabled: applyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampPct(sportCurrent) }
+                                    TextField { id: ecoCurrent; horizontalAlignment: TextInput.AlignHCenter; enabled: applyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampPct(ecoCurrent); leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
+                                    TextField { id: driveCurrent; horizontalAlignment: TextInput.AlignHCenter; enabled: applyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampPct(driveCurrent); leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
+                                    TextField { id: sportCurrent; horizontalAlignment: TextInput.AlignHCenter; enabled: applyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampPct(sportCurrent); leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
                                 }
 
                                 RowLayout {
                                     Layout.fillWidth: true
                                     CheckBox { id: applyWatts; text: "Watts"; checked: true; Layout.preferredWidth: 110 }
-                                    TextField { id: ecoWatts; horizontalAlignment: TextInput.AlignHCenter; enabled: applyWatts.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
-                                    TextField { id: driveWatts; horizontalAlignment: TextInput.AlignHCenter; enabled: applyWatts.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
-                                    TextField { id: sportWatts; horizontalAlignment: TextInput.AlignHCenter; enabled: applyWatts.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                                    TextField { id: ecoWatts; horizontalAlignment: TextInput.AlignHCenter; enabled: applyWatts.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
+                                    TextField { id: driveWatts; horizontalAlignment: TextInput.AlignHCenter; enabled: applyWatts.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
+                                    TextField { id: sportWatts; horizontalAlignment: TextInput.AlignHCenter; enabled: applyWatts.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
                                 }
 
                                 RowLayout {
                                     Layout.fillWidth: true
                                     CheckBox { id: applyFw; text: "Field Weak."; checked: true; Layout.preferredWidth: 110 }
-                                    TextField { id: ecoFw; horizontalAlignment: TextInput.AlignHCenter; enabled: applyFw.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
-                                    TextField { id: driveFw; horizontalAlignment: TextInput.AlignHCenter; enabled: applyFw.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
-                                    TextField { id: sportFw; horizontalAlignment: TextInput.AlignHCenter; enabled: applyFw.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                                    TextField { id: ecoFw; horizontalAlignment: TextInput.AlignHCenter; enabled: applyFw.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
+                                    TextField { id: driveFw; horizontalAlignment: TextInput.AlignHCenter; enabled: applyFw.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
+                                    TextField { id: sportFw; horizontalAlignment: TextInput.AlignHCenter; enabled: applyFw.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
                                 }
 
                                 RowLayout {
                                     Layout.fillWidth: true
                                     CheckBox { id: applyOm; text: "Overmod."; Layout.preferredWidth: 110 }
-                                    TextField { id: ecoOm; horizontalAlignment: TextInput.AlignHCenter; enabled: applyOm.checked; text: "1.000"; onEditingFinished: clampOm(ecoOm); Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
-                                    TextField { id: driveOm; horizontalAlignment: TextInput.AlignHCenter; enabled: applyOm.checked; text: "1.000"; onEditingFinished: clampOm(driveOm); Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
-                                    TextField { id: sportOm; horizontalAlignment: TextInput.AlignHCenter; enabled: applyOm.checked; text: "1.000"; onEditingFinished: clampOm(sportOm); Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                                    TextField { id: ecoOm; horizontalAlignment: TextInput.AlignHCenter; enabled: applyOm.checked; text: "1.000"; onEditingFinished: clampOm(ecoOm); Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
+                                    TextField { id: driveOm; horizontalAlignment: TextInput.AlignHCenter; enabled: applyOm.checked; text: "1.000"; onEditingFinished: clampOm(driveOm); Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
+                                    TextField { id: sportOm; horizontalAlignment: TextInput.AlignHCenter; enabled: applyOm.checked; text: "1.000"; onEditingFinished: clampOm(sportOm); Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
                                 }
 
                             }
@@ -2031,41 +2117,41 @@ Item {
                                 RowLayout {
                                     Layout.fillWidth: true
                                     CheckBox { id: secretApplySpeed; text: "Speed"; checked: true; Layout.preferredWidth: 110 }
-                                    TextField { id: secretEcoSpeed; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplySpeed.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
-                                    TextField { id: secretDriveSpeed; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplySpeed.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
-                                    TextField { id: secretSportSpeed; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplySpeed.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                                    TextField { id: secretEcoSpeed; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplySpeed.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
+                                    TextField { id: secretDriveSpeed; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplySpeed.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
+                                    TextField { id: secretSportSpeed; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplySpeed.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
                                 }
 
                                 RowLayout {
                                     Layout.fillWidth: true
                                     CheckBox { id: secretApplyCurrent; text: "Current %"; checked: true; Layout.preferredWidth: 110 }
-                                    TextField { id: secretEcoCurrent; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampPct(secretEcoCurrent) }
-                                    TextField { id: secretDriveCurrent; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampPct(secretDriveCurrent) }
-                                    TextField { id: secretSportCurrent; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampPct(secretSportCurrent) }
+                                    TextField { id: secretEcoCurrent; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampPct(secretEcoCurrent); leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
+                                    TextField { id: secretDriveCurrent; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampPct(secretDriveCurrent); leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
+                                    TextField { id: secretSportCurrent; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampPct(secretSportCurrent); leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
                                 }
 
                                 RowLayout {
                                     Layout.fillWidth: true
                                     CheckBox { id: secretApplyWatts; text: "Watts"; checked: true; Layout.preferredWidth: 110 }
-                                    TextField { id: secretEcoWatts; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyWatts.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
-                                    TextField { id: secretDriveWatts; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyWatts.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
-                                    TextField { id: secretSportWatts; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyWatts.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                                    TextField { id: secretEcoWatts; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyWatts.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
+                                    TextField { id: secretDriveWatts; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyWatts.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
+                                    TextField { id: secretSportWatts; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyWatts.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
                                 }
 
                                 RowLayout {
                                     Layout.fillWidth: true
                                     CheckBox { id: secretApplyFw; text: "Field Weak."; checked: true; Layout.preferredWidth: 110 }
-                                    TextField { id: secretEcoFw; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyFw.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
-                                    TextField { id: secretDriveFw; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyFw.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
-                                    TextField { id: secretSportFw; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyFw.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                                    TextField { id: secretEcoFw; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyFw.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
+                                    TextField { id: secretDriveFw; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyFw.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
+                                    TextField { id: secretSportFw; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyFw.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
                                 }
 
                                 RowLayout {
                                     Layout.fillWidth: true
                                     CheckBox { id: secretApplyOm; text: "Overmod."; Layout.preferredWidth: 110 }
-                                    TextField { id: secretEcoOm; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyOm.checked; text: "1.000"; onEditingFinished: clampOm(secretEcoOm); Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
-                                    TextField { id: secretDriveOm; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyOm.checked; text: "1.000"; onEditingFinished: clampOm(secretDriveOm); Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
-                                    TextField { id: secretSportOm; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyOm.checked; text: "1.000"; onEditingFinished: clampOm(secretSportOm); Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                                    TextField { id: secretEcoOm; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyOm.checked; text: "1.000"; onEditingFinished: clampOm(secretEcoOm); Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
+                                    TextField { id: secretDriveOm; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyOm.checked; text: "1.000"; onEditingFinished: clampOm(secretDriveOm); Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
+                                    TextField { id: secretSportOm; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyOm.checked; text: "1.000"; onEditingFinished: clampOm(secretSportOm); Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
                                 }
                             }
                         }
@@ -2170,13 +2256,13 @@ Item {
                                             RowLayout {
                                                 Layout.fillWidth: true
                                                 Label { text: "Throttle Offset (V)"; Layout.fillWidth: true }
-                                                TextField { id: lightOffThr; horizontalAlignment: TextInput.AlignHCenter; text: "0.000"; Layout.preferredWidth: 90; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampOffsetV(lightOffThr) }
+                                                TextField { id: lightOffThr; horizontalAlignment: TextInput.AlignHCenter; text: "0.000"; Layout.preferredWidth: 90; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampOffsetV(lightOffThr); leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
                                             }
 
                                             RowLayout {
                                                 Layout.fillWidth: true
                                                 Label { text: "Throttle Gain (k)"; Layout.fillWidth: true }
-                                                TextField { id: lightGainThr; horizontalAlignment: TextInput.AlignHCenter; text: "1.000"; Layout.preferredWidth: 90; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampGain(lightGainThr) }
+                                                TextField { id: lightGainThr; horizontalAlignment: TextInput.AlignHCenter; text: "1.000"; Layout.preferredWidth: 90; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampGain(lightGainThr); leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
                                             }
 
                                             Button {
@@ -2208,13 +2294,13 @@ Item {
                                             RowLayout {
                                                 Layout.fillWidth: true
                                                 Label { text: "Brake Offset (V)"; Layout.fillWidth: true }
-                                                TextField { id: lightOffBrk; horizontalAlignment: TextInput.AlignHCenter; text: "0.000"; Layout.preferredWidth: 90; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampOffsetV(lightOffBrk) }
+                                                TextField { id: lightOffBrk; horizontalAlignment: TextInput.AlignHCenter; text: "0.000"; Layout.preferredWidth: 90; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampOffsetV(lightOffBrk); leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
                                             }
 
                                             RowLayout {
                                                 Layout.fillWidth: true
                                                 Label { text: "Brake Gain (k)"; Layout.fillWidth: true }
-                                                TextField { id: lightGainBrk; horizontalAlignment: TextInput.AlignHCenter; text: "1.000"; Layout.preferredWidth: 90; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampGain(lightGainBrk) }
+                                                TextField { id: lightGainBrk; horizontalAlignment: TextInput.AlignHCenter; text: "1.000"; Layout.preferredWidth: 90; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampGain(lightGainBrk); leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
                                             }
 
                                             Button {
@@ -2254,7 +2340,7 @@ Item {
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Label { text: "Disable Gestures above (" + (useMph.checked ? "mph" : "km/h") + ")"; Layout.fillWidth: true }
-                                        TextField { id: buttonSpeed; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                                        TextField { id: buttonSpeed; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
                                     }
 
                                 }
@@ -2276,13 +2362,13 @@ Item {
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Label { text: "Motor Temp Warning (°C)"; Layout.fillWidth: true }
-                                        TextField { id: tempWarningMotor; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                                        TextField { id: tempWarningMotor; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
                                     }
 
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Label { text: "FET Temp Warning (°C)"; Layout.fillWidth: true }
-                                        TextField { id: tempWarningFet; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                                        TextField { id: tempWarningFet; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
                                     }
 
                                 }
@@ -2341,7 +2427,11 @@ Item {
                                             Layout.preferredWidth: 100
                                             maximumLength: 6
                                             inputMethodHints: Qt.ImhDigitsOnly
+                                            leftPadding: 8
+                                            rightPadding: 8
+                                            verticalAlignment: TextInput.AlignVCenter
                                             validator: RegularExpressionValidator { regularExpression: /[0-9]{0,6}/ }
+                                            background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" }
                                         }
                                     }
 
@@ -2423,28 +2513,28 @@ Item {
                                         Layout.fillWidth: true
                                         enabled: cruiseEnable.checked
                                         Label { text: "Activation Delay (s)"; Layout.fillWidth: true }
-                                        TextField { id: cruiseDelay; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                                        TextField { id: cruiseDelay; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
                                     }
 
                                     RowLayout {
                                         Layout.fillWidth: true
                                         enabled: cruiseEnable.checked
                                         Label { text: "Speed deviation (" + (useMph.checked ? "mph" : "km/h") + ")"; Layout.fillWidth: true }
-                                        TextField { id: cruiseDeviation; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                                        TextField { id: cruiseDeviation; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
                                     }
 
                                     RowLayout {
                                         Layout.fillWidth: true
                                         enabled: cruiseEnable.checked
                                         Label { text: "Min activation speed (" + (useMph.checked ? "mph" : "km/h") + ")"; Layout.fillWidth: true }
-                                        TextField { id: cruiseMinSpeed; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                                        TextField { id: cruiseMinSpeed; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
                                     }
 
                                     RowLayout {
                                         Layout.fillWidth: true
                                         enabled: cruiseEnable.checked
                                         Label { text: "Max activation speed (" + (useMph.checked ? "mph" : "km/h") + ")"; Layout.fillWidth: true }
-                                        TextField { id: cruiseMaxSpeed; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                                        TextField { id: cruiseMaxSpeed; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
                                     }
 
                                     Label {
@@ -2473,19 +2563,19 @@ Item {
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Label { text: "Speed Trigger (" + (useMph.checked ? "mph" : "km/h") + ")"; Layout.fillWidth: true }
-                                        TextField { id: alarmSpeedThreshold; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                                        TextField { id: alarmSpeedThreshold; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
                                     }
 
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Label { text: "Gyro Trigger (deg/s)"; Layout.fillWidth: true }
-                                        TextField { id: alarmGyroThreshold; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                                        TextField { id: alarmGyroThreshold; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
                                     }
 
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Label { text: "Volume (V)"; Layout.fillWidth: true }
-                                        TextField { id: alarmVoltage; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                                        TextField { id: alarmVoltage; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; leftPadding: 8; rightPadding: 8; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 40; color: parent.enabled ? "#33333a" : "#2b2b31" } }
                                     }
                                 }
                             }
