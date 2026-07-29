@@ -854,7 +854,7 @@ Item {
                             // reads as their bottom and right is 0.7071 and 0.866 of the
                             // radius from centre, not the radius. Line the sub-dial up
                             // with those, or it sits short of both edges.
-                            readonly property real subx: dcx + drad * 0.866 + dlw / 2 - srad * 0.866 - slw / 2
+                            readonly property real subx: dcx + drad + dlw / 2 - srad * 0.866 - slw / 2
                             readonly property real suby: dcy + drad * 0.7071 + dlw / 2 - srad * 0.7071 - slw / 2
 
                             readonly property real shown: useMph.checked ? (root.stSpeed * 0.621371) : root.stSpeed
@@ -1133,11 +1133,11 @@ Item {
 
                             Repeater {
                                 model: [
-                                    { cap: "V", icon: "", val: String(Math.round(root.stVin)), warn: false },
-                                    { cap: "A", icon: "", val: String(Math.round(root.stAmps)), warn: false },
-                                    { cap: "°C", icon: "chip", val: String(Math.round(root.stFet)),
+                                    { cap: "V", val: String(Math.round(root.stVin)), warn: false },
+                                    { cap: "A", val: String(Math.round(root.stAmps)), warn: false },
+                                    { cap: "E", val: Math.round(root.stFet) + "\u00b0",
                                       warn: root.stFet > (Number.parseFloat(tempWarningFet.text) || 999) },
-                                    { cap: "°C", icon: "motor", val: String(Math.round(root.stMot)),
+                                    { cap: "M", val: Math.round(root.stMot) + "\u00b0",
                                       warn: root.stMot > (Number.parseFloat(tempWarningMotor.text) || 999) }
                                 ]
                                 Rectangle {
@@ -1162,9 +1162,6 @@ Item {
 
                                     clip: true
 
-                                    // the figure sits on the centre of the card and
-                                    // the unit hangs off it, so the numbers line up
-                                    // across the row whatever their unit is called
                                     Label {
                                         id: chipVal
                                         anchors.centerIn: parent
@@ -1172,60 +1169,18 @@ Item {
                                         font.bold: true
                                         font.pointSize: root.titleSize * 1.05
                                     }
-                                    // The unit sits on the bottom of the figure. The two
-                                    // temperatures stack what they measure above the
-                                    // degrees, so the row reads without the letters C and
-                                    // M having to stand for anything.
-                                    Column {
-                                        anchors.left: chipVal.right
-                                        anchors.leftMargin: 3
+                                    // The marker sits left of the figure and on its
+                                    // bottom, so the figures stay lined up across the row
+                                    // and nothing has to fit above or below them.
+                                    Label {
+                                        anchors.right: chipVal.left
+                                        anchors.rightMargin: 4
                                         anchors.bottom: chipVal.bottom
-                                        anchors.bottomMargin: 2
-                                        spacing: 0
+                                        anchors.bottomMargin: 1
+                                        text: modelData.cap
+                                        font.bold: true
+                                        font.pointSize: root.titleSize * 0.78
                                         opacity: 0.5
-
-                                        Canvas {
-                                            anchors.horizontalCenter: parent.horizontalCenter
-                                            visible: modelData.icon !== ""
-                                            width: Math.round(root.titleSize * 0.95)
-                                            height: width
-                                            onPaint: {
-                                                var ctx = getContext("2d")
-                                                ctx.reset()
-                                                ctx.strokeStyle = "#e8e8ea"
-                                                ctx.lineWidth = Math.max(1, width * 0.11)
-                                                ctx.lineCap = "round"
-                                                if (modelData.icon === "chip") {
-                                                    var m = width * 0.26
-                                                    ctx.strokeRect(m, m, width - 2 * m, height - 2 * m)
-                                                    for (var i = 0; i < 3; i++) {
-                                                        var y = m + (height - 2 * m) * (i + 0.5) / 3
-                                                        ctx.beginPath()
-                                                        ctx.moveTo(0, y)
-                                                        ctx.lineTo(m, y)
-                                                        ctx.stroke()
-                                                        ctx.beginPath()
-                                                        ctx.moveTo(width - m, y)
-                                                        ctx.lineTo(width, y)
-                                                        ctx.stroke()
-                                                    }
-                                                } else {
-                                                    ctx.beginPath()
-                                                    ctx.arc(width * 0.40, height / 2, width * 0.30,
-                                                            0, Math.PI * 2)
-                                                    ctx.stroke()
-                                                    ctx.beginPath()
-                                                    ctx.moveTo(width * 0.72, height / 2)
-                                                    ctx.lineTo(width, height / 2)
-                                                    ctx.stroke()
-                                                }
-                                            }
-                                        }
-                                        Label {
-                                            anchors.horizontalCenter: parent.horizontalCenter
-                                            text: modelData.cap
-                                            font.pointSize: root.titleSize * 0.6
-                                        }
                                     }
                                 }
                             }
