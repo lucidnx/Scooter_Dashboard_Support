@@ -1135,9 +1135,9 @@ Item {
                                 model: [
                                     { cap: "V", val: String(Math.round(root.stVin)), warn: false },
                                     { cap: "A", val: String(Math.round(root.stAmps)), warn: false },
-                                    { cap: "E", val: Math.round(root.stFet) + "\u00b0",
+                                    { cap: "\u00b0E", val: String(Math.round(root.stFet)),
                                       warn: root.stFet > (Number.parseFloat(tempWarningFet.text) || 999) },
-                                    { cap: "M", val: Math.round(root.stMot) + "\u00b0",
+                                    { cap: "\u00b0M", val: String(Math.round(root.stMot)),
                                       warn: root.stMot > (Number.parseFloat(tempWarningMotor.text) || 999) }
                                 ]
                                 Rectangle {
@@ -1162,14 +1162,15 @@ Item {
 
                                     clip: true
 
-                                    // The figure's right edge is pinned just past the
-                                    // card's centre, so a third digit grows leftwards and
-                                    // the letters stay in a column down the row instead of
-                                    // being shoved about by the value's width.
+                                    // A two digit figure lands centred in the card and
+                                    // the unit hangs outside it, so the digits are what is
+                                    // centred rather than the pair. The right edge is what
+                                    // is pinned, so a third digit grows leftwards into the
+                                    // empty half and the units stay in a column.
                                     Label {
                                         id: chipVal
                                         anchors.right: parent.horizontalCenter
-                                        anchors.rightMargin: -Math.round(root.titleSize * 0.28)
+                                        anchors.rightMargin: -Math.round(root.titleSize * 0.75)
                                         anchors.verticalCenter: parent.verticalCenter
                                         text: modelData.val
                                         font.bold: true
