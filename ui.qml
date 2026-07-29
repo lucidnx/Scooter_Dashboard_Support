@@ -1999,7 +1999,7 @@ Item {
 
                                     RowLayout {
                                         Layout.fillWidth: true
-                                        Label { text: "Disable Button above (" + (useMph.checked ? "mph" : "km/h") + ")"; Layout.fillWidth: true }
+                                        Label { text: "Disable Gestures above (" + (useMph.checked ? "mph" : "km/h") + ")"; Layout.fillWidth: true }
                                         TextField { id: buttonSpeed; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
                                     }
 

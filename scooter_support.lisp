@@ -2459,6 +2459,14 @@
     (set 'light (not light))
 )
 
+; Gestures stop above the speed set in Setup - 0.1 km/h by default, so standstill
+; only, but raise it and modes, headlight and secret can be reached while riding.
+; Locking and switching off are never allowed with the wheel turning, whatever
+; that is set to.
+(def lock-safety-speed (/ 0.1 3.6))
+(defun gestures-allowed() (or off (<= (abs (get-speed)) button-safety-speed)))
+(defun at-standstill() (or off (<= (abs (get-speed)) lock-safety-speed)))
+
 ; Button gestures. Matching order: power-on, secret, lock, modes, light.
 (defun handle-button()
     {
@@ -2491,7 +2499,7 @@
             ((and (> lock-presses 0)
                     (= presses lock-presses)
                     (combo-held lock-combo thr brk))
-                (toggle-lock)
+                (if (at-standstill) (toggle-lock)) ; never while moving
             )
             ((and (if mode-requires-lock lock (not lock))
                     (> mode-presses 0)
@@ -2829,9 +2837,7 @@
                 ; button, lock, alarm and output handling - trap and keep looping.
                 (trap {
                     (button-apply button-state)
-                    (if (and (not off) (<= (abs (get-speed)) button-safety-speed))
-                        (handle-lever-gestures)
-                    )
+                    (if (and (not off) (gestures-allowed)) (handle-lever-gestures))
                     (handle-features)
                 })
             }
@@ -2842,22 +2848,21 @@
 (defun button-apply(button)
     {
         (var time-passed (- (systime) press-time))
-        (var is-active (or off (<= (get-speed) button-safety-speed)))
 
         ; systime ticks are 0.1 ms, so these are 300 ms and 600 ms
         (if (> time-passed 3000)
             (if button ; check button is still pressed
                 (if (> time-passed 6000) ; long press
                     {
-                        (if is-active
-                            (handle-holding-button)
+                        (if (at-standstill)
+                            (handle-holding-button) ; switching off, so standstill only
                         )
                         (reset-button) ; reset button
                     }
                 )
                 (if (> presses 0) ; if presses > 0
                     {
-                        (if is-active
+                        (if (gestures-allowed)
                             (handle-button) ; handle button presses
                         )
                         (reset-button) ; reset button

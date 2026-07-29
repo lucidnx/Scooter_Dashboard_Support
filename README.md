@@ -5,21 +5,23 @@ lock with alarm, fully remappable button/lever gestures, cruise control, rear li
 BMS support and a live remote-control dashboard - all configured from a phone-friendly UI
 and stored on the ESC.
 
-<!-- fixed width so screenshots render the same size regardless of capture resolution.
-     the settings tabs are half width, so two rows of them stand exactly as tall as
-     Control and Modes beside them -->
+<!-- fixed widths so screenshots render the same size regardless of capture resolution.
+     one cell per shot and valign=top, so the two rows of settings tabs line up with
+     the top of Control and Modes. 107 rather than half of 220 because each row also
+     carries the table cell's own padding -->
 
 <table>
 <tr>
-<td><img src="screenshots/control.jpg" alt="Control" width="220"></td>
-<td><img src="screenshots/modes.jpg" alt="Modes" width="220"></td>
-<td>
-<img src="screenshots/general1.jpg" alt="General 1" width="110">
-<img src="screenshots/general2.jpg" alt="General 2" width="110">
-<img src="screenshots/setup1.jpg" alt="Setup 1" width="110"><br>
-<img src="screenshots/setup2.jpg" alt="Setup 2" width="110">
-<img src="screenshots/setup3.jpg" alt="Setup 3" width="110">
-</td>
+<td rowspan="2" valign="top"><img src="screenshots/control.jpg" alt="Control" width="220"></td>
+<td rowspan="2" valign="top"><img src="screenshots/modes.jpg" alt="Modes" width="220"></td>
+<td valign="top"><img src="screenshots/general1.jpg" alt="General 1" width="107"></td>
+<td valign="top"><img src="screenshots/general2.jpg" alt="General 2" width="107"></td>
+<td valign="top"><img src="screenshots/setup1.jpg" alt="Setup 1" width="107"></td>
+</tr>
+<tr>
+<td valign="top"><img src="screenshots/setup2.jpg" alt="Setup 2" width="107"></td>
+<td valign="top"><img src="screenshots/setup3.jpg" alt="Setup 3" width="107"></td>
+<td></td>
 </tr>
 </table>
 
@@ -45,7 +47,7 @@ and contributors accept **no liability** for any damage, injury, or loss arising
 
 If you don't accept these terms, don't install it.
 
-## Functions
+## 🛠️ Functions
 
 One package for everything - the model is stored on the ESC and selected in the UI:
 
@@ -54,7 +56,7 @@ One package for everything - the model is stored on the ESC and selected in the 
 - **G2** - Ninebot Max G2 dashboard. **Untested** - no G2 hardware has run it yet
 - **Slave** - secondary ESC in a dual setup, only runs the CAN code server
 
-### Speed modes
+### 🛞 Speed modes
 - Three modes (Eco / Drive / Sport) plus three **secret** modes, each with its own speed,
   current, watts, field weakening and overmodulation
 - **Current %** is a percentage of your Motor Current Max, capped at 100%; **Overmodulation**
@@ -63,39 +65,44 @@ One package for everything - the model is stored on the ESC and selected in the 
   config, so you can keep your own field weakening setup
 - Selectable startup mode
 
-### Gestures
+### 🎛️ Gestures
 Lock, mode switching, headlight, secret mode and leaving secret mode are fully remappable:
 
 - **Lever combination** - any mix of Brake / Throttle to hold, or none
 - **Button presses** - 1-5, or **No** to fire from the levers alone after half a second
 - **Locked** - restrict a gesture to the locked state only
-- **Secret OFF** can only ever *leave* secret mode, so it is a way out that cannot turn it
-  on by mistake
-- A lever counts as held once it passes its ADC start voltage from VESC Tool, so there is no
-  separate deadband to tune
-- Gestures only react at standstill. Turning the scooter on always works regardless of mapping
+- **Secret** turns the three secret modes on and off. While secret is on, the Modes gesture
+  cycles the secret Eco / Drive / Sport set instead of the normal one
+- **Secret OFF** is a second, separate gesture that can only ever *leave* secret mode - it
+  does nothing when secret is already off, so it is a way out that cannot turn it on by
+  mistake
+- **Speed limit** - gestures stop working above **Disable Gestures above** in Setup. The
+  default is 0.1 km/h, which means standstill only; raise it and you can change modes, the
+  headlight or secret mode while riding. **Lock** and **power off** are the exceptions - they
+  are never accepted with the wheel turning, whatever that is set to
+- A gesture whose combination does not include a lever still needs that lever released to
+  match, so let go of the throttle for those
+- Turning the scooter on always works, regardless of mapping
 
-### Lock & alarm
+### 🔒 Lock & alarm
 - Motor braked when pushed, alarm with beeping and optional siren on gyro or wheel movement
 - Configurable thresholds and volume, and an optional "Disable Secret when Locked"
 
-### Cruise control (experimental)
+### 🚀 Cruise control (experimental)
 - Hold a steady speed with the throttle for the configured delay and the scooter keeps it
-- Built on the VESC's own cruise function - the package only presses and releases the VESC's
-  cruise button, so the ADC Cruise Control button must be enabled (see setup below)
 - **Cancels on any throttle or brake press** and your live lever takes over the same instant.
   It does not cancel on speed alone, so a bumpy road or traction control cannot drop it
 - Arms only inside a configurable **min/max speed window** (default 5 - 100 km/h)
 - The Setup switch is a **master switch**: with it off, cruise cannot be turned on from the
   Control tab, an app or a gesture
 
-### Control tab
+### 📱 Control tab
 - Live speed dial with a power sub-dial that scales to the active mode's watt limit, battery
   bar alternating charge and estimated range, and voltage, current, controller and motor
   temperature - the temperatures flash red above the warning thresholds
 - Buttons for power, lock/unlock, headlight, secret, cruise and mode selection
 
-### Third-party app support
+### 🔗 Third-party app support
 **NineDash**, **m365 Tools** and the **official Segway Ninebot app** connect over the
 dashboard's own BLE module, so no extra hardware or wiring is needed. Tested on a G30,
 including pairing.
@@ -113,45 +120,63 @@ including pairing.
 - Protocol details and app pacing measurements:
   [notes for the NineDash developer](docs/ninedash.md)
 
-### Comfort
+### 💡 Lights
 - **Auto headlight** at power on
 - **Rear / brake light** on the servo pin: dim tail light following the headlight (or always
   on), full or blinking brake light while braking
-- **Dashboard power control** - **ADC1** or **ADC2** switches the dashboard's supply through
-  a MOSFET: **3.3 V on the chosen pin while the scooter is on, 0 V when off**. Needs a
-  MOSFET (schematic to follow). Off by default. The pin is detached from the ADC app, so it
-  stops working as a lever input - on ADC2 that costs the brake, on ADC1 the throttle,
-  unless that lever comes from the dashboard. The UI warns in red when it does
+
+### 🖥️ Dashboard
 - **Idle display** - while standing still the dash speed readout shows battery %, pack
   voltage, controller or motor temperature instead. Set separately for normal and secret modes
 - **BMS battery %** - a reporting VESC BMS supplies the percentage, with a temperature
   warning above 50 °C or below 0 °C
-- **Light compensation** - the headlight sags throttle/brake voltage non-linearly, so this
-  applies an affine correction (offset + gain) rather than a flat offset. A guided wizard in
-  Setup measures it: one button per channel, two held lever positions, the light toggled and
-  sampled at each. The motor stays disengaged throughout, so **no stand is needed**. Values
-  can also be entered directly. Only offered for channels taken from the dashboard
 - **mph** - dash speed and every speed-related setting switch between km/h and mph
+- **Temperature warning icon** with configurable thresholds
 - **Ninebot Max G2** - the handlebar **horn** sounds the dash buzzer, and **holding the turn
   signal button** for three seconds toggles cruise control
-- Motor start speed (kick-start), temperature warning icon, and a long button press to turn
-  the dashboard off
+- A long button press turns the dashboard off
 
-### Robustness
-- Throttle watchdog releases throttle and brake if the dashboard link drops mid-ride
+### 🎚️ Throttle & brake
+- **Software ADC** per channel - take throttle from the dashboard and leave brake on a lever
+  wired to the ADC pin, or the other way round
+- **Light compensation** - the headlight sags throttle/brake voltage non-linearly, so this
+  applies an affine correction (offset + gain) rather than a flat offset. A guided wizard in
+  Setup measures it. The motor stays disengaged throughout, so **no stand is needed**
+- **Motor start speed** (kick-start)
+
+### 🔌 Dashboard power control
+- **ADC1** or **ADC2** switches the dashboard's supply through a MOSFET: **3.3 V on the
+  chosen pin while the scooter is on, 0 V when it is off**
+- Because the pin stays low until the script runs, the dashboard no longer shows error 10
+  while the VESC boots
+- Off by default. The chosen pin is detached from the ADC app, so it stops working as a lever
+  input - on ADC2 that costs the brake, on ADC1 the throttle, unless that lever comes from
+  the dashboard. The UI warns in red when it does
+
+### 🛡️ Robustness
+- **Dash link watchdog** - if the dashboard goes quiet mid-ride the package stops driving the
+  ADC override and drops cruise, so the controller's own command timeout releases throttle
+  and brake. The window follows the measured frame rate, so connecting an app cannot trip it
+- **CAN slaves are told to stop** with the master, rather than holding their last command
+  until it times out
+- **App traffic never delays the levers** - replies are composed in advance and carried
+  inside the dash reply the controller was going to send anyway
+- **Transient faults are trapped** - a BMS, CAN or gyro error cannot kill button, lock and
+  alarm handling
+- **The package says so if the script no longer fits** the controller's memory, instead of
+  installing and then failing at the next boot
 - Hardened UART frame parsing and supervised reader threads
 - Runs from flash; settings stored on the ESC with versioned automatic migrations
 
-## Requirements
+## 📋 Requirements
 
 - **VESC firmware 7.00**, from https://vesc-project.com/
-- **A VESC controller.** Not every unit works - some have 5V rails too weak for a dashboard,
-  and some behave badly on the shared UART. If yours misbehaves, that is worth reporting
+- **A VESC controller.** Not every unit works - if yours misbehaves, that is worth reporting
 - **A supported dashboard** - Xiaomi M365 / 1S / Essential / PRO 2, or Ninebot G30 or Max G2
 
-## Setup
+## 🔧 Setup
 
-### Install
+### 📦 Install
 
 1. Connect to your VESC in VESC Tool and install this package
    (**VESC Packages -> Load Custom -> select the .vescpkg**, or from the package store once listed).
@@ -168,7 +193,7 @@ including pairing.
 **Updating:** just install the new package over the old one - your settings are kept and
 migrated automatically. To go back to defaults, use the **Reset** button in the UI.
 
-### Required VESC configuration
+### ⚙️ Required VESC configuration
 
 The package feeds the throttle and brake from the dashboard into the VESC's ADC app, so a
 few controller settings must be set (in VESC Tool, not the package UI):
@@ -213,7 +238,7 @@ few controller settings must be set (in VESC Tool, not the package UI):
 
 After changing controller settings, write the configuration to each unit and power-cycle.
 
-### Wiring
+### 🔌 Wiring
 
 ![Dashboard connection](screenshots/wiring-dash.svg)
 
@@ -224,21 +249,22 @@ After changing controller settings, write the configuration to each unit and pow
 | 1 | Resistor 1 kΩ, 0.25 W, THT |
 | 1 | Clip-on ferrite, 5 mm inner diameter - *optional* |
 
-The **220 µF** goes across **5V and GND** as the reservoir for current spikes, and
-the **1 µF** across the **green button line and GND** to keep noise off it. Nothing
-goes on the yellow UART line. Fit both as close to the dashboard as the wiring
-allows. The electrolytic is polarised: its **marked leg is the minus and goes to
-GND**, getting that backwards will destroy it. The ferrite clips over the whole
-bundle anywhere along its length.
+ℹ️ **Both capacitors are optional** - the connection works without them. They are
+there to stop **phantom button presses**, where the scooter reacts to presses
+nobody made. The **220 µF** across **5V and GND** is a reservoir for current
+spikes, and the **1 µF** across the **green button line and GND** keeps noise off
+it. If you get phantom presses, fit them; if you never do, you can leave them out.
 
-> **Check your 5V budget first.** The dashboard is powered from the VESC's 5V
-> output, and if you also add the rear/brake light (and/or a headlight) that all
-> draws from the same rail. VESC 5V regulators are small - often only a few
-> hundred mA. Add up everything you connect and compare it to your controller's
-> 5V rating. If it's marginal or over, **use a separate step-down (buck) converter
-> from the main battery** for the lights (and/or dashboard) instead, sharing a
-> common ground with the VESC. Overloading the 5V rail can brown out the
-> dashboard mid-ride or damage the regulator.
+Nothing goes on the yellow UART line. Fit the capacitors as close to the dashboard
+as the wiring allows. The electrolytic is polarised: its **marked leg is the minus
+and goes to GND**, getting that backwards will destroy it. The ferrite clips over
+the whole bundle anywhere along its length.
+
+> ⚠️ **Check what your VESC's 5V output can supply before wiring it this way.**
+> The dashboard runs from that rail, and a rear/brake light or headlight draws
+> from the same one. On some VESCs it is not enough for all of it. If yours is
+> marginal, power the lights (and/or the dashboard) from a separate step-down
+> converter off the main battery instead, sharing a common ground with the VESC.
 
 #### Rear / brake light (optional)
 
@@ -270,7 +296,13 @@ legs pointing down:
 The metal tab is internally connected to leg 2 (Drain), so treat it as live and
 don't let it touch anything.
 
-## Thanks
+#### Dashboard power control (optional)
+
+ℹ️ **The schematic for this one is coming soon.** It switches the dashboard's supply
+through a MOSFET driven from ADC1 or ADC2 - 3.3 V on that pin while the scooter is
+on, 0 V when it is off. The diagram will be added here.
+
+## 🙏 Thanks
 
 - **Izuna, AKA13 and Netzpfuscher** - the original VESC dashboard scripts this package
   builds on
@@ -281,6 +313,6 @@ don't let it touch anything.
 - **[Koxx3](https://github.com/Koxx3/SmartESC_STM32_v2)** - reference work for Xiaomi ESCs
 - The **scooterhacking.org** community for guides and testing
 
-## See Also
+## 🔗 See Also
 
 https://github.com/Koxx3/SmartESC_STM32_v2 (VESC firmware for Xiaomi ESCs)
