@@ -1157,18 +1157,18 @@ Item {
                     // hS is solved so the page fills the height exactly until it
                     // hits that floor, and scrolls from there.
                     readonly property real wS: Math.max(0.85, Math.min(1.25, availableWidth / 320))
-                    // 98 is the height nothing scales: three 6px gaps between the three
-                    // cards, 10 above the dial card, 10 and 15 around the dial inside it,
-                    // the 5 the readings card carries, and 20 of padding in each of the
-                    // other two. 240 is what hS moves. 68 is the battery bar and the figure
+                    // 96 is the height nothing scales: three 3px gaps between the three
+                    // cards, 25 around the dial inside its own, the readings card's 2, and
+                    // 20 of padding in it plus 40 in the buttons card, whose two rows each
+                    // grew 10. 229 is what hS moves. 68 is the battery bar and the figure
                     // cards, which follow the width; 250 is everything hS does move.
                     readonly property real hS: Math.max(0.69, Math.min(1.0,
-                        (height - availableWidth * 0.767 - 98 - 68 * wS) / 240))
+                        (height - availableWidth * 0.767 - 96 - 68 * wS) / 229))
 
                     ColumnLayout {
                         id: ctlCol
                         width: ctlScroll.availableWidth
-                        spacing: 6
+                        spacing: 3
 
                         Rectangle {
                             visible: !root.stImgOk
@@ -1198,7 +1198,6 @@ Item {
                         // for the power sub-dial.
                         Rectangle {
                             Layout.fillWidth: true
-                            Layout.topMargin: 10
                             Layout.preferredHeight: dial.height + 25
                             radius: 18
                             color: "#26262b"
@@ -1337,7 +1336,7 @@ Item {
                                 opacity: root.isSlave ? 0.3 : 1.0
                                 // whole pixels - a canvas on a fractional bound rounds its
                                 // render target and the glyph drifts off the circle it sits in
-                                x: Math.round(dial.width - width - dial.pad)
+                                x: Math.round(dial.width - width - dial.pad - 10)
                                 y: Math.round(dial.dcy - dial.drad - dial.dlw / 2 + dial.pad)
                                 width: Math.round(dial.width * 0.105)
                                 height: width
@@ -1389,7 +1388,7 @@ Item {
                                 width: Math.round(dial.width * 0.105)
                                 height: width
                                 radius: width / 2
-                                x: Math.round(dial.pad)
+                                x: Math.round(dial.pad + 10)
                                 y: Math.round(dial.dcy - dial.drad - dial.dlw / 2 + dial.pad)
                                 color: gearTouch2.pressed ? "#43434c" : "#33333a"
                                 Behavior on color { ColorAnimation { duration: 140 } }
@@ -1498,7 +1497,7 @@ Item {
                         // Charge and the four readings are one card: they are one glance.
                         Rectangle {
                             Layout.fillWidth: true
-                            Layout.topMargin: Math.round(8 * ctlScroll.hS) + 5
+                            Layout.topMargin: Math.round(4 * ctlScroll.hS) + 2
                             Layout.preferredHeight: ctlReadCol.implicitHeight + 20
                             radius: 18
                             color: "#26262b"
@@ -1669,7 +1668,7 @@ Item {
                         // The mode picker and the four controls share a card, as on every other screen.
                         Rectangle {
                             Layout.fillWidth: true
-                            Layout.topMargin: Math.round(14 * ctlScroll.hS)
+                            Layout.topMargin: Math.round(7 * ctlScroll.hS)
                             Layout.preferredHeight: ctlBtnCol.implicitHeight + 20
                             radius: 18
                             color: "#26262b"
@@ -1758,7 +1757,7 @@ Item {
                                     Rectangle {
                                         Layout.fillWidth: true
                                         Layout.preferredWidth: 1
-                                        Layout.preferredHeight: Math.round(64 * ctlScroll.hS)
+                                        Layout.preferredHeight: Math.round(64 * ctlScroll.hS) + 10
                                         radius: 14
                                         // a switched off function reads as off, not as dimmed
                                         // colour - the state it was left in says nothing once
@@ -1971,11 +1970,11 @@ Item {
                                     Layout.preferredHeight: 40
                                     spacing: 5
                                     Label { text: "Lock"; font.bold: true; Layout.fillWidth: true; elide: Text.ElideRight }
-                                    CheckBox { id: lockBrake; text: "Brake"; checked: true; spacing: 4; topPadding: 0; bottomPadding: 0; leftPadding: 4; rightPadding: 4; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? "#583827" : "#2b2b31"; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.86; color: parent.checked ? "#f29c65" : "#a0a0aa" } }
-                                    CheckBox { id: lockThrottle; text: "Thr."; spacing: 4; topPadding: 0; bottomPadding: 0; leftPadding: 4; rightPadding: 4; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? "#583827" : "#2b2b31"; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.86; color: parent.checked ? "#f29c65" : "#a0a0aa" } }
+                                    CheckBox { id: lockBrake; text: "Brake"; checked: true; spacing: 4; topPadding: 0; bottomPadding: 0; leftPadding: 5; rightPadding: 5; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? "#583827" : "#2b2b31"; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.9; color: parent.checked ? "#f29c65" : "#a0a0aa" } }
+                                    CheckBox { id: lockThrottle; text: "Thr."; spacing: 4; topPadding: 0; bottomPadding: 0; leftPadding: 5; rightPadding: 5; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? "#583827" : "#2b2b31"; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.9; color: parent.checked ? "#f29c65" : "#a0a0aa" } }
                                     ComboBox {
                                         id: lockPresses
-                                        Layout.preferredWidth: 56
+                                        Layout.preferredWidth: 84
                                         model: ["1", "2", "3", "4", "5"]
                                         currentIndex: 1
                                         background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 34 }
@@ -1999,12 +1998,12 @@ Item {
                                     Layout.preferredHeight: 40
                                     spacing: 5
                                     Label { text: "Modes"; font.bold: true; Layout.fillWidth: true; elide: Text.ElideRight }
-                                    CheckBox { id: modeBrake; text: "Brake"; spacing: 4; topPadding: 0; bottomPadding: 0; leftPadding: 4; rightPadding: 4; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? "#583827" : "#2b2b31"; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.86; color: parent.checked ? "#f29c65" : "#a0a0aa" } }
-                                    CheckBox { id: modeThrottle; text: "Thr."; spacing: 4; topPadding: 0; bottomPadding: 0; leftPadding: 4; rightPadding: 4; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? "#583827" : "#2b2b31"; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.86; color: parent.checked ? "#f29c65" : "#a0a0aa" } }
-                                    CheckBox { id: modeLocked; text: "Locked"; spacing: 4; topPadding: 0; bottomPadding: 0; leftPadding: 4; rightPadding: 4; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? "#583827" : "#2b2b31"; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.86; color: parent.checked ? "#f29c65" : "#a0a0aa" } }
+                                    CheckBox { id: modeBrake; text: "Brake"; spacing: 4; topPadding: 0; bottomPadding: 0; leftPadding: 5; rightPadding: 5; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? "#583827" : "#2b2b31"; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.9; color: parent.checked ? "#f29c65" : "#a0a0aa" } }
+                                    CheckBox { id: modeThrottle; text: "Thr."; spacing: 4; topPadding: 0; bottomPadding: 0; leftPadding: 5; rightPadding: 5; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? "#583827" : "#2b2b31"; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.9; color: parent.checked ? "#f29c65" : "#a0a0aa" } }
+                                    CheckBox { id: modeLocked; text: "Locked"; spacing: 4; topPadding: 0; bottomPadding: 0; leftPadding: 5; rightPadding: 5; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? "#583827" : "#2b2b31"; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.9; color: parent.checked ? "#f29c65" : "#a0a0aa" } }
                                     ComboBox {
                                         id: modePresses
-                                        Layout.preferredWidth: 56
+                                        Layout.preferredWidth: 84
                                         model: ["No", "1", "2", "3", "4", "5"]
                                         currentIndex: 2
                                         background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 34 }
@@ -2028,12 +2027,12 @@ Item {
                                     Layout.preferredHeight: 40
                                     spacing: 5
                                     Label { text: "Headlight"; font.bold: true; Layout.fillWidth: true; elide: Text.ElideRight }
-                                    CheckBox { id: lightBrake; text: "Brake"; spacing: 4; topPadding: 0; bottomPadding: 0; leftPadding: 4; rightPadding: 4; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? "#583827" : "#2b2b31"; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.86; color: parent.checked ? "#f29c65" : "#a0a0aa" } }
-                                    CheckBox { id: lightThrottle; text: "Thr."; spacing: 4; topPadding: 0; bottomPadding: 0; leftPadding: 4; rightPadding: 4; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? "#583827" : "#2b2b31"; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.86; color: parent.checked ? "#f29c65" : "#a0a0aa" } }
-                                    CheckBox { id: lightLocked; text: "Locked"; spacing: 4; topPadding: 0; bottomPadding: 0; leftPadding: 4; rightPadding: 4; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? "#583827" : "#2b2b31"; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.86; color: parent.checked ? "#f29c65" : "#a0a0aa" } }
+                                    CheckBox { id: lightBrake; text: "Brake"; spacing: 4; topPadding: 0; bottomPadding: 0; leftPadding: 5; rightPadding: 5; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? "#583827" : "#2b2b31"; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.9; color: parent.checked ? "#f29c65" : "#a0a0aa" } }
+                                    CheckBox { id: lightThrottle; text: "Thr."; spacing: 4; topPadding: 0; bottomPadding: 0; leftPadding: 5; rightPadding: 5; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? "#583827" : "#2b2b31"; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.9; color: parent.checked ? "#f29c65" : "#a0a0aa" } }
+                                    CheckBox { id: lightLocked; text: "Locked"; spacing: 4; topPadding: 0; bottomPadding: 0; leftPadding: 5; rightPadding: 5; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? "#583827" : "#2b2b31"; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.9; color: parent.checked ? "#f29c65" : "#a0a0aa" } }
                                     ComboBox {
                                         id: lightPresses
-                                        Layout.preferredWidth: 56
+                                        Layout.preferredWidth: 84
                                         model: ["No", "1", "2", "3", "4", "5"]
                                         currentIndex: 1
                                         background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 34 }
@@ -2058,12 +2057,12 @@ Item {
                                     spacing: 5
                                     enabled: secretEnabled.checked
                                     Label { text: "Secret"; font.bold: true; Layout.fillWidth: true; elide: Text.ElideRight }
-                                    CheckBox { id: secretBrake; text: "Brake"; checked: true; spacing: 4; topPadding: 0; bottomPadding: 0; leftPadding: 4; rightPadding: 4; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? "#583827" : "#2b2b31"; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.86; color: parent.checked ? "#f29c65" : "#a0a0aa" } }
-                                    CheckBox { id: secretThrottle; text: "Thr."; checked: true; spacing: 4; topPadding: 0; bottomPadding: 0; leftPadding: 4; rightPadding: 4; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? "#583827" : "#2b2b31"; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.86; color: parent.checked ? "#f29c65" : "#a0a0aa" } }
-                                    CheckBox { id: secretRequiresLock; text: "Locked"; spacing: 4; topPadding: 0; bottomPadding: 0; leftPadding: 4; rightPadding: 4; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? "#583827" : "#2b2b31"; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.86; color: parent.checked ? "#f29c65" : "#a0a0aa" } }
+                                    CheckBox { id: secretBrake; text: "Brake"; checked: true; spacing: 4; topPadding: 0; bottomPadding: 0; leftPadding: 5; rightPadding: 5; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? "#583827" : "#2b2b31"; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.9; color: parent.checked ? "#f29c65" : "#a0a0aa" } }
+                                    CheckBox { id: secretThrottle; text: "Thr."; checked: true; spacing: 4; topPadding: 0; bottomPadding: 0; leftPadding: 5; rightPadding: 5; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? "#583827" : "#2b2b31"; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.9; color: parent.checked ? "#f29c65" : "#a0a0aa" } }
+                                    CheckBox { id: secretRequiresLock; text: "Locked"; spacing: 4; topPadding: 0; bottomPadding: 0; leftPadding: 5; rightPadding: 5; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? "#583827" : "#2b2b31"; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.9; color: parent.checked ? "#f29c65" : "#a0a0aa" } }
                                     ComboBox {
                                         id: secretPresses
-                                        Layout.preferredWidth: 56
+                                        Layout.preferredWidth: 84
                                         model: ["No", "1", "2", "3", "4", "5"]
                                         currentIndex: 1
                                         background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 34 }
@@ -2088,12 +2087,12 @@ Item {
                                     spacing: 5
                                     enabled: secretEnabled.checked
                                     Label { text: "Secret OFF"; font.bold: true; Layout.fillWidth: true; elide: Text.ElideRight }
-                                    CheckBox { id: secretOffBrake; text: "Brake"; spacing: 4; topPadding: 0; bottomPadding: 0; leftPadding: 4; rightPadding: 4; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? "#583827" : "#2b2b31"; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.86; color: parent.checked ? "#f29c65" : "#a0a0aa" } }
-                                    CheckBox { id: secretOffThrottle; text: "Thr."; spacing: 4; topPadding: 0; bottomPadding: 0; leftPadding: 4; rightPadding: 4; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? "#583827" : "#2b2b31"; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.86; color: parent.checked ? "#f29c65" : "#a0a0aa" } }
-                                    CheckBox { id: secretOffRequiresLock; text: "Locked"; spacing: 4; topPadding: 0; bottomPadding: 0; leftPadding: 4; rightPadding: 4; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? "#583827" : "#2b2b31"; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.86; color: parent.checked ? "#f29c65" : "#a0a0aa" } }
+                                    CheckBox { id: secretOffBrake; text: "Brake"; spacing: 4; topPadding: 0; bottomPadding: 0; leftPadding: 5; rightPadding: 5; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? "#583827" : "#2b2b31"; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.9; color: parent.checked ? "#f29c65" : "#a0a0aa" } }
+                                    CheckBox { id: secretOffThrottle; text: "Thr."; spacing: 4; topPadding: 0; bottomPadding: 0; leftPadding: 5; rightPadding: 5; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? "#583827" : "#2b2b31"; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.9; color: parent.checked ? "#f29c65" : "#a0a0aa" } }
+                                    CheckBox { id: secretOffRequiresLock; text: "Locked"; spacing: 4; topPadding: 0; bottomPadding: 0; leftPadding: 5; rightPadding: 5; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? "#583827" : "#2b2b31"; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.9; color: parent.checked ? "#f29c65" : "#a0a0aa" } }
                                     ComboBox {
                                         id: secretOffPresses
-                                        Layout.preferredWidth: 56
+                                        Layout.preferredWidth: 84
                                         model: ["No", "1", "2", "3", "4", "5"]
                                         currentIndex: 3
                                         background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 34 }
