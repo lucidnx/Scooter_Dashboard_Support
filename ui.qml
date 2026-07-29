@@ -807,7 +807,12 @@ Item {
                     id: ctlScroll
                     anchors.fill: parent
                     contentWidth: availableWidth
+                    contentHeight: ctlCol.implicitHeight
                     clip: true
+                    // Both explicit: a ColumnLayout sized off parent.width leaves
+                    // ScrollView deriving contentHeight from an item whose own parent
+                    // is height driven BY contentHeight, and it latches short. Overshoot
+                    // hid that, because a drag always did something.
                     // nothing to scroll means nothing moves - the flickable a
                     // ScrollView makes still rubber bands a page that already fits
                     Component.onCompleted: contentItem.boundsBehavior = Flickable.StopAtBounds
@@ -818,11 +823,15 @@ Item {
                     // hS is solved so the page fills the height exactly until it
                     // hits that floor, and scrolls from there.
                     readonly property real wS: Math.max(0.85, Math.min(1.25, availableWidth / 320))
+                    // 34 is the height nothing scales: four 6px column gaps and the
+                    // dial's 10px top margin. 68 is the battery bar and the figure
+                    // cards, which follow the width; 250 is everything hS does move.
                     readonly property real hS: Math.max(0.69, Math.min(1.0,
-                        (height - availableWidth * 0.767 - 24 - 68 * wS) / 250))
+                        (height - availableWidth * 0.767 - 34 - 68 * wS) / 250))
 
                     ColumnLayout {
-                        width: parent.width
+                        id: ctlCol
+                        width: ctlScroll.availableWidth
                         spacing: 6
 
                         Rectangle {
@@ -1383,15 +1392,22 @@ Item {
                 enabled: !isSlave
 
                 ScrollView {
+                    id: genScroll
                     anchors.fill: parent
                     contentWidth: availableWidth
+                    contentHeight: genCol.implicitHeight
                     clip: true
+                    // Both explicit: a ColumnLayout sized off parent.width leaves
+                    // ScrollView deriving contentHeight from an item whose own parent
+                    // is height driven BY contentHeight, and it latches short. Overshoot
+                    // hid that, because a drag always did something.
                     // nothing to scroll means nothing moves - the flickable a
                     // ScrollView makes still rubber bands a page that already fits
                     Component.onCompleted: contentItem.boundsBehavior = Flickable.StopAtBounds
 
                     ColumnLayout {
-                        width: parent.width
+                        id: genCol
+                        width: genScroll.availableWidth
                         spacing: 4
 
                         Label { text: "General"; font.bold: true; font.pointSize: root.titleSize * 0.82; font.capitalization: Font.AllUppercase; font.letterSpacing: 1; opacity: 0.55; Layout.topMargin: 12; Layout.leftMargin: 4 }
@@ -1657,15 +1673,22 @@ Item {
                 enabled: !isSlave
 
                 ScrollView {
+                    id: modScroll
                     anchors.fill: parent
                     contentWidth: availableWidth
+                    contentHeight: modCol.implicitHeight
                     clip: true
+                    // Both explicit: a ColumnLayout sized off parent.width leaves
+                    // ScrollView deriving contentHeight from an item whose own parent
+                    // is height driven BY contentHeight, and it latches short. Overshoot
+                    // hid that, because a drag always did something.
                     // nothing to scroll means nothing moves - the flickable a
                     // ScrollView makes still rubber bands a page that already fits
                     Component.onCompleted: contentItem.boundsBehavior = Flickable.StopAtBounds
 
                     ColumnLayout {
-                        width: parent.width
+                        id: modCol
+                        width: modScroll.availableWidth
                         spacing: 4
 
                         Label { text: "Normal"; font.bold: true; font.pointSize: root.titleSize * 0.82; font.capitalization: Font.AllUppercase; font.letterSpacing: 1; opacity: 0.55; Layout.topMargin: 12; Layout.leftMargin: 4 }
@@ -1801,15 +1824,22 @@ Item {
 
             Page {
                 ScrollView {
+                    id: setScroll
                     anchors.fill: parent
                     contentWidth: availableWidth
+                    contentHeight: setCol.implicitHeight
                     clip: true
+                    // Both explicit: a ColumnLayout sized off parent.width leaves
+                    // ScrollView deriving contentHeight from an item whose own parent
+                    // is height driven BY contentHeight, and it latches short. Overshoot
+                    // hid that, because a drag always did something.
                     // nothing to scroll means nothing moves - the flickable a
                     // ScrollView makes still rubber bands a page that already fits
                     Component.onCompleted: contentItem.boundsBehavior = Flickable.StopAtBounds
 
                     ColumnLayout {
-                        width: parent.width
+                        id: setCol
+                        width: setScroll.availableWidth
                         spacing: 4
 
                         Rectangle {
