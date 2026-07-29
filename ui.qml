@@ -1652,8 +1652,9 @@ Item {
                                             Label {
                                                 id: chipVal
                                                 anchors.right: parent.right
-                                                anchors.rightMargin: root.chipCapW + root.chipGap + root.chipDegW
+                                                anchors.rightMargin: root.chipCapW + root.chipGap + root.chipDegW + 2
                                                 anchors.verticalCenter: parent.verticalCenter
+                                                anchors.verticalCenterOffset: 2
                                                 text: modelData.val
                                                 font.bold: true
                                                 font.pointSize: root.titleSize * 1.09
