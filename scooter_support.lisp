@@ -577,9 +577,9 @@
     }
 )
 
-(defun restore-defaults ()
+(defun restore-defaults (keep-model)
     {
-        (var cur-model (read-setting 'model)) ; keep model across restores
+        (var cur-model (read-setting 'model))
         (write-setting 'software-adc true)
         (write-setting 'software-adc2 true)
         (write-setting 'min-adc-throttle 0.1)
@@ -618,7 +618,7 @@
         (write-setting 'secret-sport-watts 2000.0)
         (write-setting 'secret-sport-fw 10.0)
         (restore-gesture-apply-defaults)
-        (write-setting 'model (if (valid-model cur-model) cur-model 2))
+        (write-setting 'model (if (and keep-model (valid-model cur-model)) cur-model 2))
         (write-setting 'ver-code settings-version)
     }
 )
@@ -631,7 +631,7 @@
         ; older than v4.0 is reconfigured from defaults rather than migrated.
         (if (not-eq ver settings-version)
             (if (or (eq ver nil) (< ver 400i32) (> ver settings-version))
-                (restore-defaults)
+                (restore-defaults true) ; an upgrade keeps the dashboard it had
                 {
                     (if (< ver 401i32) (write-v401-defaults))
                     (if (< ver 402i32) (write-v402-defaults))
@@ -928,8 +928,9 @@
 
 (defun restore-settings-ui ()
     {
-        (restore-defaults)
-        (finish-settings-save)
+        (restore-defaults false) ; back to Slave, like a fresh install
+        (apply-runtime-settings)
+        (send-data "reset-ok") ; the model only takes effect on a restart
     }
 )
 

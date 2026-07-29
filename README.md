@@ -191,7 +191,8 @@ including pairing.
 5. Configure everything else in the **General**, **Modes** and **Setup** tabs and press **Save**.
 
 **Updating:** just install the new package over the old one - your settings are kept and
-migrated automatically. To go back to defaults, use the **Reset** button in the UI.
+migrated automatically. To go back to defaults, use the **Reset** button in the UI - that
+takes the model back to **Slave** as well, so pick it again afterwards.
 
 ### ⚙️ Required VESC configuration
 

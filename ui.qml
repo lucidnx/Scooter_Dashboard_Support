@@ -672,7 +672,7 @@ Item {
         Label {
             width: resetDialog.availableWidth
             wrapMode: Text.WordWrap
-            text: "This restores every setting to defaults. Your model selection is kept. This cannot be undone."
+            text: "This restores every setting to defaults, including the model, which goes back to Slave. The script restarts. This cannot be undone."
         }
     }
 
@@ -2388,6 +2388,16 @@ Item {
                 loadedModel = modelBox.currentIndex
                 resetSettingsLoad()
                 VescIf.emitStatusMessage("Model saved, restarting...", true)
+                mCommands.lispSetRunning(false)
+                restartTimer.start()
+            } else if (message === "reset-ok") {
+                // reset takes the model back to Slave, which only applies on a restart
+                modelBox.currentIndex = 2
+                loadedModel = 2
+                root.saving = false
+                saveTimeout.stop()
+                resetSettingsLoad()
+                VescIf.emitStatusMessage("Settings reset, restarting...", true)
                 mCommands.lispSetRunning(false)
                 restartTimer.start()
             } else if (message === "ok") {
