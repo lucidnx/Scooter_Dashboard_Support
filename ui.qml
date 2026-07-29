@@ -830,15 +830,25 @@ Item {
                 Layout.preferredHeight: 150
                 radius: 10
                 color: "#26262b"
-                TextArea {
-                    id: exportText
+
+                // TextArea.flickable is what makes a text box scroll: attached that
+                // way the TextArea drives the Flickable's contentHeight and keeps the
+                // caret in view. Anchored inside a fixed height parent it just grew
+                // past it instead, with the caret walking off the bottom.
+                Flickable {
                     anchors.fill: parent
                     anchors.margins: 8
-                    readOnly: true
-                    wrapMode: TextArea.WrapAnywhere
-                    font.family: "monospace"
-                    font.pointSize: root.titleSize * 0.72
-                    background: Item {}
+                    clip: true
+                    TextArea.flickable: TextArea {
+                        id: exportText
+                        readOnly: true
+                        wrapMode: TextArea.Wrap
+                        font.family: "monospace"
+                        font.pointSize: root.titleSize * 0.72
+                        padding: 0
+                        background: Item {}
+                    }
+                    ScrollBar.vertical: ScrollBar { }
                 }
             }
             RowLayout {
@@ -914,14 +924,24 @@ Item {
                 Layout.preferredHeight: 150
                 radius: 10
                 color: "#26262b"
-                TextArea {
-                    id: importText
+
+                // TextArea.flickable is what makes a text box scroll: attached that
+                // way the TextArea drives the Flickable's contentHeight and keeps the
+                // caret in view. Anchored inside a fixed height parent it just grew
+                // past it instead, with the caret walking off the bottom.
+                Flickable {
                     anchors.fill: parent
                     anchors.margins: 8
-                    wrapMode: TextArea.WrapAnywhere
-                    font.family: "monospace"
-                    font.pointSize: root.titleSize * 0.72
-                    background: Item {}
+                    clip: true
+                    TextArea.flickable: TextArea {
+                        id: importText
+                        wrapMode: TextArea.Wrap
+                        font.family: "monospace"
+                        font.pointSize: root.titleSize * 0.72
+                        padding: 0
+                        background: Item {}
+                    }
+                    ScrollBar.vertical: ScrollBar { }
                 }
             }
             RowLayout {
