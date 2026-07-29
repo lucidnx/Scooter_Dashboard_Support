@@ -136,6 +136,14 @@ including pairing.
   signal button** for three seconds toggles cruise control
 - A long button press turns the dashboard off
 
+### 💾 Backup
+- **Export** in Setup puts every saved setting on the clipboard as a short block of
+  text - paste it into a note, a file or a message to keep it
+- **Import** takes that text back, fills in every field, and waits for you to press
+  Save. The model is not part of a backup, since it belongs to the unit
+- VESC Tool gives a package no way to write a file on the phone or the desktop, so a
+  backup travels as text rather than as a download
+
 ### 🎚️ Throttle & brake
 - **Software ADC** per channel - take throttle from the dashboard and leave brake on a lever
   wired to the ADC pin, or the other way round

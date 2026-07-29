@@ -512,9 +512,57 @@ Item {
         sendCode("(send-settings)")
     }
 
+    property var cfgLines: ({})
+
+    // The export is the very lines the script sends, so nothing can drift out of
+    // step with the parser. The model is left out: it is per unit, and applying it
+    // needs the restart that saving a model does.
+    // misc first, exactly as send-settings orders it: it carries the mph switch, and
+    // every speed after it is formatted for whichever unit it sets
+    readonly property var cfgKeys: ["misc", "general", "temps", "modes", "secret",
+        "apply", "gesture", "rear", "cruise", "alarm"]
+
+    function cfgExport() {
+        var out = ["vss-settings 1"]
+        for (var i = 0; i < cfgKeys.length; i++) {
+            var l = cfgLines[cfgKeys[i]]
+            if (l !== undefined) out.push(l)
+        }
+        return out.join("\n")
+    }
+
+    // returns the number of groups applied, or -1 if this is not one of ours
+    function cfgImport(txt) {
+        var lines = txt.split("\n")
+        var head = false
+        var found = ({})
+        for (var i = 0; i < lines.length; i++) {
+            var l = lines[i].trim()
+            if (l.length === 0) continue
+            if (l.indexOf("vss-settings") === 0) { head = true; continue }
+            var key = l.split(" ")[0]
+            if (cfgKeys.indexOf(key) >= 0) found[key] = l
+        }
+        if (!head) return -1
+
+        // Apply in cfgKeys order whatever order the file is in, and hold
+        // settingsLoaded down: it is what gates useMph's field conversion, which
+        // would otherwise convert values that arrived already converted.
+        var wasLoaded = settingsLoaded
+        settingsLoaded = false
+        var n = 0
+        for (var k = 0; k < cfgKeys.length; k++) {
+            var line = found[cfgKeys[k]]
+            if (line !== undefined) { applySettingsLine(line); n += 1 }
+        }
+        settingsLoaded = wasLoaded
+        return n
+    }
+
     function applySettingsLine(line) {
         var parts = line.split(" ")
         markSettingsSeen(parts[0])
+        cfgLines[parts[0]] = line
 
         if (parts[0] === "model") {
             loadedModel = Number.parseInt(parts[1])
@@ -673,6 +721,138 @@ Item {
             width: resetDialog.availableWidth
             wrapMode: Text.WordWrap
             text: "This restores every setting to defaults, including the model, which goes back to Slave. The script restarts. This cannot be undone."
+        }
+    }
+
+    // VESC Tool's QML has no way to write a file on the phone or the desktop, so a
+    // backup travels as text through the clipboard - paste it wherever you keep it.
+    Dialog {
+        id: exportDialog
+        anchors.centerIn: parent
+        width: Math.min(parent.width - 40, 420)
+        modal: true
+        title: "Export settings"
+        standardButtons: Dialog.Close
+
+        ColumnLayout {
+            width: exportDialog.availableWidth
+            spacing: 8
+
+            Label {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                text: "This is everything saved on the ESC except the model. Copy it and "
+                      + "keep it somewhere - a note, a file, a message to yourself."
+            }
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 150
+                radius: 10
+                color: "#26262b"
+                TextArea {
+                    id: exportText
+                    anchors.fill: parent
+                    anchors.margins: 8
+                    readOnly: true
+                    wrapMode: TextArea.WrapAnywhere
+                    font.family: "monospace"
+                    font.pointSize: root.titleSize * 0.72
+                    background: Item {}
+                }
+            }
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 44
+                radius: 12
+                color: copyTouch.pressed ? "#1f9c2e" : "#1b8728"
+                Label { anchors.centerIn: parent; text: "Copy to clipboard"; font.bold: true; color: "#ffffff" }
+                MouseArea {
+                    id: copyTouch
+                    anchors.fill: parent
+                    onClicked: {
+                        exportText.selectAll()
+                        exportText.copy()
+                        exportText.deselect()
+                        VescIf.emitStatusMessage("Settings copied to clipboard.", true)
+                    }
+                }
+            }
+        }
+    }
+
+    Dialog {
+        id: importDialog
+        anchors.centerIn: parent
+        width: Math.min(parent.width - 40, 420)
+        modal: true
+        title: "Import settings"
+        standardButtons: Dialog.Cancel
+
+        ColumnLayout {
+            width: importDialog.availableWidth
+            spacing: 8
+
+            Label {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                text: "Paste a backup here. It only fills in the fields - press Save "
+                      + "afterwards to write it to the ESC."
+            }
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 150
+                radius: 10
+                color: "#26262b"
+                TextArea {
+                    id: importText
+                    anchors.fill: parent
+                    anchors.margins: 8
+                    wrapMode: TextArea.WrapAnywhere
+                    font.family: "monospace"
+                    font.pointSize: root.titleSize * 0.72
+                    background: Item {}
+                }
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredWidth: 1
+                    Layout.preferredHeight: 44
+                    radius: 12
+                    color: pasteTouch.pressed ? "#3a3a44" : "#33333a"
+                    Label { anchors.centerIn: parent; text: "Paste"; font.bold: true }
+                    MouseArea {
+                        id: pasteTouch
+                        anchors.fill: parent
+                        onClicked: { importText.selectAll(); importText.paste() }
+                    }
+                }
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredWidth: 1
+                    Layout.preferredHeight: 44
+                    radius: 12
+                    color: applyTouch.pressed ? "#1f9c2e" : "#1b8728"
+                    Label { anchors.centerIn: parent; text: "Apply"; font.bold: true; color: "#ffffff" }
+                    MouseArea {
+                        id: applyTouch
+                        anchors.fill: parent
+                        onClicked: {
+                            var n = root.cfgImport(importText.text)
+                            if (n < 0) {
+                                VescIf.emitStatusMessage("That is not a settings backup.", false)
+                            } else if (n === 0) {
+                                VescIf.emitStatusMessage("Nothing in that backup could be read.", false)
+                            } else {
+                                importDialog.close()
+                                VescIf.emitStatusMessage(n + " groups loaded - press Save to keep them.", true)
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -2251,6 +2431,57 @@ Item {
                                         Layout.fillWidth: true
                                         Label { text: "Volume (V)"; Layout.fillWidth: true }
                                         TextField { id: alarmVoltage; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly }
+                                    }
+                                }
+                            }
+
+                            Label { text: "Backup"; font.bold: true; font.pointSize: root.titleSize * 0.82; font.capitalization: Font.AllUppercase; font.letterSpacing: 1; opacity: 0.55; Layout.topMargin: 26; Layout.leftMargin: 4 }
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: card10.implicitHeight + 28
+                                radius: 14
+                                color: "#26262b"
+                                ColumnLayout {
+                                    id: card10
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.top: parent.top
+                                    anchors.margins: 14
+                                    spacing: 8
+
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 8
+                                        Repeater {
+                                            model: [{ t: "Export", exp: true }, { t: "Import", exp: false }]
+                                            Rectangle {
+                                                Layout.fillWidth: true
+                                                Layout.preferredWidth: 1
+                                                Layout.preferredHeight: 44
+                                                radius: 12
+                                                color: cfgTouch.pressed ? "#3a3a44" : "#33333a"
+                                                opacity: root.settingsLoaded ? 1.0 : 0.4
+                                                Label {
+                                                    anchors.centerIn: parent
+                                                    text: modelData.t
+                                                    font.bold: true
+                                                }
+                                                MouseArea {
+                                                    id: cfgTouch
+                                                    anchors.fill: parent
+                                                    enabled: root.settingsLoaded
+                                                    onClicked: {
+                                                        if (modelData.exp) {
+                                                            exportText.text = root.cfgExport()
+                                                            exportDialog.open()
+                                                        } else {
+                                                            importText.text = ""
+                                                            importDialog.open()
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
