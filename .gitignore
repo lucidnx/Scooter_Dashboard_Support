@@ -7,7 +7,9 @@ tools/*
 !tools/pad_lisp.py
 .DS_Store
 # diagnostic captures and tools, not part of the package
+logs/
 *.log
 bus_sniff.py
+screenshots/*-old.*
 build/
 padded.lisp

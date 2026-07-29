@@ -7,6 +7,11 @@ the app protocol, so NineDash works against it exactly as against a stock ESC.
 Everything below comes from logic-level captures of the internal UART bus on a real G30
 dash, not from guesswork. Frame counts and timings are measured.
 
+The captures themselves are kept outside the repository - they are diagnostic material, not
+part of the package. In a working copy they live in `logs/`, one file per session, named
+`date_time_dash_build_app_subject.log`; `logs/README.md` says what each one was taken to
+answer. Ask if you want the raw files.
+
 ## Detecting a VESC
 
 Two independent markers, either is enough:
