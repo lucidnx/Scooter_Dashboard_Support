@@ -1280,7 +1280,7 @@ Item {
                                 RowLayout {
                                     Layout.fillWidth: true
                                     Label { text: "Startup Mode"; Layout.fillWidth: true }
-                                    ComboBox { id: bootMode; background: Rectangle { radius: 10; color: "#33333a" }; Layout.preferredWidth: 100; model: ["Eco", "Drive", "Sport"]; currentIndex: 1 }
+                                    ComboBox { id: bootMode; Layout.preferredWidth: 100; model: ["Eco", "Drive", "Sport"]; currentIndex: 1; background: Rectangle { radius: 10; color: "#33333a" } }
                                 }
 
                                 RowLayout {
@@ -1316,7 +1316,7 @@ Item {
                                 RowLayout {
                                     Layout.fillWidth: true
                                     Label { text: "Brake Light"; Layout.fillWidth: true; enabled: rearLightEnable.checked }
-                                    ComboBox { id: brakeLightMode; background: Rectangle { radius: 10; color: "#33333a" }; Layout.preferredWidth: 100; model: ["On", "Blink", "Off"]; enabled: rearLightEnable.checked }
+                                    ComboBox { id: brakeLightMode; Layout.preferredWidth: 100; model: ["On", "Blink", "Off"]; enabled: rearLightEnable.checked; background: Rectangle { radius: 10; color: "#33333a" } }
                                 }
 
                                 RowLayout {
@@ -1371,7 +1371,7 @@ Item {
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Label { text: "Lock"; font.bold: true; Layout.fillWidth: true }
-                                        ComboBox { id: lockPresses; background: Rectangle { radius: 10; color: "#33333a" }; Layout.preferredWidth: 84; model: ["1", "2", "3", "4", "5"]; currentIndex: 1 }
+                                        ComboBox { id: lockPresses; Layout.preferredWidth: 84; model: ["1", "2", "3", "4", "5"]; currentIndex: 1; background: Rectangle { radius: 10; color: "#33333a" } }
                                     }
 
                                     RowLayout {
@@ -1391,7 +1391,7 @@ Item {
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Label { text: "Modes"; font.bold: true; Layout.fillWidth: true }
-                                        ComboBox { id: modePresses; background: Rectangle { radius: 10; color: "#33333a" }; Layout.preferredWidth: 84; model: ["No", "1", "2", "3", "4", "5"]; currentIndex: 2 }
+                                        ComboBox { id: modePresses; Layout.preferredWidth: 84; model: ["No", "1", "2", "3", "4", "5"]; currentIndex: 2; background: Rectangle { radius: 10; color: "#33333a" } }
                                     }
 
                                     RowLayout {
@@ -1412,7 +1412,7 @@ Item {
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Label { text: "Headlight"; font.bold: true; Layout.fillWidth: true }
-                                        ComboBox { id: lightPresses; background: Rectangle { radius: 10; color: "#33333a" }; Layout.preferredWidth: 84; model: ["No", "1", "2", "3", "4", "5"]; currentIndex: 1 }
+                                        ComboBox { id: lightPresses; Layout.preferredWidth: 84; model: ["No", "1", "2", "3", "4", "5"]; currentIndex: 1; background: Rectangle { radius: 10; color: "#33333a" } }
                                     }
 
                                     RowLayout {
@@ -1433,7 +1433,7 @@ Item {
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Label { text: "Secret"; font.bold: true; Layout.fillWidth: true }
-                                        ComboBox { id: secretPresses; background: Rectangle { radius: 10; color: "#33333a" }; Layout.preferredWidth: 84; model: ["No", "1", "2", "3", "4", "5"]; currentIndex: 1 }
+                                        ComboBox { id: secretPresses; Layout.preferredWidth: 84; model: ["No", "1", "2", "3", "4", "5"]; currentIndex: 1; background: Rectangle { radius: 10; color: "#33333a" } }
                                     }
 
                                     RowLayout {
@@ -1454,7 +1454,7 @@ Item {
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Label { text: "Secret OFF"; font.bold: true; Layout.fillWidth: true }
-                                        ComboBox { id: secretOffPresses; background: Rectangle { radius: 10; color: "#33333a" }; Layout.preferredWidth: 84; model: ["No", "1", "2", "3", "4", "5"]; currentIndex: 3 }
+                                        ComboBox { id: secretOffPresses; Layout.preferredWidth: 84; model: ["No", "1", "2", "3", "4", "5"]; currentIndex: 3; background: Rectangle { radius: 10; color: "#33333a" } }
                                     }
 
                                     RowLayout {
@@ -1879,7 +1879,7 @@ Item {
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Label { text: "Dashboard power Control (experimental)"; Layout.fillWidth: true }
-                                        ComboBox { id: dashPowerOut; background: Rectangle { radius: 10; color: "#33333a" }; Layout.preferredWidth: 100; model: ["Off", "ADC1", "ADC2"] }
+                                        ComboBox { id: dashPowerOut; Layout.preferredWidth: 100; model: ["Off", "ADC1", "ADC2"]; background: Rectangle { radius: 10; color: "#33333a" } }
                                     }
 
                                     Label {

@@ -42,6 +42,25 @@ def balance(src):
     return None
 
 
+def inline_object_semicolon(src):
+    """`prop: Type { ... };` on one line - QML will not take the semicolon."""
+    bad = []
+    for n, line in enumerate(src.split("\n"), 1):
+        for m in re.finditer(r":\s*[A-Z]\w*\s*\{", line):
+            depth, i = 0, m.end() - 1
+            while i < len(line):
+                if line[i] == "{":
+                    depth += 1
+                elif line[i] == "}":
+                    depth -= 1
+                    if depth == 0:
+                        break
+                i += 1
+            if depth == 0 and line[i + 1:].lstrip().startswith(";"):
+                bad.append(n)
+    return bad
+
+
 def undeclared(src):
     ids = set(re.findall(r"\bid:\s*([A-Za-z_][A-Za-z0-9_]*)", src))
     params = set()
@@ -57,6 +76,10 @@ def main():
     err = balance(src)
     if err:
         raise SystemExit(f"check_qml: {err}")
+    bad = inline_object_semicolon(src)
+    if bad:
+        raise SystemExit("check_qml: object assignment followed by ';' at line "
+                         + ", ".join(str(b) for b in bad))
     missing = undeclared(src)
     if missing:
         raise SystemExit(f"check_qml: referenced but never declared: {', '.join(missing)}")
