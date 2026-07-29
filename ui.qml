@@ -62,14 +62,16 @@ Item {
     property real stMot: 0
     // The three colours everything coloured is drawn from, so the battery bar
     // reads as part of the same set as the buttons rather than its own scheme.
-    readonly property color palRed: "#c44440"
-    readonly property color palAmber: "#d79b33"
-    readonly property color palGreen: "#44904b"
+    readonly property color palRed: "#dc2e28"
+    readonly property color palAmber: "#e49e26"
+    readonly property color palGreen: "#25af32"
 
     function mixColor(a, b, t) {
         return Qt.rgba(a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t,
                        a.b + (b.b - a.b) * t, 1)
     }
+
+    property bool battShowRange: false
 
     // Highest draw seen this session, the fallback when nothing caps watts.
     property real stWattPeak: 500
@@ -802,7 +804,7 @@ Item {
                     // hits that floor, and scrolls from there.
                     readonly property real wS: Math.max(0.85, Math.min(1.25, availableWidth / 320))
                     readonly property real hS: Math.max(0.69, Math.min(1.0,
-                        (height - availableWidth * 0.767 - 39 - 68 * wS) / 250))
+                        (height - availableWidth * 0.767 - 16 - 68 * wS) / 250))
 
                     ColumnLayout {
                         width: parent.width
@@ -912,7 +914,7 @@ Item {
                                     ctx.stroke()
 
                                     if (wAnim > 0.004) {
-                                        ctx.strokeStyle = root.stWatts < 0 ? "#77c67b" : "#69d1ff"
+                                        ctx.strokeStyle = root.stWatts < 0 ? "#5edf64" : "#70cef8"
                                         ctx.beginPath()
                                         ctx.arc(dial.subx, dial.suby, sr, b0, b0 + (b1 - b0) * wAnim, false)
                                         ctx.stroke()
@@ -925,7 +927,7 @@ Item {
                                 anchors.horizontalCenter: parent.left
                                 anchors.horizontalCenterOffset: dial.dcx
                                 anchors.verticalCenter: parent.top
-                                anchors.verticalCenterOffset: dial.dcy
+                                anchors.verticalCenterOffset: dial.dcy - dial.drad * 0.06
                                 text: Math.round(dial.shown)
                                 font.pixelSize: dial.drad * 0.50
                                 font.bold: true
@@ -967,7 +969,7 @@ Item {
                                 width: dial.width * 0.105
                                 height: width
                                 radius: width / 2
-                                color: root.stOff ? "#303034" : "#307a3b"
+                                color: root.stOff ? "#303034" : "#1b8f2c"
                                 scale: powerTouch.pressed ? 0.94 : 1.0
                                 Behavior on color { ColorAnimation { duration: 180 } }
                                 Behavior on scale { NumberAnimation { duration: 90 } }
@@ -1015,29 +1017,32 @@ Item {
 
                                 Canvas {
                                     anchors.fill: parent
+                                    property color notch: gearTouch2.pressed ? "#3a3a44" : "#26262b"
+                                    onNotchChanged: requestPaint()
                                     onPaint: {
                                         var ctx = getContext("2d")
                                         ctx.reset()
                                         var c = width / 2
-                                        var rm = width * 0.150      // ring the teeth stand on
-                                        var ro = width * 0.235      // tip of a tooth
-                                        ctx.strokeStyle = "#c8c8d0"
-                                        // six teeth, each wider than the gap beside it, with
-                                        // square tips - fewer and fatter than eight thin rays,
-                                        // which read as a sun rather than a cog
+                                        // A thick ring with six notches cut back out of it
+                                        // in the badge's own colour. Teeth as gaps rather
+                                        // than spokes, so there are no spikes to read as a sun.
                                         ctx.lineCap = "butt"
-                                        ctx.lineWidth = Math.max(2, width * 0.105)
+                                        ctx.strokeStyle = "#c8c8d0"
+                                        ctx.lineWidth = width * 0.115
+                                        ctx.beginPath()
+                                        ctx.arc(c, c, width * 0.185, 0, Math.PI * 2)
+                                        ctx.stroke()
+                                        ctx.strokeStyle = notch
+                                        ctx.lineWidth = width * 0.055
                                         for (var i = 0; i < 6; i++) {
-                                            var a = i * Math.PI / 3
+                                            var a = i * Math.PI / 3 + Math.PI / 6
                                             ctx.beginPath()
-                                            ctx.moveTo(c + Math.cos(a) * rm, c + Math.sin(a) * rm)
-                                            ctx.lineTo(c + Math.cos(a) * ro, c + Math.sin(a) * ro)
+                                            ctx.moveTo(c + Math.cos(a) * width * 0.09,
+                                                       c + Math.sin(a) * width * 0.09)
+                                            ctx.lineTo(c + Math.cos(a) * width * 0.29,
+                                                       c + Math.sin(a) * width * 0.29)
                                             ctx.stroke()
                                         }
-                                        ctx.lineWidth = Math.max(2, width * 0.085)
-                                        ctx.beginPath()
-                                        ctx.arc(c, c, rm, 0, Math.PI * 2)
-                                        ctx.stroke()
                                     }
                                 }
                                 MouseArea {
@@ -1045,6 +1050,30 @@ Item {
                                     anchors.fill: parent
                                     anchors.margins: -6
                                     onClicked: swipeView.currentIndex = 1
+                                }
+                            }
+
+                            // Consumption at the bottom centre, where the arc's opening
+                            // leaves the space free. Figure in the speed's colour, unit in
+                            // the same grey as km/h, so it reads as one more dial reading.
+                            Row {
+                                anchors.horizontalCenter: parent.left
+                                anchors.horizontalCenterOffset: dial.dcx
+                                anchors.verticalCenter: parent.top
+                                anchors.verticalCenterOffset: dial.dcy + dial.drad * 0.52
+                                spacing: 3
+
+                                Label {
+                                    anchors.baseline: whkmUnit.baseline
+                                    text: fmtWhkm(useMph.checked ? (root.stWhkm / 0.621371) : root.stWhkm)
+                                    font.bold: true
+                                    font.pixelSize: dial.drad * 0.17
+                                }
+                                Label {
+                                    id: whkmUnit
+                                    text: useMph.checked ? "Wh/mi" : "Wh/km"
+                                    font.pixelSize: dial.drad * 0.13
+                                    opacity: 0.55
                                 }
                             }
 
@@ -1056,7 +1085,7 @@ Item {
                                 radius: width / 2
                                 x: dial.dcx + dial.drad + dial.dlw / 2 - width
                                 y: dial.dcy - dial.drad * 0.05 - width / 2
-                                color: root.stCruise ? "#20a3b3" : "#26262b"
+                                color: root.stCruise ? "#17aabc" : "#26262b"
                                 Behavior on color { ColorAnimation { duration: 200 } }
                                 Label {
                                     anchors.centerIn: parent
@@ -1099,33 +1128,26 @@ Item {
                                     Behavior on color { ColorAnimation { duration: 320 } }
                                 }
 
+                                // The bar already shows the charge, so the figure on it
+                                // alternates with what people actually want from it.
+                                Timer {
+                                    interval: 3000
+                                    repeat: true
+                                    running: swipeView.currentIndex === 0
+                                    onTriggered: root.battShowRange = !root.battShowRange
+                                }
+
                                 Label {
                                     anchors.centerIn: parent
-                                    text: Math.round(root.stBatt) + " %"
+                                    text: root.battShowRange
+                                        ? "~" + Math.round(useMph.checked ? (root.stRange * 0.621371)
+                                                                          : root.stRange)
+                                          + (useMph.checked ? "mi" : "km")
+                                        : Math.round(root.stBatt) + " %"
                                     font.bold: true
                                     font.pointSize: root.titleSize * 1.05
                                     color: "#ffffff"
                                 }
-                            }
-                        }
-
-                        Item {
-                            Layout.fillWidth: true
-                            Layout.topMargin: 3
-                            Layout.preferredHeight: whkmLabel.height
-
-                            Label {
-                                id: whkmLabel
-                                anchors.left: parent.left
-                                text: fmtWhkm(useMph.checked ? (root.stWhkm / 0.621371) : root.stWhkm)
-                                    + (useMph.checked ? " Wh/mi" : " Wh/km")
-                                opacity: 0.6
-                            }
-                            Label {
-                                anchors.right: parent.right
-                                text: "~" + Math.round(useMph.checked ? (root.stRange * 0.621371) : root.stRange)
-                                    + (useMph.checked ? " mi range" : " km range")
-                                opacity: 0.6
                             }
                         }
 
@@ -1165,27 +1187,26 @@ Item {
 
                                     clip: true
 
-                                    // A two digit figure lands centred in the card and
-                                    // the unit hangs outside it, so what is centred is the
-                                    // digits rather than the whole reading. The right
-                                    // edge is what is pinned, so a third
-                                    // grows leftwards into the empty half.
+                                    // Right to left: the letter is pinned, so the gap from
+                                    // it to the card's edge is the same on all four. The
+                                    // degree hangs off it at the value's own size and weight,
+                                    // dim rather than smaller, and the digits right-align
+                                    // against whichever comes first - so a third digit grows
+                                    // leftwards and nothing else shifts.
                                     Label {
-                                        id: chipVal
+                                        id: chipCap
                                         anchors.right: parent.horizontalCenter
-                                        anchors.rightMargin: -Math.round(root.titleSize * 0.75)
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: modelData.val
+                                        anchors.rightMargin: -Math.round(root.titleSize * 1.18)
+                                        anchors.bottom: chipVal.bottom
+                                        text: modelData.cap
                                         font.bold: true
-                                        font.pointSize: root.titleSize * 1.05
+                                        font.pointSize: root.titleSize * 0.78
+                                        opacity: 0.5
                                     }
-                                    // The degree is part of the reading - the value's own
-                                    // size, set apart only by being dim - but it is its own
-                                    // label so it carries no weight in where the digits sit.
-                                    // Empty where there is none, so it costs no width.
                                     Label {
                                         id: chipDeg
-                                        anchors.left: chipVal.right
+                                        anchors.right: chipCap.left
+                                        anchors.rightMargin: 3
                                         anchors.baseline: chipVal.baseline
                                         text: modelData.deg ? "\u00b0" : ""
                                         font.bold: true
@@ -1193,13 +1214,12 @@ Item {
                                         opacity: 0.45
                                     }
                                     Label {
-                                        anchors.left: chipDeg.right
-                                        anchors.leftMargin: 3
-                                        anchors.bottom: chipVal.bottom
-                                        text: modelData.cap
+                                        id: chipVal
+                                        anchors.right: chipDeg.left
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: modelData.val
                                         font.bold: true
-                                        font.pointSize: root.titleSize * 0.78
-                                        opacity: 0.5
+                                        font.pointSize: root.titleSize * 1.05
                                     }
                                 }
                             }
@@ -1223,7 +1243,7 @@ Item {
                                     height: parent.height
                                     radius: parent.radius
                                     x: root.stMode === 2 ? 0 : (root.stMode === 1 ? modeTrack.width / 3 : modeTrack.width * 2 / 3)
-                                    color: root.stMode === 2 ? "#307fc3" : (root.stMode === 1 ? "#44904b" : "#c44440")
+                                    color: root.stMode === 2 ? "#1e80d5" : (root.stMode === 1 ? "#25af32" : "#dc2e28")
                                     Behavior on x { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
                                     Behavior on color { ColorAnimation { duration: 220 } }
                                 }
@@ -1266,13 +1286,13 @@ Item {
 
                             Repeater {
                                 model: [
-                                    { t: "LOCK", on: root.stLock, col: "#ae3434", fg: "#ffffff",
+                                    { t: "LOCK", on: root.stLock, col: "#c31f1f", fg: "#ffffff",
                                       cmd: "(ctrl-lock " + (root.stLock ? "false" : "true") + ")", live: true },
-                                    { t: "SECRET", on: root.stSecret, col: "#70308e", fg: "#ffffff",
+                                    { t: "SECRET", on: root.stSecret, col: "#771ca2", fg: "#ffffff",
                                       cmd: "(ctrl-secret " + (root.stSecret ? "false" : "true") + ")", live: true },
-                                    { t: "LIGHT", on: root.stLight, col: "#d79b33", fg: root.stLight ? "#1e1a10" : "#ffffff",
+                                    { t: "LIGHT", on: root.stLight, col: "#e49e26", fg: root.stLight ? "#1e1a10" : "#ffffff",
                                       cmd: "(ctrl-light " + (root.stLight ? "false" : "true") + ")", live: true },
-                                    { t: "CRUISE", on: root.stCruiseEn, col: "#1a7c72", fg: "#ffffff",
+                                    { t: "CRUISE", on: root.stCruiseEn, col: "#118579", fg: "#ffffff",
                                       cmd: "(ctrl-cruise " + (root.stCruiseEn ? "false" : "true") + ")", live: root.stCruiseAllow }
                                 ]
                                 Rectangle {
@@ -1827,7 +1847,7 @@ Item {
                                                 Material.foreground: root.calibRunning === "thr" ? "#d0faff" : "#ffffff"
                                                 background: Rectangle {
                                                     radius: 14
-                                                    color: root.calibRunning === "thr" ? "#1a7c72" : "#33333a"
+                                                    color: root.calibRunning === "thr" ? "#118579" : "#33333a"
                                                 }
                                                 onClicked: root.calibStartChannel("thr")
                                             }
@@ -1862,7 +1882,7 @@ Item {
                                                 Material.foreground: root.calibRunning === "brk" ? "#d0faff" : "#ffffff"
                                                 background: Rectangle {
                                                     radius: 14
-                                                    color: root.calibRunning === "brk" ? "#1a7c72" : "#33333a"
+                                                    color: root.calibRunning === "brk" ? "#118579" : "#33333a"
                                                 }
                                                 onClicked: root.calibStartChannel("brk")
                                             }
@@ -2147,7 +2167,7 @@ Item {
                     Layout.preferredWidth: 1
                     Layout.preferredHeight: 46
                     radius: 14
-                    color: modelData.accent ? "#327039" : "#26262b"
+                    color: modelData.accent ? "#1b8728" : "#26262b"
                     opacity: modelData.on ? 1.0 : 0.4
                     scale: actTouch.pressed && modelData.on ? 0.975 : 1.0
                     Behavior on opacity { NumberAnimation { duration: 150 } }
