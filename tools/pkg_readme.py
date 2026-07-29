@@ -13,6 +13,12 @@ import sys
 
 REPO = "https://github.com/lucidnx/vesc_scooter_support"
 
+# VESC Tool renders the description as markdown, which takes the underscores in
+# a bare URL for emphasis and drops them - vesc_scooter_support arrived as
+# vescscootersupport. A link destination is never parsed that way, so the target
+# is safe either side of the escape; only text the reader sees needs it.
+REPO_MD = "[" + REPO.replace("_", "\\_") + "](" + REPO + ")"
+
 
 def is_image(line):
     return "<img " in line or re.match(r"\s*!\[", line)
@@ -55,18 +61,24 @@ def strip_images(src):
     return re.sub(r"\n{3,}", "\n\n", text)
 
 
+def escape_bare_urls(src):
+    """Same trap as REPO_MD, for the URLs the README writes out in full."""
+    return re.sub(r"(?<![(\[<])\bhttps?://\S*_\S*",
+                  lambda m: m.group(0).replace("_", "\\_"), src)
+
+
 def add_link(src):
     lines = src.split("\n")
     for i, line in enumerate(lines):
         if line.startswith("# "):
-            lines.insert(i + 1, f"\n{REPO}")
+            lines.insert(i + 1, f"\n{REPO_MD}")
             break
     return "\n".join(lines)
 
 
 def main():
     src = open(sys.argv[1]).read()
-    dst = add_link(strip_images(src))
+    dst = add_link(escape_bare_urls(strip_images(src)))
     open(sys.argv[2], "w").write(dst)
     print(f"pkg_readme: {len(src)} -> {len(dst)} bytes, "
           f"{sum(1 for l in src.split(chr(10)) if is_image(l))} images dropped")
