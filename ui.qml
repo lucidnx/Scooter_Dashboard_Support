@@ -1029,6 +1029,8 @@ Item {
                                 x: dial.dcx + dial.drad + dial.dlw / 2 - width
                                 y: dial.dcy - dial.drad * 0.05 - width / 2
                                 color: root.stCruise ? "#21aabb" : "#303034"
+                                border.width: root.stCruise ? 0 : 1
+                                border.color: "#43434c"
                                 Behavior on color { ColorAnimation { duration: 200 } }
                                 Label {
                                     anchors.centerIn: parent
@@ -1105,7 +1107,7 @@ Item {
                                 model: [
                                     { cap: "V", val: root.stVin.toFixed(1), warn: false },
                                     { cap: "A", val: root.stAmps.toFixed(1), warn: false },
-                                    { cap: "E °C", val: String(Math.round(root.stFet)),
+                                    { cap: "C °C", val: String(Math.round(root.stFet)),
                                       warn: root.stFet > (Number.parseFloat(tempWarningFet.text) || 999) },
                                     { cap: "M °C", val: String(Math.round(root.stMot)),
                                       warn: root.stMot > (Number.parseFloat(tempWarningMotor.text) || 999) }
@@ -1130,6 +1132,7 @@ Item {
                                         }
                                     }
 
+                                    clip: true
                                     Row {
                                         anchors.centerIn: parent
                                         spacing: 2
@@ -1137,12 +1140,13 @@ Item {
                                             anchors.verticalCenter: parent.verticalCenter
                                             text: modelData.val
                                             font.bold: true
-                                            font.pointSize: root.titleSize * 1.05
+                                            // shrink rather than spill out of the card
+                                            font.pointSize: root.titleSize * (modelData.val.length > 4 ? 0.86 : 1.0)
                                         }
                                         Label {
                                             anchors.verticalCenter: parent.verticalCenter
                                             text: modelData.cap
-                                            font.pointSize: root.titleSize * 0.68
+                                            font.pointSize: root.titleSize * 0.62
                                             opacity: 0.5
                                         }
                                     }
@@ -1226,6 +1230,8 @@ Item {
                                     Layout.preferredHeight: Math.round(64 * ctlScroll.hS)
                                     radius: 14
                                     color: modelData.on ? modelData.col : "#303034"
+                                    border.width: modelData.on ? 0 : 1
+                                    border.color: "#43434c"
                                     opacity: modelData.live ? 1.0 : 0.35
                                     scale: cellTouch.pressed ? 0.975 : 1.0
                                     Behavior on color { ColorAnimation { duration: 180 } }
@@ -1281,7 +1287,14 @@ Item {
                                 RowLayout {
                                     Layout.fillWidth: true
                                     Label { text: "Startup Mode"; Layout.fillWidth: true }
-                                    ComboBox { id: bootMode; Layout.preferredWidth: 100; model: ["Eco", "Drive", "Sport"]; currentIndex: 1; background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 42 } }
+                                    ComboBox {
+                                        id: bootMode
+                                        Layout.preferredWidth: 100
+                                        model: ["Eco", "Drive", "Sport"]
+                                        currentIndex: 1
+                                        background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 42 }
+                                        popup.background: Rectangle { radius: 12; color: "#2b2b31"; border.width: 1; border.color: "#43434c" }
+                                    }
                                 }
 
                                 RowLayout {
@@ -1317,7 +1330,14 @@ Item {
                                 RowLayout {
                                     Layout.fillWidth: true
                                     Label { text: "Brake Light"; Layout.fillWidth: true; enabled: rearLightEnable.checked }
-                                    ComboBox { id: brakeLightMode; Layout.preferredWidth: 100; model: ["On", "Blink", "Off"]; enabled: rearLightEnable.checked; background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 42 } }
+                                    ComboBox {
+                                        id: brakeLightMode
+                                        Layout.preferredWidth: 100
+                                        model: ["On", "Blink", "Off"]
+                                        enabled: rearLightEnable.checked
+                                        background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 42 }
+                                        popup.background: Rectangle { radius: 12; color: "#2b2b31"; border.width: 1; border.color: "#43434c" }
+                                    }
                                 }
 
                                 RowLayout {
@@ -1337,6 +1357,7 @@ Item {
                                     ComboBox {
                                         id: idleDisplay
                                         background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 42 }
+                                        popup.background: Rectangle { radius: 12; color: "#2b2b31"; border.width: 1; border.color: "#43434c" }
                                         Layout.preferredWidth: 170
                                         enabled: showBatteryInIdle.checked || showBatterySecret.checked
                                         model: ["Battery %", "Battery V", "VESC \u00B0C", "Motor \u00B0C"]
@@ -1372,7 +1393,14 @@ Item {
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Label { text: "Lock"; font.bold: true; Layout.fillWidth: true }
-                                        ComboBox { id: lockPresses; Layout.preferredWidth: 84; model: ["1", "2", "3", "4", "5"]; currentIndex: 1; background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 42 } }
+                                        ComboBox {
+                                            id: lockPresses
+                                            Layout.preferredWidth: 84
+                                            model: ["1", "2", "3", "4", "5"]
+                                            currentIndex: 1
+                                            background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 42 }
+                                            popup.background: Rectangle { radius: 12; color: "#2b2b31"; border.width: 1; border.color: "#43434c" }
+                                        }
                                     }
 
                                     RowLayout {
@@ -1392,7 +1420,14 @@ Item {
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Label { text: "Modes"; font.bold: true; Layout.fillWidth: true }
-                                        ComboBox { id: modePresses; Layout.preferredWidth: 84; model: ["No", "1", "2", "3", "4", "5"]; currentIndex: 2; background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 42 } }
+                                        ComboBox {
+                                            id: modePresses
+                                            Layout.preferredWidth: 84
+                                            model: ["No", "1", "2", "3", "4", "5"]
+                                            currentIndex: 2
+                                            background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 42 }
+                                            popup.background: Rectangle { radius: 12; color: "#2b2b31"; border.width: 1; border.color: "#43434c" }
+                                        }
                                     }
 
                                     RowLayout {
@@ -1413,7 +1448,14 @@ Item {
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Label { text: "Headlight"; font.bold: true; Layout.fillWidth: true }
-                                        ComboBox { id: lightPresses; Layout.preferredWidth: 84; model: ["No", "1", "2", "3", "4", "5"]; currentIndex: 1; background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 42 } }
+                                        ComboBox {
+                                            id: lightPresses
+                                            Layout.preferredWidth: 84
+                                            model: ["No", "1", "2", "3", "4", "5"]
+                                            currentIndex: 1
+                                            background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 42 }
+                                            popup.background: Rectangle { radius: 12; color: "#2b2b31"; border.width: 1; border.color: "#43434c" }
+                                        }
                                     }
 
                                     RowLayout {
@@ -1434,7 +1476,14 @@ Item {
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Label { text: "Secret"; font.bold: true; Layout.fillWidth: true }
-                                        ComboBox { id: secretPresses; Layout.preferredWidth: 84; model: ["No", "1", "2", "3", "4", "5"]; currentIndex: 1; background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 42 } }
+                                        ComboBox {
+                                            id: secretPresses
+                                            Layout.preferredWidth: 84
+                                            model: ["No", "1", "2", "3", "4", "5"]
+                                            currentIndex: 1
+                                            background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 42 }
+                                            popup.background: Rectangle { radius: 12; color: "#2b2b31"; border.width: 1; border.color: "#43434c" }
+                                        }
                                     }
 
                                     RowLayout {
@@ -1455,7 +1504,14 @@ Item {
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Label { text: "Secret OFF"; font.bold: true; Layout.fillWidth: true }
-                                        ComboBox { id: secretOffPresses; Layout.preferredWidth: 84; model: ["No", "1", "2", "3", "4", "5"]; currentIndex: 3; background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 42 } }
+                                        ComboBox {
+                                            id: secretOffPresses
+                                            Layout.preferredWidth: 84
+                                            model: ["No", "1", "2", "3", "4", "5"]
+                                            currentIndex: 3
+                                            background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 42 }
+                                            popup.background: Rectangle { radius: 12; color: "#2b2b31"; border.width: 1; border.color: "#43434c" }
+                                        }
                                     }
 
                                     RowLayout {
@@ -1642,6 +1698,7 @@ Item {
                                     ComboBox {
                                         id: modelBox
                                         background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 42 }
+                                        popup.background: Rectangle { radius: 12; color: "#2b2b31"; border.width: 1; border.color: "#43434c" }
                                         Layout.preferredWidth: 170
                                         model: ["G30", "M365/1S/PRO2", "Slave", "G2 (untested)"]
                                     }
@@ -1717,7 +1774,12 @@ Item {
                                                 // other channel's button locks out; re-tapping is a no-op
                                                 enabled: root.calibRunning === "" || root.calibRunning === "thr"
                                                 text: root.calibButtonText("thr")
+                                                font.bold: true
                                                 Material.foreground: root.calibRunning === "thr" ? "#d0faff" : "#ffffff"
+                                                background: Rectangle {
+                                                    radius: 14
+                                                    color: root.calibRunning === "thr" ? "#1b8277" : "#33333a"
+                                                }
                                                 onClicked: root.calibStartChannel("thr")
                                             }
 
@@ -1747,7 +1809,12 @@ Item {
                                                 Layout.topMargin: 4
                                                 enabled: root.calibRunning === "" || root.calibRunning === "brk"
                                                 text: root.calibButtonText("brk")
+                                                font.bold: true
                                                 Material.foreground: root.calibRunning === "brk" ? "#d0faff" : "#ffffff"
+                                                background: Rectangle {
+                                                    radius: 14
+                                                    color: root.calibRunning === "brk" ? "#1b8277" : "#33333a"
+                                                }
                                                 onClicked: root.calibStartChannel("brk")
                                             }
 
@@ -1880,7 +1947,13 @@ Item {
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Label { text: "Dashboard power Control (experimental)"; Layout.fillWidth: true }
-                                        ComboBox { id: dashPowerOut; Layout.preferredWidth: 100; model: ["Off", "ADC1", "ADC2"]; background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 42 } }
+                                        ComboBox {
+                                            id: dashPowerOut
+                                            Layout.preferredWidth: 100
+                                            model: ["Off", "ADC1", "ADC2"]
+                                            background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 42 }
+                                            popup.background: Rectangle { radius: 12; color: "#2b2b31"; border.width: 1; border.color: "#43434c" }
+                                        }
                                     }
 
                                     Label {
@@ -2026,6 +2099,8 @@ Item {
                     Layout.preferredHeight: 46
                     radius: 14
                     color: modelData.accent ? "#34753c" : "#303034"
+                    border.width: modelData.accent ? 0 : 1
+                    border.color: "#43434c"
                     opacity: modelData.on ? 1.0 : 0.4
                     scale: actTouch.pressed && modelData.on ? 0.975 : 1.0
                     Behavior on opacity { NumberAnimation { duration: 150 } }
