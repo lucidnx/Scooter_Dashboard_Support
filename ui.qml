@@ -49,7 +49,7 @@ Item {
     readonly property real chipDigW: chipValFm.advanceWidth("000")
     readonly property real chipDegW: chipValFm.advanceWidth("°")
     readonly property real chipCapW: chipCapFm.advanceWidth("M")
-    readonly property real chipGap: Math.round(chipValFm.height * 0.10)
+    readonly property real chipGap: Math.round(chipValFm.height * 0.20)
     readonly property real chipGrpW: chipDigW + chipDegW + chipGap + chipCapW
 
     // Live scooter state for the Control tab
@@ -1584,6 +1584,14 @@ Item {
                                         Label {
                                             id: chipCap
                                             anchors.right: parent.right
+                                            // A slot as wide as the widest letter, with the
+                                            // glyph centred in it. Right anchoring it at its
+                                            // own width is what left M snug against the degree
+                                            // and E four pixels clear of it: everything else
+                                            // is positioned from M's width, so a narrower
+                                            // letter handed the difference back as gap.
+                                            width: root.chipCapW
+                                            horizontalAlignment: Text.AlignHCenter
                                             // one baseline for all three. Aligning boxes
                                             // instead drops the smaller font by the
                                             // difference in descent, and V, A, E and M have
