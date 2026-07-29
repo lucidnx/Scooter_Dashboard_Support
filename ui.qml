@@ -1017,32 +1017,36 @@ Item {
 
                                 Canvas {
                                     anchors.fill: parent
-                                    property color notch: gearTouch2.pressed ? "#3a3a44" : "#26262b"
-                                    onNotchChanged: requestPaint()
+                                    property color hub: gearTouch2.pressed ? "#3a3a44" : "#26262b"
+                                    onHubChanged: requestPaint()
                                     onPaint: {
                                         var ctx = getContext("2d")
                                         ctx.reset()
                                         var c = width / 2
-                                        // A thick ring with six notches cut back out of it
-                                        // in the badge's own colour. Teeth as gaps rather
-                                        // than spokes, so there are no spikes to read as a sun.
-                                        ctx.lineCap = "butt"
-                                        ctx.strokeStyle = "#c8c8d0"
-                                        ctx.lineWidth = width * 0.115
+                                        // A solid cog: seven trapezoid teeth walked as
+                                        // alternating arcs at the tip and root radius, the
+                                        // corners rounded by stroking the same path, then the
+                                        // hub punched back out in the badge's own colour.
+                                        var pitch = Math.PI * 2 / 7
+                                        var half = pitch * 0.22
                                         ctx.beginPath()
-                                        ctx.arc(c, c, width * 0.185, 0, Math.PI * 2)
-                                        ctx.stroke()
-                                        ctx.strokeStyle = notch
-                                        ctx.lineWidth = width * 0.055
-                                        for (var i = 0; i < 6; i++) {
-                                            var a = i * Math.PI / 3 + Math.PI / 6
-                                            ctx.beginPath()
-                                            ctx.moveTo(c + Math.cos(a) * width * 0.09,
-                                                       c + Math.sin(a) * width * 0.09)
-                                            ctx.lineTo(c + Math.cos(a) * width * 0.29,
-                                                       c + Math.sin(a) * width * 0.29)
-                                            ctx.stroke()
+                                        for (var i = 0; i < 7; i++) {
+                                            var a = i * pitch
+                                            ctx.arc(c, c, width * 0.325, a - half, a + half, false)
+                                            ctx.arc(c, c, width * 0.205, a + half * 1.35,
+                                                    a + pitch - half * 1.35, false)
                                         }
+                                        ctx.closePath()
+                                        ctx.fillStyle = "#c8c8d0"
+                                        ctx.fill()
+                                        ctx.lineJoin = "round"
+                                        ctx.lineWidth = width * 0.045
+                                        ctx.strokeStyle = "#c8c8d0"
+                                        ctx.stroke()
+                                        ctx.beginPath()
+                                        ctx.arc(c, c, width * 0.125, 0, Math.PI * 2)
+                                        ctx.fillStyle = hub
+                                        ctx.fill()
                                     }
                                 }
                                 MouseArea {
@@ -1054,25 +1058,25 @@ Item {
                             }
 
                             // Consumption at the bottom centre, where the arc's opening
-                            // leaves the space free. Figure in the speed's colour, unit in
-                            // the same grey as km/h, so it reads as one more dial reading.
+                            // leaves the space free, sat down on the level the ring's own
+                            // ends reach. Figure in the speed's colour, unit in the same
+                            // grey as km/h, so it reads as one more dial reading.
                             Row {
                                 anchors.horizontalCenter: parent.left
                                 anchors.horizontalCenterOffset: dial.dcx
-                                anchors.verticalCenter: parent.top
-                                anchors.verticalCenterOffset: dial.dcy + dial.drad * 0.52
+                                anchors.bottom: parent.bottom
                                 spacing: 3
 
                                 Label {
-                                    anchors.baseline: whkmUnit.baseline
+                                    id: whkmNum
                                     text: fmtWhkm(useMph.checked ? (root.stWhkm / 0.621371) : root.stWhkm)
                                     font.bold: true
-                                    font.pixelSize: dial.drad * 0.17
+                                    font.pixelSize: dial.drad * 0.13
                                 }
                                 Label {
-                                    id: whkmUnit
+                                    anchors.baseline: whkmNum.baseline
                                     text: useMph.checked ? "Wh/mi" : "Wh/km"
-                                    font.pixelSize: dial.drad * 0.13
+                                    font.pixelSize: dial.drad * 0.10
                                     opacity: 0.55
                                 }
                             }
@@ -1187,16 +1191,16 @@ Item {
 
                                     clip: true
 
-                                    // Right to left: the letter is pinned, so the gap from
-                                    // it to the card's edge is the same on all four. The
-                                    // degree hangs off it at the value's own size and weight,
-                                    // dim rather than smaller, and the digits right-align
-                                    // against whichever comes first - so a third digit grows
-                                    // leftwards and nothing else shifts.
+                                    // Right to left off the card's own edge. The letter is
+                                    // pinned there, so its gap to the edge is the same on all
+                                    // four. The degree keeps its slot whether it is drawn or
+                                    // not, at the value's size and baseline but dim - so the
+                                    // digits end at one x on every card, a third digit grows
+                                    // leftwards, and a two digit reading lands centred.
                                     Label {
                                         id: chipCap
-                                        anchors.right: parent.horizontalCenter
-                                        anchors.rightMargin: -Math.round(root.titleSize * 1.18)
+                                        anchors.right: parent.right
+                                        anchors.rightMargin: Math.round(root.titleSize * 0.55)
                                         anchors.bottom: chipVal.bottom
                                         text: modelData.cap
                                         font.bold: true
@@ -1206,12 +1210,12 @@ Item {
                                     Label {
                                         id: chipDeg
                                         anchors.right: chipCap.left
-                                        anchors.rightMargin: 3
+                                        anchors.rightMargin: Math.round(root.titleSize * 0.14)
                                         anchors.baseline: chipVal.baseline
-                                        text: modelData.deg ? "\u00b0" : ""
+                                        text: "\u00b0"
                                         font.bold: true
                                         font.pointSize: root.titleSize * 1.05
-                                        opacity: 0.45
+                                        opacity: modelData.deg ? 0.45 : 0
                                     }
                                     Label {
                                         id: chipVal
