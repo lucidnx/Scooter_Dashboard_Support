@@ -10,7 +10,7 @@
 (def show-batt-in-idle false) ; show idle-display instead of speed at idle, normal modes
 (def idle-display 0) ; 0 battery %, 1 battery V, 2 controller C, 3 motor C
 (def last-alarm-code 0) ; the code the app reads back after an alarm has cleared
-(def show-batt-idle-secret true) ; same but in secret modes
+(def show-batt-idle-secret false) ; same but in secret modes
 (def min-speed 1) ; minimum speed in km/h to enable throttle and brake
 (def button-safety-speed (/ 0.1 3.6)) ; disabling button above 0.1 km/h (due to safety reasons)
 
@@ -39,15 +39,15 @@
 (def secret-enabled true)
 (def secret-eco-speed (/ 27 3.6))
 (def secret-eco-current 1.0)
-(def secret-eco-watts 1200)
+(def secret-eco-watts 1000)
 (def secret-eco-fw 0)
 (def secret-drive-speed (/ 47 3.6))
 (def secret-drive-current 1.0)
-(def secret-drive-watts 1500000)
+(def secret-drive-watts 1500)
 (def secret-drive-fw 0)
 (def secret-sport-speed (/ 1000 3.6)) ; 1000 km/h easy
 (def secret-sport-current 1.0)
-(def secret-sport-watts 1500000)
+(def secret-sport-watts 2000)
 (def secret-sport-fw 10)
 
 ; Per-parameter apply toggles - a disabled parameter is never written to the motor config
@@ -70,7 +70,7 @@
 (def secret-off-requires-lock false)
 (def secret-combo 0)
 (def secret-requires-lock false) ; secret gesture only works while locked
-(def secret-exit-on-lock true) ; locking drops back to normal modes
+(def secret-exit-on-lock false) ; locking drops back to normal modes
 (def lock-presses 2)
 (def lock-combo 1)
 (def mode-presses 2)
@@ -129,7 +129,7 @@
 @const-end
 
 ; Model (0=G30, 1=M365/1S/PRO2, 2=Slave)
-(def model 0)
+(def model 2)
 
 ; Protocol offsets, set per model in main
 (def tx-base 7) ; first dash field in tx-frame
@@ -239,7 +239,7 @@
 ; Answer third-party apps at all. Transmitting makes the receiver deaf for as
 ; long as the firmware's worker takes to switch it back on, so a connected app
 ; costs lever responsiveness - turn this off to ride with the sharpest throttle.
-(def app-enable true)
+(def app-enable false)
 (def cur-cell-mv 0) ; one division, not fifteen per cell read
 
 ; rear light state
@@ -468,7 +468,7 @@
 )
 
 (defun write-v401-defaults () ; settings added in v401
-    (write-setting 'app-enable true)
+    (write-setting 'app-enable false)
 )
 
 (defun write-v400-defaults () ; settings added in v400
@@ -499,7 +499,7 @@
 )
 
 (defun write-v307-defaults () ; settings added in v307
-    (write-setting 'secret-exit-on-lock true)
+    (write-setting 'secret-exit-on-lock false)
 )
 
 (defun write-v306-defaults () ; settings added in v306
@@ -586,7 +586,7 @@
         (write-setting 'min-adc-brake 0.1)
         (write-setting 'temp-warning-motor 80.0)
         (write-setting 'temp-warning-fet 80.0)
-        (write-setting 'show-batt-in-idle true)
+        (write-setting 'show-batt-in-idle false)
         (write-setting 'min-speed-kmh 1.0)
         (write-setting 'alarm-tone true)
         (write-setting 'alarm-speed-threshold 0.5)
@@ -607,18 +607,18 @@
         (write-setting 'secret-enabled true)
         (write-setting 'secret-eco-speed-kmh 27.0)
         (write-setting 'secret-eco-current 1.0)
-        (write-setting 'secret-eco-watts 1200.0)
+        (write-setting 'secret-eco-watts 1000.0)
         (write-setting 'secret-eco-fw 0.0)
         (write-setting 'secret-drive-speed-kmh 47.0)
         (write-setting 'secret-drive-current 1.0)
-        (write-setting 'secret-drive-watts 1500000.0)
+        (write-setting 'secret-drive-watts 1500.0)
         (write-setting 'secret-drive-fw 0.0)
         (write-setting 'secret-sport-speed-kmh 1000.0)
         (write-setting 'secret-sport-current 1.0)
-        (write-setting 'secret-sport-watts 1500000.0)
+        (write-setting 'secret-sport-watts 2000.0)
         (write-setting 'secret-sport-fw 10.0)
         (restore-gesture-apply-defaults)
-        (write-setting 'model (if (valid-model cur-model) cur-model 0))
+        (write-setting 'model (if (valid-model cur-model) cur-model 2))
         (write-setting 'ver-code settings-version)
     }
 )
@@ -913,7 +913,7 @@
 ; UI restarts lisp after "model-ok" so the new model takes effect
 (defun save-model (m)
     {
-        (write-setting 'model (if (valid-model m) m 0))
+        (write-setting 'model (if (valid-model m) m 2))
         (send-data "model-ok")
     }
 )

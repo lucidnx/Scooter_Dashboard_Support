@@ -1446,8 +1446,9 @@ Item {
 
                                 RowLayout {
                                     Layout.fillWidth: true
+                                    enabled: secretEnabled.checked
                                     Label { text: "Disable Secret when Locked"; Layout.fillWidth: true }
-                                    CheckBox { id: secretExitOnLock; text: "Enabled"; checked: true; spacing: 4 }
+                                    CheckBox { id: secretExitOnLock; text: "Enabled"; spacing: 4 }
                                 }
 
                                 RowLayout {
@@ -1485,7 +1486,8 @@ Item {
                                     Layout.fillWidth: true
                                     Label { text: "Show Idle Display"; Layout.fillWidth: true }
                                     CheckBox { id: showBatteryInIdle; text: "Normal"; spacing: 4 }
-                                    CheckBox { id: showBatterySecret; text: "Secret"; checked: true; spacing: 4 }
+                                    CheckBox { id: showBatterySecret; text: "Secret"; spacing: 4
+                                        enabled: secretEnabled.checked }
                                 }
 
                                 RowLayout {
@@ -1613,6 +1615,7 @@ Item {
                                     Layout.fillWidth: true
                                     spacing: 0
                                     Layout.topMargin: 6
+                                    enabled: secretEnabled.checked
 
                                     RowLayout {
                                         Layout.fillWidth: true
@@ -1641,6 +1644,7 @@ Item {
                                     Layout.fillWidth: true
                                     spacing: 0
                                     Layout.topMargin: 6
+                                    enabled: secretEnabled.checked
 
                                     RowLayout {
                                         Layout.fillWidth: true
@@ -1868,6 +1872,7 @@ Item {
                                         popup.background: Rectangle { radius: 12; color: "#2b2b31"; border.width: 1; border.color: "#43434c" }
                                         Layout.preferredWidth: 170
                                         model: ["G30", "M365/1S/PRO2", "Slave", "G2 (untested)"]
+                                        currentIndex: 2
                                     }
                                 }
                         }
