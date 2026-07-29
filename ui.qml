@@ -1176,7 +1176,6 @@ Item {
                                         anchors.right: chipVal.left
                                         anchors.rightMargin: 4
                                         anchors.bottom: chipVal.bottom
-                                        anchors.bottomMargin: 1
                                         text: modelData.cap
                                         font.bold: true
                                         font.pointSize: root.titleSize * 0.78
