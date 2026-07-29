@@ -69,6 +69,7 @@ Item {
     property bool stCruise: false
     property bool stCruiseEn: false
     property bool stCruiseAllow: false
+    property bool stSecretAllow: false
     property bool stImgOk: true
     property real stFet: 0
     property real stMot: 0
@@ -121,6 +122,7 @@ Item {
         stImgOk = parseBoolToken(p[17])
         stFet = Number.parseFloat(p[18]) || 0
         stMot = Number.parseFloat(p[19]) || 0
+        stSecretAllow = parseBoolToken(p[20])
         if (Math.abs(stWatts) > stWattPeak)
             stWattPeak = Math.abs(stWatts)
     }
@@ -1304,7 +1306,7 @@ Item {
                                     height: parent.height
                                     radius: parent.radius
                                     x: root.stMode === 2 ? 0 : (root.stMode === 1 ? modeTrack.width / 3 : modeTrack.width * 2 / 3)
-                                    color: root.stMode === 2 ? "#1e80d5" : (root.stMode === 1 ? "#25af32" : "#dc2e28")
+                                    color: root.stMode === 2 ? "#25af32" : (root.stMode === 1 ? "#1e80d5" : "#dc2e28")
                                     Behavior on x { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
                                     Behavior on color { ColorAnimation { duration: 220 } }
                                 }
@@ -1350,7 +1352,8 @@ Item {
                                     { t: "LOCK", on: root.stLock, col: "#c31f1f", fg: "#ffffff",
                                       cmd: "(ctrl-lock " + (root.stLock ? "false" : "true") + ")", live: true },
                                     { t: "SECRET", on: root.stSecret, col: "#771ca2", fg: "#ffffff",
-                                      cmd: "(ctrl-secret " + (root.stSecret ? "false" : "true") + ")", live: true },
+                                      cmd: "(ctrl-secret " + (root.stSecret ? "false" : "true") + ")",
+                                      live: root.stSecretAllow },
                                     { t: "LIGHT", on: root.stLight, col: "#e49e26", fg: root.stLight ? "#1e1a10" : "#ffffff",
                                       cmd: "(ctrl-light " + (root.stLight ? "false" : "true") + ")", live: true },
                                     { t: "CRUISE", on: root.stCruiseEn, col: "#118579", fg: "#ffffff",
@@ -1361,7 +1364,11 @@ Item {
                                     Layout.preferredWidth: 1
                                     Layout.preferredHeight: Math.round(64 * ctlScroll.hS)
                                     radius: 14
-                                    color: modelData.on ? modelData.col : "#26262b"
+                                    // a switched off function reads as off, not as dimmed
+                                    // colour - the state it was left in says nothing once
+                                    // the function itself is gone
+                                    readonly property bool lit: modelData.live && modelData.on
+                                    color: lit ? modelData.col : "#26262b"
                                     opacity: modelData.live ? 1.0 : 0.35
                                     scale: cellTouch.pressed ? 0.975 : 1.0
                                     Behavior on color { ColorAnimation { duration: 180 } }
@@ -1373,7 +1380,7 @@ Item {
                                         text: modelData.t
                                         font.bold: true
                                         font.pointSize: root.titleSize
-                                        color: modelData.on ? modelData.fg : "#ffffff"
+                                        color: parent.lit ? modelData.fg : "#ffffff"
                                     }
                                     MouseArea {
                                         id: cellTouch
@@ -1435,12 +1442,6 @@ Item {
                                         background: Rectangle { radius: 10; color: "#33333a"; implicitHeight: 42 }
                                         popup.background: Rectangle { radius: 12; color: "#2b2b31"; border.width: 1; border.color: "#43434c" }
                                     }
-                                }
-
-                                RowLayout {
-                                    Layout.fillWidth: true
-                                    Label { text: "Secret"; Layout.fillWidth: true }
-                                    CheckBox { id: secretEnabled; text: "Enabled"; spacing: 4 }
                                 }
 
                                 RowLayout {
@@ -1768,6 +1769,12 @@ Item {
                                 anchors.top: parent.top
                                 anchors.margins: 14
                                 spacing: 8
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Label { text: "Secret Modes"; Layout.fillWidth: true }
+                                    CheckBox { id: secretEnabled; text: "Enabled"; spacing: 4 }
+                                }
 
                                 RowLayout {
                                     Layout.fillWidth: true
