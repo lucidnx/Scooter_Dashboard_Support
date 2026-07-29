@@ -713,7 +713,7 @@ Item {
                         var cx = width / 2
                         var cy = height / 2
                         var d = height * 0.20
-                        ctx.strokeStyle = "#c8c8d0"
+                        ctx.strokeStyle = "#ffffff"
                         ctx.lineWidth = Math.max(2, height * 0.075)
                         ctx.lineCap = "round"
                         ctx.lineJoin = "round"
@@ -808,6 +808,9 @@ Item {
                     anchors.fill: parent
                     contentWidth: availableWidth
                     clip: true
+                    // nothing to scroll means nothing moves - the flickable a
+                    // ScrollView makes still rubber bands a page that already fits
+                    Component.onCompleted: contentItem.boundsBehavior = Flickable.StopAtBounds
 
                     // The dial, the battery bar and the figure cards follow the
                     // width and nothing else. Only the buttons, the mode picker and
@@ -999,10 +1002,13 @@ Item {
                                         var ctx = getContext("2d")
                                         ctx.reset()
                                         var c = width / 2
-                                        var r = width * 0.225
+                                        // 0.237 + half the stroke reaches 0.2875 either
+                                        // side, the cog's own extent, so the two badges
+                                        // carry a glyph of the same width
+                                        var r = width * 0.237
                                         var cy = c + r * 0.11
                                         ctx.strokeStyle = ink
-                                        ctx.lineWidth = Math.max(2, width * 0.075)
+                                        ctx.lineWidth = Math.max(2, width * 0.100)
                                         ctx.lineCap = "round"
                                         ctx.beginPath()
                                         ctx.arc(c, cy, r, Math.PI * -0.28, Math.PI * 1.28, false)
@@ -1054,11 +1060,11 @@ Item {
                                                     a + pitch - half * 1.35, false)
                                         }
                                         ctx.closePath()
-                                        ctx.fillStyle = "#c8c8d0"
+                                        ctx.fillStyle = "#ffffff"
                                         ctx.fill()
                                         ctx.lineJoin = "round"
                                         ctx.lineWidth = width * 0.037
-                                        ctx.strokeStyle = "#c8c8d0"
+                                        ctx.strokeStyle = "#ffffff"
                                         ctx.stroke()
                                         ctx.beginPath()
                                         ctx.arc(c, c, width * 0.104, 0, Math.PI * 2)
@@ -1170,7 +1176,7 @@ Item {
                                     text: root.battShowRange
                                         ? "~" + Math.round(useMph.checked ? (root.stRange * 0.621371)
                                                                           : root.stRange)
-                                          + (useMph.checked ? "mi" : "km")
+                                          + (useMph.checked ? " mi" : " km")
                                         : Math.round(root.stBatt) + " %"
                                     font.bold: true
                                     font.pointSize: root.titleSize * 1.05
@@ -1370,6 +1376,9 @@ Item {
                     anchors.fill: parent
                     contentWidth: availableWidth
                     clip: true
+                    // nothing to scroll means nothing moves - the flickable a
+                    // ScrollView makes still rubber bands a page that already fits
+                    Component.onCompleted: contentItem.boundsBehavior = Flickable.StopAtBounds
 
                     ColumnLayout {
                         width: parent.width
@@ -1641,6 +1650,9 @@ Item {
                     anchors.fill: parent
                     contentWidth: availableWidth
                     clip: true
+                    // nothing to scroll means nothing moves - the flickable a
+                    // ScrollView makes still rubber bands a page that already fits
+                    Component.onCompleted: contentItem.boundsBehavior = Flickable.StopAtBounds
 
                     ColumnLayout {
                         width: parent.width
@@ -1782,6 +1794,9 @@ Item {
                     anchors.fill: parent
                     contentWidth: availableWidth
                     clip: true
+                    // nothing to scroll means nothing moves - the flickable a
+                    // ScrollView makes still rubber bands a page that already fits
+                    Component.onCompleted: contentItem.boundsBehavior = Flickable.StopAtBounds
 
                     ColumnLayout {
                         width: parent.width
