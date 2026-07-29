@@ -786,7 +786,10 @@ Item {
             clip: true
 
             Page {
-                enabled: !isSlave
+                // Not enabled: !isSlave - the gear that reaches Setup is on this
+                // page, and enabled is ANDed down the tree, so disabling the page
+                // would leave a slaved unit with no way into its own settings.
+                // The controls that command a scooter are gated one by one below.
 
                 // Adaptive polling: keep at most one request in flight so it
                 // paces to the BLE round-trip instead of piling up (which caused
@@ -990,6 +993,8 @@ Item {
                             // empty, level with the top of the dial
                             Rectangle {
                                 id: powerBtn
+                                enabled: !root.isSlave
+                                opacity: root.isSlave ? 0.3 : 1.0
                                 // whole pixels - a canvas on a fractional bound rounds its
                                 // render target and the glyph drifts off the circle it sits in
                                 x: Math.round(dial.width - width - dial.pad)
@@ -1298,6 +1303,8 @@ Item {
                             Rectangle {
                                 id: modeTrack
                                 anchors.fill: parent
+                                enabled: !root.isSlave
+                                opacity: root.isSlave ? 0.3 : 1.0
                                 radius: 14
                                 color: "#26262b"
 
@@ -1343,6 +1350,8 @@ Item {
                             Layout.fillWidth: true
                             Layout.topMargin: Math.round(14 * ctlScroll.hS)
                             Layout.bottomMargin: 14
+                            enabled: !root.isSlave
+                            opacity: root.isSlave ? 0.3 : 1.0
                             columns: 2
                             rowSpacing: Math.round(16 * ctlScroll.hS)
                             columnSpacing: Math.round(14 * ctlScroll.hS)
