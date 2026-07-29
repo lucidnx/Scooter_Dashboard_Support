@@ -652,70 +652,15 @@ Item {
         anchors.margins: 6
         spacing: 4
 
-        // One header instead of a tab bar. The Control screen is the app and
-        // carries only the model and a gear; everything else lives behind it,
-        // with a back button and its own section picker.
+        // No chrome on the Control screen - its gear lives in the dial. This
+        // header is the settings one: a way back, and a section picker.
         Item {
+            visible: swipeView.currentIndex !== 0
             Layout.fillWidth: true
             Layout.preferredHeight: 42
 
-            Label {
-                visible: swipeView.currentIndex === 0
-                anchors.left: parent.left
-                anchors.leftMargin: 6
-                anchors.verticalCenter: parent.verticalCenter
-                text: modelBox.currentText
-                font.bold: true
-                font.pointSize: root.titleSize * 0.95
-                opacity: 0.5
-            }
-
-            Rectangle {
-                id: gearBtn
-                visible: swipeView.currentIndex === 0
-                anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
-                width: 38
-                height: width
-                radius: width / 2
-                color: gearTouch.pressed ? "#3a3a44" : "#2b2b31"
-                Behavior on color { ColorAnimation { duration: 140 } }
-
-                Canvas {
-                    anchors.fill: parent
-                    onPaint: {
-                        var ctx = getContext("2d")
-                        ctx.reset()
-                        var c = width / 2
-                        var ri = width * 0.16
-                        var ro = width * 0.30
-                        ctx.strokeStyle = "#c8c8d0"
-                        ctx.lineWidth = Math.max(1.6, width * 0.075)
-                        ctx.lineCap = "round"
-                        ctx.beginPath()
-                        ctx.arc(c, c, ri, 0, Math.PI * 2)
-                        ctx.stroke()
-                        for (var i = 0; i < 8; i++) {
-                            var a = i * Math.PI / 4
-                            ctx.beginPath()
-                            ctx.moveTo(c + Math.cos(a) * (ri + width * 0.05),
-                                       c + Math.sin(a) * (ri + width * 0.05))
-                            ctx.lineTo(c + Math.cos(a) * ro, c + Math.sin(a) * ro)
-                            ctx.stroke()
-                        }
-                    }
-                }
-                MouseArea {
-                    id: gearTouch
-                    anchors.fill: parent
-                    anchors.margins: -6
-                    onClicked: swipeView.currentIndex = 1
-                }
-            }
-
             Rectangle {
                 id: backBtn
-                visible: swipeView.currentIndex !== 0
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
                 width: 40
@@ -752,7 +697,6 @@ Item {
 
             Rectangle {
                 id: secTrack
-                visible: swipeView.currentIndex !== 0
                 anchors.left: backBtn.right
                 anchors.leftMargin: 8
                 anchors.right: parent.right
