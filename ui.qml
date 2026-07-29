@@ -1162,19 +1162,22 @@ Item {
 
                                     clip: true
 
+                                    // The figure's right edge is pinned just past the
+                                    // card's centre, so a third digit grows leftwards and
+                                    // the letters stay in a column down the row instead of
+                                    // being shoved about by the value's width.
                                     Label {
                                         id: chipVal
-                                        anchors.centerIn: parent
+                                        anchors.right: parent.horizontalCenter
+                                        anchors.rightMargin: -Math.round(root.titleSize * 0.28)
+                                        anchors.verticalCenter: parent.verticalCenter
                                         text: modelData.val
                                         font.bold: true
                                         font.pointSize: root.titleSize * 1.05
                                     }
-                                    // The marker sits left of the figure and on its
-                                    // bottom, so the figures stay lined up across the row
-                                    // and nothing has to fit above or below them.
                                     Label {
-                                        anchors.right: chipVal.left
-                                        anchors.rightMargin: 4
+                                        anchors.left: chipVal.right
+                                        anchors.leftMargin: 4
                                         anchors.bottom: chipVal.bottom
                                         text: modelData.cap
                                         font.bold: true
