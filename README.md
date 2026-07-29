@@ -5,19 +5,23 @@ lock with alarm, fully remappable button/lever gestures, cruise control, rear li
 BMS support and a live remote-control dashboard - all configured from a phone-friendly UI
 and stored on the ESC.
 
-<!-- fixed width so screenshots render the same size regardless of capture resolution -->
+<!-- fixed width so screenshots render the same size regardless of capture resolution.
+     the settings tabs are half width, so two rows of them stand exactly as tall as
+     Control and Modes beside them -->
 
-| Control | Modes |
-|---------|-------|
-| <img src="screenshots/control.jpg" alt="Control" width="220"> | <img src="screenshots/modes.jpg" alt="Modes" width="220"> |
-
-| General | General |
-|---------|---------|
-| <img src="screenshots/general1.jpg" alt="General 1" width="220"> | <img src="screenshots/general2.jpg" alt="General 2" width="220"> |
-
-| Setup | Setup | Setup |
-|-------|-------|-------|
-| <img src="screenshots/setup1.jpg" alt="Setup 1" width="220"> | <img src="screenshots/setup2.jpg" alt="Setup 2" width="220"> | <img src="screenshots/setup3.jpg" alt="Setup 3" width="220"> |
+<table>
+<tr>
+<td><img src="screenshots/control.jpg" alt="Control" width="220"></td>
+<td><img src="screenshots/modes.jpg" alt="Modes" width="220"></td>
+<td>
+<img src="screenshots/general1.jpg" alt="General 1" width="110">
+<img src="screenshots/general2.jpg" alt="General 2" width="110">
+<img src="screenshots/setup1.jpg" alt="Setup 1" width="110"><br>
+<img src="screenshots/setup2.jpg" alt="Setup 2" width="110">
+<img src="screenshots/setup3.jpg" alt="Setup 3" width="110">
+</td>
+</tr>
+</table>
 
 ## ⚠️ Disclaimer
 

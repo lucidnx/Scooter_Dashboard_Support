@@ -31,6 +31,23 @@ def strip_images(src):
     while i < len(lines):
         line = lines[i]
 
+        # an html table of images goes whole - dropping the img lines alone would
+        # leave the tr and td tags behind as markup in the description
+        if "<table" in line:
+            j = i
+            block = []
+            while j < len(lines):
+                block.append(lines[j])
+                if "</table>" in lines[j]:
+                    break
+                j += 1
+            if any(is_image(b) for b in block):
+                i = j + 1
+                while i < len(lines) and not lines[i].strip():
+                    i += 1
+                out.append("")
+                continue
+
         # a table row of images takes its header and separator with it
         if is_image(line) and line.lstrip().startswith("|"):
             while out and out[-1].lstrip().startswith("|"):
@@ -49,9 +66,14 @@ def strip_images(src):
                 i += 1
             continue
 
-        # the comment only explains the screenshot widths
-        if "fixed width so screenshots" in line:
+        # comments are notes to whoever edits the README, never to the reader -
+        # and a multi line one would otherwise spill its middle into the description
+        if line.lstrip().startswith("<!--"):
+            while i < len(lines) and "-->" not in lines[i]:
+                i += 1
             i += 1
+            while i < len(lines) and not lines[i].strip():
+                i += 1
             continue
 
         out.append(line)
