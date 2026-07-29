@@ -984,10 +984,10 @@ Item {
                                         var ctx = getContext("2d")
                                         ctx.reset()
                                         var c = width / 2
-                                        var r = width * 0.205
+                                        var r = width * 0.225
                                         var cy = c + r * 0.11
                                         ctx.strokeStyle = "#ffffff"
-                                        ctx.lineWidth = Math.max(2, width * 0.068)
+                                        ctx.lineWidth = Math.max(2, width * 0.075)
                                         ctx.lineCap = "round"
                                         ctx.beginPath()
                                         ctx.arc(c, cy, r, Math.PI * -0.28, Math.PI * 1.28, false)
@@ -1027,24 +1027,26 @@ Item {
                                         // alternating arcs at the tip and root radius, the
                                         // corners rounded by stroking the same path, then the
                                         // hub punched back out in the badge's own colour.
+                                        // Its 0.288 extent is the power mark's, so the badge
+                                        // shows the same ring of colour around both.
                                         var pitch = Math.PI * 2 / 7
                                         var half = pitch * 0.22
                                         ctx.beginPath()
                                         for (var i = 0; i < 7; i++) {
                                             var a = i * pitch
-                                            ctx.arc(c, c, width * 0.325, a - half, a + half, false)
-                                            ctx.arc(c, c, width * 0.205, a + half * 1.35,
+                                            ctx.arc(c, c, width * 0.269, a - half, a + half, false)
+                                            ctx.arc(c, c, width * 0.170, a + half * 1.35,
                                                     a + pitch - half * 1.35, false)
                                         }
                                         ctx.closePath()
                                         ctx.fillStyle = "#c8c8d0"
                                         ctx.fill()
                                         ctx.lineJoin = "round"
-                                        ctx.lineWidth = width * 0.045
+                                        ctx.lineWidth = width * 0.037
                                         ctx.strokeStyle = "#c8c8d0"
                                         ctx.stroke()
                                         ctx.beginPath()
-                                        ctx.arc(c, c, width * 0.125, 0, Math.PI * 2)
+                                        ctx.arc(c, c, width * 0.104, 0, Math.PI * 2)
                                         ctx.fillStyle = hub
                                         ctx.fill()
                                     }
@@ -1061,10 +1063,17 @@ Item {
                             // leaves the space free, sat down on the level the ring's own
                             // ends reach. Figure in the speed's colour, unit in the same
                             // grey as km/h, so it reads as one more dial reading.
+                            FontMetrics { id: whkmFm; font: whkmNum.font }
+
                             Row {
                                 anchors.horizontalCenter: parent.left
                                 anchors.horizontalCenterOffset: dial.dcx
                                 anchors.bottom: parent.bottom
+                                // a label's box carries the font's descent below the
+                                // baseline, so bottom alignment alone would leave the
+                                // digits floating - drop it by exactly that much and
+                                // they sit on the level both rings end at
+                                anchors.bottomMargin: -Math.round(whkmFm.height - whkmFm.ascent)
                                 spacing: 3
 
                                 Label {
