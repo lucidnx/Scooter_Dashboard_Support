@@ -13,11 +13,12 @@ import sys
 
 REPO = "https://github.com/lucidnx/vesc_scooter_support"
 
-# VESC Tool's renderer eats an underscore as emphasis and does not honour a
-# backslash escape either - escaping only swapped the missing underscores for
-# visible backslashes. So nothing the reader sees may contain one. A link
-# destination is never parsed for emphasis, so the target is safe; the label
-# carries no underscore to lose.
+# VESC Tool's renderer applies emphasis to the source text before it works out
+# what is a link, and it honours no backslash escape. So an underscore is lost
+# wherever it appears - in the text as a missing character, and in a destination
+# as a literal <em> inside the href. Nothing may carry one: labels avoid them,
+# and encode_link_targets swaps them for %5F, which is the same character to the
+# server and has nothing to pair with.
 REPO_MD = "[VESC Scooter Support on GitHub](" + REPO + ")"
 
 
@@ -92,6 +93,13 @@ def code_bare_urls(src):
                   lambda m: "`" + m.group(0) + "`", src)
 
 
+def encode_link_targets(src):
+    """Underscores in a link destination, percent encoded so emphasis cannot reach
+    them. Verified against GitHub: the %5F form serves the same repository."""
+    return re.sub(r"\]\(([^)\s]*)\)",
+                  lambda m: "](" + m.group(1).replace("_", "%5F") + ")", src)
+
+
 def add_link(src):
     lines = src.split("\n")
     for i, line in enumerate(lines):
@@ -103,7 +111,7 @@ def add_link(src):
 
 def main():
     src = open(sys.argv[1]).read()
-    dst = add_link(code_bare_urls(strip_images(src)))
+    dst = encode_link_targets(add_link(code_bare_urls(strip_images(src))))
     open(sys.argv[2], "w").write(dst)
     print(f"pkg_readme: {len(src)} -> {len(dst)} bytes, "
           f"{sum(1 for l in src.split(chr(10)) if is_image(l))} images dropped")
