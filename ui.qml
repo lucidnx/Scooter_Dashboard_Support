@@ -1158,9 +1158,9 @@ Item {
                     // hits that floor, and scrolls from there.
                     readonly property real wS: Math.max(0.85, Math.min(1.25, availableWidth / 320))
                     // 64 is the height nothing scales: four 6px column gaps, the dial
-                    // card's 10px top margin, and 10 above plus 20 below the dial inside
-                    // it. 240 is what hS moves, ten less than before since the battery
-                    // bar's own margin gave that up to the card. 68 is the battery bar and the figure
+                    // card's 10px top margin, 10 above plus 15 below the dial inside it,
+                    // and the 5 the battery bar carries so trimming the card did not
+                    // close the gap. 240 is what hS moves. 68 is the battery bar and the figure
                     // cards, which follow the width; 250 is everything hS does move.
                     readonly property real hS: Math.max(0.69, Math.min(1.0,
                         (height - availableWidth * 0.767 - 64 - 68 * wS) / 240))
@@ -1199,7 +1199,7 @@ Item {
                         Rectangle {
                             Layout.fillWidth: true
                             Layout.topMargin: 10
-                            Layout.preferredHeight: dial.height + 30
+                            Layout.preferredHeight: dial.height + 25
                             radius: 18
                             color: "#26262b"
 
@@ -1497,7 +1497,7 @@ Item {
 
                         Item {
                             Layout.fillWidth: true
-                            Layout.topMargin: Math.round(8 * ctlScroll.hS)
+                            Layout.topMargin: Math.round(8 * ctlScroll.hS) + 5
                             Layout.preferredHeight: Math.round(28 * ctlScroll.wS)
 
                             Rectangle {
@@ -2384,13 +2384,13 @@ Item {
                                             RowLayout {
                                                 Layout.fillWidth: true
                                                 Label { text: "Throttle Offset (V)"; Layout.fillWidth: true }
-                                                TextField { id: lightOffThr; horizontalAlignment: TextInput.AlignHCenter; text: "0.000"; Layout.preferredWidth: 90; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampOffsetV(lightOffThr); topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? "#33333a" : "#2b2b31" } }
+                                                TextField { id: lightOffThr; horizontalAlignment: TextInput.AlignHCenter; text: "0.000"; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampOffsetV(lightOffThr); topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? "#33333a" : "#2b2b31" } }
                                             }
 
                                             RowLayout {
                                                 Layout.fillWidth: true
                                                 Label { text: "Throttle Gain (k)"; Layout.fillWidth: true }
-                                                TextField { id: lightGainThr; horizontalAlignment: TextInput.AlignHCenter; text: "1.000"; Layout.preferredWidth: 90; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampGain(lightGainThr); topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? "#33333a" : "#2b2b31" } }
+                                                TextField { id: lightGainThr; horizontalAlignment: TextInput.AlignHCenter; text: "1.000"; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampGain(lightGainThr); topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? "#33333a" : "#2b2b31" } }
                                             }
 
                                             Button {
@@ -2422,13 +2422,13 @@ Item {
                                             RowLayout {
                                                 Layout.fillWidth: true
                                                 Label { text: "Brake Offset (V)"; Layout.fillWidth: true }
-                                                TextField { id: lightOffBrk; horizontalAlignment: TextInput.AlignHCenter; text: "0.000"; Layout.preferredWidth: 90; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampOffsetV(lightOffBrk); topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? "#33333a" : "#2b2b31" } }
+                                                TextField { id: lightOffBrk; horizontalAlignment: TextInput.AlignHCenter; text: "0.000"; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampOffsetV(lightOffBrk); topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? "#33333a" : "#2b2b31" } }
                                             }
 
                                             RowLayout {
                                                 Layout.fillWidth: true
                                                 Label { text: "Brake Gain (k)"; Layout.fillWidth: true }
-                                                TextField { id: lightGainBrk; horizontalAlignment: TextInput.AlignHCenter; text: "1.000"; Layout.preferredWidth: 90; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampGain(lightGainBrk); topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? "#33333a" : "#2b2b31" } }
+                                                TextField { id: lightGainBrk; horizontalAlignment: TextInput.AlignHCenter; text: "1.000"; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampGain(lightGainBrk); topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? "#33333a" : "#2b2b31" } }
                                             }
 
                                             Button {
@@ -2676,7 +2676,7 @@ Item {
                                     }
 
                                     Label {
-                                        text: "Master switch - off means cruise cannot be turned on from the Control tab, the app or a gesture. Activates by holding steady speed for set time. Cancel on throttle/brake input. Requires Cruise Control enabled in VESC."
+                                        text: "Activates by holding steady speed for set time. Cancel on throttle/brake input. Requires Cruise Control enabled in VESC."
                                         opacity: 0.6
                                         wrapMode: Text.WordWrap
                                         Layout.fillWidth: true
