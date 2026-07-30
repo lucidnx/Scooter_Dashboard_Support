@@ -2303,6 +2303,14 @@ Item {
                                 }
                             }
                         }
+
+                        Label {
+                            Layout.fillWidth: true
+                            Layout.topMargin: 10
+                            wrapMode: Text.WordWrap
+                            opacity: 0.6
+                            text: "Every value here is written to each controller, so two motors draw twice the watts."
+                        }
                     }
                 }
             }
