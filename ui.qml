@@ -72,7 +72,7 @@ Item {
     property bool stSecretAllow: false
     property int stMotors: 1
     property int stFault: 0
-    property real stSlip: 0
+    property int stSlip: 0
     property bool stImgOk: true
     property real stFet: 0
     property real stMot: 0
@@ -129,7 +129,7 @@ Item {
         stSecretAllow = parseBoolToken(p[20])
         stMotors = Math.max(1, Number.parseInt(p[21]) || 1)
         stFault = Number.parseInt(p[22]) || 0
-        stSlip = Number.parseFloat(p[23]) || 0
+        stSlip = Number.parseInt(p[23]) || 0
         if (Math.abs(stWatts) > stWattPeak)
             stWattPeak = Math.abs(stWatts)
     }
@@ -1523,7 +1523,7 @@ Item {
                                     height: width
                                     radius: width / 2
                                     color: "#33333a"
-                                    readonly property bool slipping: root.stSlip > 3.0
+                                    readonly property bool slipping: root.stSlip > 0
                                     Canvas {
                                         id: tcIcon
                                         anchors.fill: parent

@@ -101,6 +101,7 @@
 (def auto-taillight false) ; taillight on from power on
 (def brake-light-mode 1) ; 0=off, 1=on while braking, 2=blink while braking
 (def taillight-brightness 0.4) ; tail light duty, 0-1
+(def tc-erpm-diff 3000.0) ; VESC's own traction control threshold, read at boot
 
 ; Overmodulation factor per mode (max recommended 1.15)
 (def eco-om 1.0)
@@ -284,7 +285,7 @@
 
 @const-start
 
-(def settings-version 408i32)
+(def settings-version 409i32)
 
 ; Persistent settings: (label . (eeprom-offset type))
 (def eeprom-addrs '(
@@ -432,6 +433,10 @@
 
 ; the single cruise switch splits in two: the old one becomes the master, and
 ; the Control tab gets its own that starts on, so the master alone decides
+(defun write-v409-defaults () ; settings added in v409
+    (write-setting 'taillight-brightness 0.4)
+)
+
 (defun write-v408-defaults () ; settings added in v408
     {
         (write-setting 'cruise-allow (read-setting 'cruise-enabled))
@@ -571,6 +576,7 @@
         (write-v406-defaults)
         (write-v407-defaults)
         (write-v408-defaults)
+        (write-v409-defaults)
         (write-setting 'secret-presses 1)
         (write-setting 'secret-combo 0)
         (write-setting 'secret-requires-lock false)
@@ -643,6 +649,7 @@
                     (if (< ver 406i32) (write-v406-defaults))
                     (if (< ver 407i32) (write-v407-defaults))
                     (if (< ver 408i32) (write-v408-defaults))
+                    (if (< ver 409i32) (write-v409-defaults))
                     (write-setting 'ver-code settings-version)
                 }
             )
@@ -670,7 +677,7 @@
             bms-soc-enable cruise-allow cruise-enabled cruise-delay cruise-deviation
             cruise-min-speed cruise-max-speed app-pin app-enable secret-off-presses
             secret-off-combo secret-off-requires-lock idle-display
-        ) (set n (read-setting n)))
+        ) (set n (let ((v (read-setting n))) (if (eq v nil) (eval n) v))))
         (set 'min-speed (read-setting 'min-speed-kmh))
         (set 'eco-speed (/ (read-setting 'eco-speed-kmh) 3.6))
         (set 'drive-speed (/ (read-setting 'drive-speed-kmh) 3.6))
@@ -744,6 +751,7 @@
 (defun apply-runtime-settings ()
     {
         (load-settings)
+        (trap (let ((v (conf-get 'tc-max-diff))) (if (> v 50) (setq tc-erpm-diff v))))
         (if (!= model 2) { ; slave must not push conf to the master
             (apply-software-adc)
             (apply-dash-power)
@@ -1016,7 +1024,7 @@
         (if secret-enabled "true " "false ")
         (str-from-n (+ 1 (length (can-list-devs))) "%d ")
         (str-from-n (get-fault) "%d ")
-        (str-from-n (wheel-slip) "%.1f")
+        (str-from-n (wheel-slip) "%d")
     ))
 )
 
@@ -2771,12 +2779,12 @@
 )
 
 (defun wheel-slip ()
-    (let ((lo (abs (get-speed))) (hi (abs (get-speed))))
+    (let ((lo (abs (get-rpm))) (hi (abs (get-rpm))))
         {
             (loopforeach i (can-list-devs)
-                (trap (let ((v (abs (canget-speed i))))
+                (trap (let ((v (abs (canget-rpm i))))
                     { (if (< v lo) (setq lo v)) (if (> v hi) (setq hi v)) })))
-            (* 3.6 (- hi lo))
+            (if (> (- hi lo) tc-erpm-diff) 1 0)
         }
     )
 )
