@@ -1499,48 +1499,25 @@ Item {
                                         property color ink: root.stFault > 0 ? "#dc2e28" : "#4a4a52"
                                         onInkChanged: requestPaint()
                                         onPaint: {
-                                            // the engine block in outline: an eight sided
-                                            // body stepping out twice on the right, a pill
-                                            // cam cover on a stem, a bracket down the left
+                                            // solid engine block: flat right edge with one
+                                            // step, a plain bar across the top on its stem,
+                                            // and the bracket down the left
                                             var ctx = getContext("2d")
                                             ctx.reset()
                                             var u = width / 100
-                                            var lw = width * 0.058
-                                            ctx.strokeStyle = ink
-                                            ctx.lineWidth = lw
-                                            ctx.lineJoin = "round"
-                                            var pts = [24,42, 32,32, 58,32, 66,42, 74,42,
-                                                       74,36, 88,36, 88,48, 78,48, 78,56,
-                                                       88,56, 88,68, 74,68, 74,62, 66,62,
-                                                       58,72, 32,72, 24,62]
+                                            ctx.fillStyle = ink
+                                            var pts = [20,44, 28,36, 56,36, 64,44, 86,44,
+                                                       86,60, 76,60, 76,66, 34,66, 26,58,
+                                                       20,58]
                                             ctx.beginPath()
                                             ctx.moveTo(pts[0] * u, pts[1] * u)
                                             for (var i = 2; i < pts.length; i += 2)
                                                 ctx.lineTo(pts[i] * u, pts[i + 1] * u)
                                             ctx.closePath()
-                                            ctx.stroke()
-                                            ctx.beginPath() // cam cover, a pill
-                                            ctx.moveTo(35.5 * u, 12 * u)
-                                            ctx.lineTo(58.5 * u, 12 * u)
-                                            ctx.arc(58.5 * u, 17.5 * u, 5.5 * u,
-                                                    -Math.PI / 2, Math.PI / 2, false)
-                                            ctx.lineTo(35.5 * u, 23 * u)
-                                            ctx.arc(35.5 * u, 17.5 * u, 5.5 * u,
-                                                    Math.PI / 2, Math.PI * 1.5, false)
-                                            ctx.closePath()
-                                            ctx.stroke()
-                                            ctx.beginPath()
-                                            ctx.moveTo(47 * u, 23 * u); ctx.lineTo(47 * u, 32 * u)
-                                            ctx.stroke()
-                                            ctx.lineCap = "round"
-                                            ctx.lineWidth = lw * 1.15
-                                            ctx.beginPath()
-                                            ctx.moveTo(11 * u, 34 * u); ctx.lineTo(11 * u, 70 * u)
-                                            ctx.stroke()
-                                            ctx.lineWidth = lw
-                                            ctx.beginPath()
-                                            ctx.moveTo(11 * u, 52 * u); ctx.lineTo(24 * u, 52 * u)
-                                            ctx.stroke()
+                                            ctx.fill()
+                                            ctx.fillRect(33 * u, 26 * u, 28 * u, 6 * u)
+                                            ctx.fillRect(44 * u, 32 * u, 6 * u, 6 * u)
+                                            ctx.fillRect(8 * u, 36 * u, 7 * u, 28 * u)
                                         }
                                     }
                                 }
@@ -1566,23 +1543,23 @@ Item {
                                             var r = width * 0.375
                                             var lw = width * 0.115
                                             var rad = Math.PI / 180
-                                            var at = function (a, f) {
-                                                return [c + r * f * Math.cos(a * rad),
-                                                        c + r * f * Math.sin(a * rad)]
-                                            }
                                             ctx.strokeStyle = ink
                                             ctx.fillStyle = ink
                                             ctx.lineWidth = lw
                                             ctx.beginPath()
-                                            ctx.arc(c, c, r, 132 * rad, (60 + 360) * rad, false)
+                                            ctx.arc(c, c, r, -160 * rad, 140 * rad, false)
                                             ctx.stroke()
-                                            var t = at(148, 1.20)
-                                            var o1 = at(132, 1.45)
-                                            var i1 = at(132, 0.45)
+                                            // head on the tangent, so it reads as
+                                            // travelling round the ring
+                                            var ae = 140 * rad
+                                            var ex = c + r * Math.cos(ae)
+                                            var ey = c + r * Math.sin(ae)
+                                            var tx = -Math.sin(ae), ty = Math.cos(ae)
+                                            var nx = Math.cos(ae), ny = Math.sin(ae)
                                             ctx.beginPath()
-                                            ctx.moveTo(t[0], t[1])
-                                            ctx.lineTo(o1[0], o1[1])
-                                            ctx.lineTo(i1[0], i1[1])
+                                            ctx.moveTo(ex + tx * lw * 2.2, ey + ty * lw * 2.2)
+                                            ctx.lineTo(ex + nx * lw * 1.5, ey + ny * lw * 1.5)
+                                            ctx.lineTo(ex - nx * lw * 1.5, ey - ny * lw * 1.5)
                                             ctx.closePath()
                                             ctx.fill()
                                             var s = width * 0.52
