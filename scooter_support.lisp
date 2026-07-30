@@ -101,7 +101,7 @@
 (def auto-taillight false) ; taillight on from power on
 (def brake-light-mode 1) ; 0=off, 1=on while braking, 2=blink while braking
 (def taillight-brightness 0.4) ; tail light duty, 0-1
-(def slip-diff (/ 2.0 3.6)) ; wheel speed spread that counts as slip
+(def slip-erpm 1200.0) ; wheel spread that counts as slip, from VESC's own at boot
 (def slip-hold 2.0) ; seconds the slip lamp stays on after the last one
 (def slip-time 0)
 
@@ -753,6 +753,9 @@
 (defun apply-runtime-settings ()
     {
         (load-settings)
+        ; the ADC app fades the motor out between 60 ERPM of wheel spread and its
+        ; own limit, so light the lamp once it has taken away nearly half
+        (trap (let ((v (* 0.4 (conf-get 'adc-tc-max-diff)))) (if (> v 60) (setq slip-erpm v))))
         (if (!= model 2) { ; slave must not push conf to the master
             (apply-software-adc)
             (apply-dash-power)
@@ -2784,12 +2787,12 @@
 ; the next poll, so asking on demand almost always looks at a wheel that has
 ; already gripped again.
 (defun check-slip ()
-    (let ((lo (abs (get-speed))) (hi (abs (get-speed))))
+    (let ((lo (abs (get-rpm))) (hi (abs (get-rpm))))
         {
             (loopforeach i (can-list-devs)
-                (trap (let ((v (abs (canget-speed i))))
+                (trap (let ((v (abs (canget-rpm i))))
                     { (if (< v lo) (setq lo v)) (if (> v hi) (setq hi v)) })))
-            (if (> (- hi lo) slip-diff) (set 'slip-time (systime)))
+            (if (> (- hi lo) slip-erpm) (set 'slip-time (systime)))
         }
     )
 )
