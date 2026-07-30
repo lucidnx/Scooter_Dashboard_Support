@@ -102,8 +102,9 @@ Lock, mode switching, headlight, secret mode and leaving secret mode are fully r
   range, and voltage, current, controller and motor temperature - the temperatures flash
   red above the warning thresholds
 - **Warning lamps** above the speed: a red engine lamp for any controller fault, and an
-  amber traction lamp that flashes on wheel slip. Slip is the spread between the fastest
-  and the slowest wheel, so it needs more than one motor to see anything
+  amber traction lamp that flashes on wheel slip. Slip is more than 2 km/h between the
+  fastest and the slowest wheel, so it needs more than one motor to see anything, and the
+  lamp holds for two seconds so a brief one is not missed
 - A disabled function reads as off: with cruise or secret switched off in Setup, its button
   greys out and stops responding rather than sitting there coloured
 - Buttons for power, lock/unlock, headlight, secret, cruise and mode selection

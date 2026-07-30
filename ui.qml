@@ -1551,7 +1551,7 @@ Item {
                                         onInkChanged: requestPaint()
                                         onPaint: root.paintIcon(getContext("2d"),
                                                                 root.iconEngine,
-                                                                width, 0.60, ink)
+                                                                width, 0.68, ink)
                                     }
                                 }
 
@@ -1568,7 +1568,7 @@ Item {
                                         onInkChanged: requestPaint()
                                         onPaint: root.paintIcon(getContext("2d"),
                                                                 root.iconSlip,
-                                                                width, 0.60, ink)
+                                                                width, 0.68, ink)
                                         SequentialAnimation on opacity {
                                             running: tcLamp.slipping
                                             loops: Animation.Infinite

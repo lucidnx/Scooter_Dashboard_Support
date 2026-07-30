@@ -101,7 +101,9 @@
 (def auto-taillight false) ; taillight on from power on
 (def brake-light-mode 1) ; 0=off, 1=on while braking, 2=blink while braking
 (def taillight-brightness 0.4) ; tail light duty, 0-1
-(def tc-erpm-diff 3000.0) ; VESC's own traction control threshold, read at boot
+(def slip-diff (/ 2.0 3.6)) ; wheel speed spread that counts as slip
+(def slip-hold 2.0) ; seconds the slip lamp stays on after the last one
+(def slip-time 0)
 
 ; Overmodulation factor per mode (max recommended 1.15)
 (def eco-om 1.0)
@@ -751,7 +753,6 @@
 (defun apply-runtime-settings ()
     {
         (load-settings)
-        (trap (let ((v (conf-get 'tc-max-diff))) (if (> v 50) (setq tc-erpm-diff v))))
         (if (!= model 2) { ; slave must not push conf to the master
             (apply-software-adc)
             (apply-dash-power)
@@ -1570,6 +1571,7 @@
 (defun handle-features()
     {
         (set 'cur-speed-kmh (* (get-lowest-speed) 3.6))
+        (check-slip)
 
         ; battery %: BMS reads can throw if no BMS is present - keep them from
         ; skipping the safety-critical output/lock handling below
@@ -2778,16 +2780,22 @@
     }
 )
 
-(defun wheel-slip ()
-    (let ((lo (abs (get-rpm))) (hi (abs (get-rpm))))
+; Sampled in the feature loop, not when the UI asks: a slip is over long before
+; the next poll, so asking on demand almost always looks at a wheel that has
+; already gripped again.
+(defun check-slip ()
+    (let ((lo (abs (get-speed))) (hi (abs (get-speed))))
         {
             (loopforeach i (can-list-devs)
-                (trap (let ((v (abs (canget-rpm i))))
+                (trap (let ((v (abs (canget-speed i))))
                     { (if (< v lo) (setq lo v)) (if (> v hi) (setq hi v)) })))
-            (if (> (- hi lo) tc-erpm-diff) 1 0)
+            (if (> (- hi lo) slip-diff) (set 'slip-time (systime)))
         }
     )
 )
+
+(defun wheel-slip ()
+    (if (and (> slip-time 0) (< (secs-since slip-time) slip-hold)) 1 0))
 
 (defun get-lowest-speed()
     {
