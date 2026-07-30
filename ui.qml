@@ -1535,7 +1535,9 @@ Item {
                             // Warning lamps, centred above the speed: a fault from the
                             // controller, and wheel slip. Slip is the spread between the
                             // fastest and slowest wheel, so a single motor never shows it.
-                            // Both are the size of the CC badge.
+                            // Both are the size of the CC badge, and both are only there
+                            // when they have something to say - the row recentres on
+                            // whichever is left.
                             Row {
                                 anchors.horizontalCenter: parent.left
                                 anchors.horizontalCenterOffset: dial.dcx
@@ -1548,13 +1550,14 @@ Item {
                                     height: width
                                     radius: width / 2
                                     color: "#33333a"
+                                    visible: root.stFault > 0
                                     Canvas {
                                         anchors.fill: parent
-                                        property color ink: root.stFault > 0 ? "#dc2e28" : "#4a4a52"
-                                        onInkChanged: requestPaint()
+                                        // a canvas hidden before it ever drew comes back blank
+                                        onVisibleChanged: if (visible) requestPaint()
                                         onPaint: root.paintIcon(getContext("2d"),
                                                                 root.iconEngine,
-                                                                width, 0.75, 0, 0, ink)
+                                                                width, 0.75, 0, 0, "#dc2e28")
                                     }
                                 }
 
@@ -1565,13 +1568,13 @@ Item {
                                     radius: width / 2
                                     color: "#33333a"
                                     readonly property bool slipping: root.stSlip > 0
+                                    visible: slipping
                                     Canvas {
                                         anchors.fill: parent
-                                        property color ink: tcLamp.slipping ? "#e49e26" : "#4a4a52"
-                                        onInkChanged: requestPaint()
+                                        onVisibleChanged: if (visible) requestPaint()
                                         onPaint: root.paintIcon(getContext("2d"),
                                                                 root.iconSlip,
-                                                                width, 0.75, 0.015, 0.014, ink)
+                                                                width, 0.75, 0.015, 0.014, "#e49e26")
                                         SequentialAnimation on opacity {
                                             running: tcLamp.slipping
                                             loops: Animation.Infinite
