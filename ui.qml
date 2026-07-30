@@ -1481,15 +1481,16 @@ Item {
                             // Warning lamps, centred above the speed: a fault from the
                             // controller, and wheel slip. Slip is the spread between the
                             // fastest and slowest wheel, so a single motor never shows it.
+                            // Both are the size of the CC badge.
                             Row {
                                 anchors.horizontalCenter: parent.left
                                 anchors.horizontalCenterOffset: dial.dcx
                                 anchors.verticalCenter: parent.top
-                                anchors.verticalCenterOffset: dial.dcy - dial.drad * 0.50
-                                spacing: Math.round(dial.drad * 0.07)
+                                anchors.verticalCenterOffset: dial.dcy - dial.drad * 0.56
+                                spacing: Math.round(dial.ccd * 0.30)
 
                                 Rectangle {
-                                    width: Math.round(dial.drad * 0.25)
+                                    width: dial.ccd
                                     height: width
                                     radius: width / 2
                                     color: "#33333a"
@@ -1498,79 +1499,94 @@ Item {
                                         property color ink: root.stFault > 0 ? "#dc2e28" : "#4a4a52"
                                         onInkChanged: requestPaint()
                                         onPaint: {
+                                            // engine block in outline, as the lamp is drawn
                                             var ctx = getContext("2d")
                                             ctx.reset()
                                             var u = width / 100
-                                            ctx.fillStyle = ink
+                                            ctx.strokeStyle = ink
+                                            ctx.lineWidth = width * 0.062
+                                            ctx.lineJoin = "round"
                                             ctx.beginPath()
-                                            ctx.moveTo(22 * u, 44 * u); ctx.lineTo(30 * u, 44 * u)
-                                            ctx.lineTo(30 * u, 36 * u); ctx.lineTo(50 * u, 36 * u)
-                                            ctx.lineTo(50 * u, 30 * u); ctx.lineTo(70 * u, 30 * u)
-                                            ctx.lineTo(70 * u, 40 * u); ctx.lineTo(80 * u, 40 * u)
-                                            ctx.lineTo(80 * u, 56 * u); ctx.lineTo(70 * u, 56 * u)
-                                            ctx.lineTo(70 * u, 68 * u); ctx.lineTo(40 * u, 68 * u)
-                                            ctx.lineTo(40 * u, 60 * u); ctx.lineTo(22 * u, 60 * u)
+                                            ctx.moveTo(20 * u, 40 * u); ctx.lineTo(30 * u, 40 * u)
+                                            ctx.lineTo(38 * u, 31 * u); ctx.lineTo(58 * u, 31 * u)
+                                            ctx.lineTo(66 * u, 40 * u); ctx.lineTo(76 * u, 40 * u)
+                                            ctx.lineTo(76 * u, 33 * u); ctx.lineTo(88 * u, 33 * u)
+                                            ctx.lineTo(88 * u, 51 * u); ctx.lineTo(76 * u, 51 * u)
+                                            ctx.lineTo(76 * u, 59 * u); ctx.lineTo(66 * u, 59 * u)
+                                            ctx.lineTo(58 * u, 68 * u); ctx.lineTo(34 * u, 68 * u)
+                                            ctx.lineTo(26 * u, 59 * u); ctx.lineTo(20 * u, 59 * u)
                                             ctx.closePath()
-                                            ctx.fill()
-                                            ctx.fillRect(34 * u, 24 * u, 22 * u, 7 * u)
+                                            ctx.stroke()
+                                            ctx.beginPath() // cam cover and its stem
+                                            ctx.rect(30 * u, 16 * u, 30 * u, 9 * u)
+                                            ctx.stroke()
+                                            ctx.beginPath()
+                                            ctx.moveTo(45 * u, 25 * u); ctx.lineTo(45 * u, 31 * u)
+                                            ctx.stroke()
+                                            ctx.lineCap = "round" // the bracket on the left
+                                            ctx.beginPath()
+                                            ctx.moveTo(10 * u, 36 * u); ctx.lineTo(10 * u, 63 * u)
+                                            ctx.stroke()
+                                            ctx.beginPath()
+                                            ctx.moveTo(10 * u, 49 * u); ctx.lineTo(20 * u, 49 * u)
+                                            ctx.stroke()
                                         }
                                     }
                                 }
 
                                 Rectangle {
                                     id: tcLamp
-                                    width: Math.round(dial.drad * 0.25)
+                                    width: dial.ccd
                                     height: width
                                     radius: width / 2
                                     color: "#33333a"
                                     readonly property bool slipping: root.stSlip > 0
                                     Canvas {
-                                        id: tcIcon
                                         anchors.fill: parent
                                         property color ink: tcLamp.slipping ? "#e49e26" : "#4a4a52"
                                         onInkChanged: requestPaint()
                                         onPaint: {
+                                            // a ring left open at the lower left, an arrow
+                                            // closing it, and a warning triangle inside
                                             var ctx = getContext("2d")
                                             ctx.reset()
                                             var c = width / 2
-                                            var r = width * 0.34
+                                            var r = width * 0.375
+                                            var lw = width * 0.100
+                                            var rad = Math.PI / 180
                                             ctx.strokeStyle = ink
                                             ctx.fillStyle = ink
-                                            ctx.lineWidth = width * 0.10
-                                            ctx.lineCap = "round"
+                                            ctx.lineWidth = lw
                                             ctx.beginPath()
-                                            ctx.arc(c, c, r, Math.PI * 118 / 180, Math.PI * 400 / 180, false)
+                                            ctx.arc(c, c, r, 143 * rad, (95 + 360) * rad, false)
                                             ctx.stroke()
-                                            // the arrow head that closes the loop
-                                            var a0 = Math.PI * 118 / 180
-                                            var ax = c + r * Math.cos(a0), ay = c + r * Math.sin(a0)
-                                            var d = a0 + Math.PI / 2
                                             ctx.beginPath()
-                                            ctx.moveTo(ax + Math.cos(d) * width * 0.16,
-                                                       ay + Math.sin(d) * width * 0.16)
-                                            ctx.lineTo(ax + Math.cos(a0 - 0.5) * width * 0.13,
-                                                       ay + Math.sin(a0 - 0.5) * width * 0.13)
-                                            ctx.lineTo(ax - Math.cos(a0 - 0.5) * width * 0.02,
-                                                       ay - Math.sin(a0 - 0.5) * width * 0.02)
+                                            ctx.moveTo(c + r * Math.cos(172 * rad),
+                                                       c + r * Math.sin(172 * rad))
+                                            ctx.lineTo(c + (r + lw * 1.05) * Math.cos(143 * rad),
+                                                       c + (r + lw * 1.05) * Math.sin(143 * rad))
+                                            ctx.lineTo(c + (r - lw * 1.05) * Math.cos(143 * rad),
+                                                       c + (r - lw * 1.05) * Math.sin(143 * rad))
                                             ctx.closePath()
                                             ctx.fill()
-                                            // warning triangle
-                                            var s = width * 0.40, h = s * 0.88
+                                            var s = width * 0.46
+                                            var h = s * 0.87
+                                            var cy = c + width * 0.01
                                             ctx.lineWidth = s * 0.15
                                             ctx.lineJoin = "round"
                                             ctx.beginPath()
-                                            ctx.moveTo(c, c - h / 2)
-                                            ctx.lineTo(c + s / 2, c + h / 2)
-                                            ctx.lineTo(c - s / 2, c + h / 2)
+                                            ctx.moveTo(c, cy - h / 2)
+                                            ctx.lineTo(c + s / 2, cy + h / 2)
+                                            ctx.lineTo(c - s / 2, cy + h / 2)
                                             ctx.closePath()
                                             ctx.stroke()
                                             ctx.lineWidth = s * 0.13
+                                            ctx.lineCap = "round"
                                             ctx.beginPath()
-                                            ctx.moveTo(c, c - h * 0.12)
-                                            ctx.lineTo(c, c + h * 0.14)
+                                            ctx.moveTo(c, cy - h * 0.13); ctx.lineTo(c, cy + h * 0.11)
                                             ctx.stroke()
                                             ctx.beginPath()
-                                            ctx.arc(c, c + h * 0.31, s * 0.075, 0, Math.PI * 2)
+                                            ctx.arc(c, cy + h * 0.29, s * 0.072, 0, Math.PI * 2)
                                             ctx.fill()
                                         }
                                         SequentialAnimation on opacity {
