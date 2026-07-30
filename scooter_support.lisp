@@ -121,7 +121,7 @@
 (def cruise-delay 5.0) ; seconds of steady speed to activate
 (def cruise-deviation 1.0) ; km/h window counted as "steady"
 (def cruise-min-speed 5.0) ; km/h - cruise can only activate at or above this
-(def cruise-max-speed 100.0) ; km/h - cruise can only activate at or below this
+(def cruise-max-speed 35.0) ; km/h - cruise can only activate at or below this
 
 ; -> Code starts here (DO NOT CHANGE ANYTHING BELOW THIS LINE IF YOU DON'T KNOW WHAT YOU ARE DOING)
 
@@ -287,7 +287,7 @@
 
 @const-start
 
-(def settings-version 409i32)
+(def settings-version 410i32)
 
 ; Persistent settings: (label . (eeprom-offset type))
 (def eeprom-addrs '(
@@ -435,6 +435,13 @@
 
 ; the single cruise switch splits in two: the old one becomes the master, and
 ; the Control tab gets its own that starts on, so the master alone decides
+(defun write-v410-defaults () ; settings changed in v410
+    ; the old ceiling was 100, which is no ceiling at all - leave anyone who
+    ; picked their own alone
+    (if (>= (read-setting 'cruise-max-speed) 100.0)
+        (write-setting 'cruise-max-speed 35.0))
+)
+
 (defun write-v409-defaults () ; settings added in v409
     (write-setting 'taillight-brightness 0.4)
 )
@@ -486,7 +493,7 @@
 (defun write-v310-defaults () ; settings added in v310
     {
         (write-setting 'cruise-min-speed 5.0)
-        (write-setting 'cruise-max-speed 100.0)
+        (write-setting 'cruise-max-speed 35.0)
     }
 )
 
@@ -579,6 +586,7 @@
         (write-v407-defaults)
         (write-v408-defaults)
         (write-v409-defaults)
+        (write-v410-defaults)
         (write-setting 'secret-presses 1)
         (write-setting 'secret-combo 0)
         (write-setting 'secret-requires-lock false)
@@ -652,6 +660,7 @@
                     (if (< ver 407i32) (write-v407-defaults))
                     (if (< ver 408i32) (write-v408-defaults))
                     (if (< ver 409i32) (write-v409-defaults))
+                    (if (< ver 410i32) (write-v410-defaults))
                     (write-setting 'ver-code settings-version)
                 }
             )
