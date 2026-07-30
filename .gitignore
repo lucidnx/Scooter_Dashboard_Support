@@ -5,6 +5,8 @@ tools/*
 !tools/check_qml.py
 !tools/pkg_readme.py
 !tools/pad_lisp.py
+!tools/svg_to_canvas.py
+!tools/icons/
 .DS_Store
 # diagnostic captures and tools, not part of the package
 logs/

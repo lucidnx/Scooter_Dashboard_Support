@@ -87,6 +87,57 @@ Item {
                        a.b + (b.b - a.b) * t, 1)
     }
 
+    // The two warning lamps, traced off the real icons by tools/svg_to_canvas.py:
+    // closed rings in a unit box, the cut outs wound the other way so the plain
+    // fill leaves them open. A package carries no image files, and the modules
+    // that would take an SVG are not in VESC Tool's own QML, so Canvas draws them.
+    readonly property var iconEngine: [
+        [0.2269, 0.1531, 0.6508, 0.1531, 0.6508, 0.204, 0.5356, 0.204, 0.5356, 0.2385, 0.6507, 0.2384, 0.6714, 0.2457,
+         0.6817, 0.265, 0.6824, 0.3045, 0.7329, 0.3051, 0.7536, 0.318, 0.7853, 0.4285, 0.8151, 0.4285, 0.848, 0.3245,
+         0.861, 0.3089, 0.9473, 0.3044, 0.9709, 0.3141, 0.9816, 0.343, 0.996, 0.4617, 0.9979, 0.6667, 0.9797, 0.8237,
+         0.9673, 0.8413, 0.9414, 0.8469, 0.8747, 0.8465, 0.8563, 0.8386, 0.8157, 0.7232, 0.7859, 0.7226, 0.7564, 0.8281,
+         0.7351, 0.8456, 0.3117, 0.8453, 0.214, 0.7226, 0.1199, 0.7221, 0.0968, 0.711, 0.0895, 0.688, 0.0895, 0.5449,
+         0.0631, 0.5449, 0.0631, 0.6905, 0, 0.6905, 0, 0.3361, 0.0631, 0.3361, 0.0631, 0.4817, 0.0895, 0.4817,
+         0.0894, 0.3393, 0.0982, 0.3139, 0.1192, 0.3046, 0.1953, 0.3045, 0.197, 0.2603, 0.217, 0.2398, 0.3555, 0.2385,
+         0.3555, 0.204, 0.2269, 0.204],
+        [0.3245, 0.3016, 0.259, 0.3016, 0.2565, 0.347, 0.2368, 0.3661, 0.1532, 0.3677, 0.1532, 0.6589, 0.2481, 0.665,
+         0.3425, 0.7829, 0.7028, 0.7828, 0.7345, 0.6755, 0.7474, 0.6627, 0.7681, 0.6591, 0.8414, 0.6595, 0.8601, 0.6672,
+         0.9011, 0.7828, 0.9215, 0.7828, 0.9336, 0.6608, 0.9359, 0.5308, 0.9204, 0.3683, 0.9011, 0.3683, 0.8679, 0.4702,
+         0.8562, 0.4864, 0.7601, 0.4915, 0.7336, 0.4754, 0.7028, 0.3677, 0.6484, 0.3671, 0.6298, 0.3599, 0.6192, 0.3408,
+         0.6186, 0.3016]]
+    readonly property var iconSlip: [
+        [0.6165, 0.0133, 0.7215, 0.0522, 0.8187, 0.1172, 0.899, 0.2057, 0.9507, 0.3002, 0.9836, 0.421, 0.9848, 0.5382,
+         0.9619, 0.6443, 0.9099, 0.7513, 0.8347, 0.8418, 0.7234, 0.9201, 0.6693, 0.9435, 0.6474, 0.9387, 0.6371, 0.9207,
+         0.6438, 0.9003, 0.7392, 0.8479, 0.8053, 0.7943, 0.8619, 0.7252, 0.9045, 0.6438, 0.9287, 0.5537, 0.9331, 0.4826,
+         0.9273, 0.4122, 0.9026, 0.3246, 0.8579, 0.2411, 0.8044, 0.1779, 0.7387, 0.1247, 0.6628, 0.0853, 0.5929, 0.0634,
+         0.4931, 0.0537, 0.4052, 0.0646, 0.324, 0.0913, 0.2128, 0.1624, 0.1642, 0.2134, 0.1262, 0.2674, 0.0797, 0.3802,
+         0.0679, 0.4503, 0.0676, 0.5183, 0.0831, 0.6066, 0.1138, 0.6839, 0.1633, 0.7606, 0.2255, 0.8225, 0.2481, 0.8378,
+         0.3132, 0.746, 0.3225, 0.7388, 0.3314, 0.743, 0.3897, 0.9593, 0.3737, 0.9711, 0.1672, 1, 0.1573, 0.9954,
+         0.1564, 0.982, 0.2178, 0.8861, 0.1102, 0.781, 0.0684, 0.7147, 0.0384, 0.6462, 0.0184, 0.5666, 0.013, 0.484,
+         0.019, 0.4046, 0.0387, 0.3266, 0.0701, 0.2565, 0.1117, 0.1917, 0.2123, 0.0932, 0.2888, 0.0477, 0.3607, 0.0193,
+         0.4448, 0.0023, 0.5025, 0],
+        [0.5147, 0.1391, 0.8135, 0.6731, 0.8126, 0.6895, 0.7995, 0.7033, 0.6561, 0.7068, 0.1833, 0.706, 0.1676, 0.6874,
+         0.1816, 0.6437, 0.4511, 0.1651, 0.4742, 0.1273, 0.4896, 0.1182],
+        [0.4644, 0.2842, 0.4548, 0.3073, 0.4679, 0.5415, 0.5124, 0.5398, 0.5229, 0.2979, 0.5056, 0.2793, 0.488, 0.275],
+        [0.4607, 0.5703, 0.4487, 0.5998, 0.4589, 0.6275, 0.4872, 0.6404, 0.516, 0.6305, 0.5298, 0.6, 0.5178, 0.5716,
+         0.4888, 0.5592]]
+
+    function paintIcon(ctx, rings, size, frac, col) {
+        ctx.reset()
+        var e = size * frac
+        var o = (size - e) / 2
+        ctx.beginPath()
+        for (var s = 0; s < rings.length; s++) {
+            var r = rings[s]
+            ctx.moveTo(o + r[0] * e, o + r[1] * e)
+            for (var i = 2; i < r.length; i += 2)
+                ctx.lineTo(o + r[i] * e, o + r[i + 1] * e)
+            ctx.closePath()
+        }
+        ctx.fillStyle = col
+        ctx.fill()
+    }
+
     property bool battShowRange: false
 
     // Highest draw seen this session, the fallback when nothing caps watts.
@@ -1498,27 +1549,9 @@ Item {
                                         anchors.fill: parent
                                         property color ink: root.stFault > 0 ? "#dc2e28" : "#4a4a52"
                                         onInkChanged: requestPaint()
-                                        onPaint: {
-                                            // solid engine block: flat right edge with one
-                                            // step, a plain bar across the top on its stem,
-                                            // and the bracket down the left
-                                            var ctx = getContext("2d")
-                                            ctx.reset()
-                                            var u = width / 100
-                                            ctx.fillStyle = ink
-                                            var pts = [20,44, 28,36, 56,36, 64,44, 86,44,
-                                                       86,60, 76,60, 76,66, 34,66, 26,58,
-                                                       20,58]
-                                            ctx.beginPath()
-                                            ctx.moveTo(pts[0] * u, pts[1] * u)
-                                            for (var i = 2; i < pts.length; i += 2)
-                                                ctx.lineTo(pts[i] * u, pts[i + 1] * u)
-                                            ctx.closePath()
-                                            ctx.fill()
-                                            ctx.fillRect(33 * u, 26 * u, 28 * u, 6 * u)
-                                            ctx.fillRect(44 * u, 32 * u, 6 * u, 6 * u)
-                                            ctx.fillRect(8 * u, 36 * u, 7 * u, 28 * u)
-                                        }
+                                        onPaint: root.paintIcon(getContext("2d"),
+                                                                root.iconEngine,
+                                                                width, 0.60, ink)
                                     }
                                 }
 
@@ -1533,54 +1566,9 @@ Item {
                                         anchors.fill: parent
                                         property color ink: tcLamp.slipping ? "#e49e26" : "#4a4a52"
                                         onInkChanged: requestPaint()
-                                        onPaint: {
-                                            // ring open at the bottom left, a blunt arrow
-                                            // head closing it pointing down and out, and a
-                                            // warning triangle filling the inside
-                                            var ctx = getContext("2d")
-                                            ctx.reset()
-                                            var c = width / 2
-                                            var r = width * 0.375
-                                            var lw = width * 0.115
-                                            var rad = Math.PI / 180
-                                            ctx.strokeStyle = ink
-                                            ctx.fillStyle = ink
-                                            ctx.lineWidth = lw
-                                            ctx.beginPath()
-                                            ctx.arc(c, c, r, -160 * rad, 140 * rad, false)
-                                            ctx.stroke()
-                                            // head on the tangent, so it reads as
-                                            // travelling round the ring
-                                            var ae = 140 * rad
-                                            var ex = c + r * Math.cos(ae)
-                                            var ey = c + r * Math.sin(ae)
-                                            var tx = -Math.sin(ae), ty = Math.cos(ae)
-                                            var nx = Math.cos(ae), ny = Math.sin(ae)
-                                            ctx.beginPath()
-                                            ctx.moveTo(ex + tx * lw * 2.2, ey + ty * lw * 2.2)
-                                            ctx.lineTo(ex + nx * lw * 1.5, ey + ny * lw * 1.5)
-                                            ctx.lineTo(ex - nx * lw * 1.5, ey - ny * lw * 1.5)
-                                            ctx.closePath()
-                                            ctx.fill()
-                                            var s = width * 0.52
-                                            var h = s * 0.88
-                                            ctx.lineWidth = s * 0.145
-                                            ctx.lineJoin = "round"
-                                            ctx.beginPath()
-                                            ctx.moveTo(c, c - h / 2)
-                                            ctx.lineTo(c + s / 2, c + h / 2)
-                                            ctx.lineTo(c - s / 2, c + h / 2)
-                                            ctx.closePath()
-                                            ctx.stroke()
-                                            ctx.lineWidth = s * 0.12
-                                            ctx.lineCap = "round"
-                                            ctx.beginPath()
-                                            ctx.moveTo(c, c - h * 0.14); ctx.lineTo(c, c + h * 0.10)
-                                            ctx.stroke()
-                                            ctx.beginPath()
-                                            ctx.arc(c, c + h * 0.28, s * 0.065, 0, Math.PI * 2)
-                                            ctx.fill()
-                                        }
+                                        onPaint: root.paintIcon(getContext("2d"),
+                                                                root.iconSlip,
+                                                                width, 0.60, ink)
                                         SequentialAnimation on opacity {
                                             running: tcLamp.slipping
                                             loops: Animation.Infinite
