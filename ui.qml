@@ -71,6 +71,8 @@ Item {
     property bool stCruiseAllow: false
     property bool stSecretAllow: false
     property int stMotors: 1
+    property int stFault: 0
+    property real stSlip: 0
     property bool stImgOk: true
     property real stFet: 0
     property real stMot: 0
@@ -126,6 +128,8 @@ Item {
         stMot = Number.parseFloat(p[19]) || 0
         stSecretAllow = parseBoolToken(p[20])
         stMotors = Math.max(1, Number.parseInt(p[21]) || 1)
+        stFault = Number.parseInt(p[22]) || 0
+        stSlip = Number.parseFloat(p[23]) || 0
         if (Math.abs(stWatts) > stWattPeak)
             stWattPeak = Math.abs(stWatts)
     }
@@ -486,6 +490,7 @@ Item {
             + boolAtom(rearLightEnable)
             + " " + boolAtom(autoTaillight)
             + " " + [1, 2, 0][brakeLightMode.currentIndex]
+            + " " + (Math.max(5, Math.min(100, Number.parseFloat(tailBright.text) || 40)) / 100)
             + ")")
 
         queueCode("(save-cruise-settings "
@@ -659,6 +664,7 @@ Item {
             autoTaillight.checked = parseBoolToken(parts[2])
             var blm = Number.parseInt(parts[3])
             brakeLightMode.currentIndex = blm === 1 ? 0 : (blm === 2 ? 1 : 2)
+            tailBright.text = Math.round((Number.parseFloat(parts[4]) || 0.4) * 100)
         } else if (parts[0] === "cruise") {
             cruiseEnable.checked = parseBoolToken(parts[1])
             setReal(cruiseDelay, parts[2], 1)
@@ -1472,6 +1478,112 @@ Item {
                                 }
                             }
 
+                            // Warning lamps, centred above the speed: a fault from the
+                            // controller, and wheel slip. Slip is the spread between the
+                            // fastest and slowest wheel, so a single motor never shows it.
+                            Row {
+                                anchors.horizontalCenter: parent.left
+                                anchors.horizontalCenterOffset: dial.dcx
+                                anchors.verticalCenter: parent.top
+                                anchors.verticalCenterOffset: dial.dcy - dial.drad * 0.50
+                                spacing: Math.round(dial.drad * 0.07)
+
+                                Rectangle {
+                                    width: Math.round(dial.drad * 0.25)
+                                    height: width
+                                    radius: width / 2
+                                    color: "#33333a"
+                                    Canvas {
+                                        anchors.fill: parent
+                                        property color ink: root.stFault > 0 ? "#dc2e28" : "#4a4a52"
+                                        onInkChanged: requestPaint()
+                                        onPaint: {
+                                            var ctx = getContext("2d")
+                                            ctx.reset()
+                                            var u = width / 100
+                                            ctx.fillStyle = ink
+                                            ctx.beginPath()
+                                            ctx.moveTo(22 * u, 44 * u); ctx.lineTo(30 * u, 44 * u)
+                                            ctx.lineTo(30 * u, 36 * u); ctx.lineTo(50 * u, 36 * u)
+                                            ctx.lineTo(50 * u, 30 * u); ctx.lineTo(70 * u, 30 * u)
+                                            ctx.lineTo(70 * u, 40 * u); ctx.lineTo(80 * u, 40 * u)
+                                            ctx.lineTo(80 * u, 56 * u); ctx.lineTo(70 * u, 56 * u)
+                                            ctx.lineTo(70 * u, 68 * u); ctx.lineTo(40 * u, 68 * u)
+                                            ctx.lineTo(40 * u, 60 * u); ctx.lineTo(22 * u, 60 * u)
+                                            ctx.closePath()
+                                            ctx.fill()
+                                            ctx.fillRect(34 * u, 24 * u, 22 * u, 7 * u)
+                                        }
+                                    }
+                                }
+
+                                Rectangle {
+                                    id: tcLamp
+                                    width: Math.round(dial.drad * 0.25)
+                                    height: width
+                                    radius: width / 2
+                                    color: "#33333a"
+                                    readonly property bool slipping: root.stSlip > 3.0
+                                    Canvas {
+                                        id: tcIcon
+                                        anchors.fill: parent
+                                        property color ink: tcLamp.slipping ? "#e49e26" : "#4a4a52"
+                                        onInkChanged: requestPaint()
+                                        onPaint: {
+                                            var ctx = getContext("2d")
+                                            ctx.reset()
+                                            var c = width / 2
+                                            var r = width * 0.34
+                                            ctx.strokeStyle = ink
+                                            ctx.fillStyle = ink
+                                            ctx.lineWidth = width * 0.10
+                                            ctx.lineCap = "round"
+                                            ctx.beginPath()
+                                            ctx.arc(c, c, r, Math.PI * 118 / 180, Math.PI * 400 / 180, false)
+                                            ctx.stroke()
+                                            // the arrow head that closes the loop
+                                            var a0 = Math.PI * 118 / 180
+                                            var ax = c + r * Math.cos(a0), ay = c + r * Math.sin(a0)
+                                            var d = a0 + Math.PI / 2
+                                            ctx.beginPath()
+                                            ctx.moveTo(ax + Math.cos(d) * width * 0.16,
+                                                       ay + Math.sin(d) * width * 0.16)
+                                            ctx.lineTo(ax + Math.cos(a0 - 0.5) * width * 0.13,
+                                                       ay + Math.sin(a0 - 0.5) * width * 0.13)
+                                            ctx.lineTo(ax - Math.cos(a0 - 0.5) * width * 0.02,
+                                                       ay - Math.sin(a0 - 0.5) * width * 0.02)
+                                            ctx.closePath()
+                                            ctx.fill()
+                                            // warning triangle
+                                            var s = width * 0.40, h = s * 0.88
+                                            ctx.lineWidth = s * 0.15
+                                            ctx.lineJoin = "round"
+                                            ctx.beginPath()
+                                            ctx.moveTo(c, c - h / 2)
+                                            ctx.lineTo(c + s / 2, c + h / 2)
+                                            ctx.lineTo(c - s / 2, c + h / 2)
+                                            ctx.closePath()
+                                            ctx.stroke()
+                                            ctx.lineWidth = s * 0.13
+                                            ctx.beginPath()
+                                            ctx.moveTo(c, c - h * 0.12)
+                                            ctx.lineTo(c, c + h * 0.14)
+                                            ctx.stroke()
+                                            ctx.beginPath()
+                                            ctx.arc(c, c + h * 0.31, s * 0.075, 0, Math.PI * 2)
+                                            ctx.fill()
+                                        }
+                                        SequentialAnimation on opacity {
+                                            running: tcLamp.slipping
+                                            loops: Animation.Infinite
+                                            alwaysRunToEnd: true
+                                            NumberAnimation { from: 1.0; to: 0.25; duration: 180 }
+                                            NumberAnimation { from: 0.25; to: 1.0; duration: 180 }
+                                        }
+                                    }
+                                }
+                            }
+
                             // cruise sits inside the ring, on the right, flush with
                             // the dial's own edge
                             Rectangle {
@@ -1879,6 +1991,14 @@ Item {
                                     Layout.preferredHeight: 40
                                     Label { text: "Always ON Tail Light"; Layout.fillWidth: true; enabled: rearLightEnable.checked }
                                     CheckBox { id: autoTaillight; spacing: 4; enabled: rearLightEnable.checked; padding: 7; indicator: Rectangle { implicitWidth: 40; implicitHeight: 22; x: parent.leftPadding; y: parent.height / 2 - height / 2; radius: 11; color: parent.checked ? "#613c26" : "#3d3d44"; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } Rectangle { y: 3; width: 16; height: 16; radius: 8; color: parent.parent.checked ? "#f29c65" : "#8e8e98"; x: parent.parent.checked ? 21 : 3; Behavior on color { ColorAnimation { duration: 140 } } Behavior on x { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } } } } }
+                                }
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 40
+                                    enabled: rearLightEnable.checked
+                                    Label { text: "Tail Light Brightness (%)"; Layout.fillWidth: true }
+                                    TextField { id: tailBright; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 3; inputMethodHints: Qt.ImhDigitsOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? "#33333a" : "#2b2b31" } }
                                 }
 
                                 RowLayout {

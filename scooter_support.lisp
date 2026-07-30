@@ -100,7 +100,7 @@
 (def rear-light-enable false)
 (def auto-taillight false) ; taillight on from power on
 (def brake-light-mode 1) ; 0=off, 1=on while braking, 2=blink while braking
-(def taillight-brightness 0.4)
+(def taillight-brightness 0.4) ; tail light duty, 0-1
 
 ; Overmodulation factor per mode (max recommended 1.15)
 (def eco-om 1.0)
@@ -378,6 +378,7 @@
     (light-gain-thr        . (80 f))
     (light-gain-brk        . (81 f))
     (app-pin               . (84 i))
+    (taillight-brightness  . (94 f))
     (app-enable            . (85 b))
     (dash-power-out        . (86 b)) ; kept so the v404 migration can read it
     (power-pin             . (88 i))
@@ -508,6 +509,7 @@
         (write-setting 'rear-light-enable false)
         (write-setting 'auto-taillight false)
         (write-setting 'brake-light-mode 1)
+        (write-setting 'taillight-brightness 0.4)
         (write-setting 'eco-om 1.0)
         (write-setting 'drive-om 1.0)
         (write-setting 'sport-om 1.0)
@@ -662,7 +664,8 @@
             light-offset-brk light-gain-brk lock-presses lock-combo mode-presses
             mode-combo mode-requires-lock light-presses light-combo
             light-requires-lock light-on-boot boot-mode use-mph rear-light-enable
-            power-pin auto-taillight brake-light-mode eco-om drive-om sport-om
+            power-pin auto-taillight brake-light-mode taillight-brightness
+            eco-om drive-om sport-om
             secret-eco-om secret-drive-om secret-sport-om apply-om secret-apply-om
             bms-soc-enable cruise-allow cruise-enabled cruise-delay cruise-deviation
             cruise-min-speed cruise-max-speed app-pin app-enable secret-off-presses
@@ -881,11 +884,12 @@
     }
 )
 
-(defun save-rear-settings (enable auto-tail brake-mode)
+(defun save-rear-settings (enable auto-tail brake-mode bright)
     {
         (write-setting 'rear-light-enable enable)
         (write-setting 'auto-taillight auto-tail)
         (write-setting 'brake-light-mode brake-mode)
+        (write-setting 'taillight-brightness bright)
     }
 )
 
@@ -1010,7 +1014,9 @@
         (str-from-n (highest-temp cur-fet canget-temp-fet) "%.0f ")
         (str-from-n (highest-temp cur-mot canget-temp-motor) "%.0f ")
         (if secret-enabled "true " "false ")
-        (str-from-n (+ 1 (length (can-list-devs))) "%d")
+        (str-from-n (+ 1 (length (can-list-devs))) "%d ")
+        (str-from-n (get-fault) "%d ")
+        (str-from-n (wheel-slip) "%.1f")
     ))
 )
 
@@ -1176,7 +1182,8 @@
             "rear "
             (setting-bool 'rear-light-enable)
             (setting-bool 'auto-taillight)
-            (setting-num 'brake-light-mode "%d")
+            (setting-num 'brake-light-mode "%d ")
+            (setting-num 'taillight-brightness "%.2f")
         ))
         (sleep 0.05)
         (send-data (str-merge
@@ -2761,6 +2768,17 @@
             (rcode-run-noret id '(foc-play-stop))
         )
     }
+)
+
+(defun wheel-slip ()
+    (let ((lo (abs (get-speed))) (hi (abs (get-speed))))
+        {
+            (loopforeach i (can-list-devs)
+                (trap (let ((v (abs (canget-speed i))))
+                    { (if (< v lo) (setq lo v)) (if (> v hi) (setq hi v)) })))
+            (* 3.6 (- hi lo))
+        }
+    )
 )
 
 (defun get-lowest-speed()

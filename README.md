@@ -101,6 +101,9 @@ Lock, mode switching, headlight, secret mode and leaving secret mode are fully r
   the number of controllers on the bus, a battery bar alternating charge and estimated
   range, and voltage, current, controller and motor temperature - the temperatures flash
   red above the warning thresholds
+- **Warning lamps** above the speed: a red engine lamp for any controller fault, and an
+  amber traction lamp that flashes on wheel slip. Slip is the spread between the fastest
+  and the slowest wheel, so it needs more than one motor to see anything
 - A disabled function reads as off: with cruise or secret switched off in Setup, its button
   greys out and stops responding rather than sitting there coloured
 - Buttons for power, lock/unlock, headlight, secret, cruise and mode selection
@@ -128,7 +131,8 @@ including pairing.
 ### 💡 Lights
 - **Auto headlight** at power on
 - **Rear / brake light** on the servo pin: dim tail light following the headlight (or always
-  on), full or blinking brake light while braking
+  on), full or blinking brake light while braking. **Tail Light Brightness** sets how dim,
+  5 - 100%, default 40
 
 ### 🖥️ Dashboard
 - **Idle display** - while standing still the dash speed readout shows battery %, pack
@@ -137,6 +141,9 @@ including pairing.
   warning above 50 °C or below 0 °C
 - **Use Miles** - dash speed and every speed-related setting switch between km/h and mph
 - **Temperature warning icon** with configurable thresholds
+- **Faults reach the dashboard** - the controller's own fault code goes into the dash's
+  error field, so the display flashes it. The number is a **VESC** fault code shown by a
+  dashboard that reads it against the scooter's own table, so read it as a VESC one
 - **Ninebot Max G2** - the handlebar **horn** sounds the dash buzzer, and **holding the turn
   signal button** for three seconds toggles cruise control
 - A long button press turns the dashboard off
