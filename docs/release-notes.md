@@ -22,8 +22,11 @@ listens to.
   headlight.
 - **Battery screen**: on Xiaomi the BMS is emulated, so the app's battery page is populated.
 - **Shutdown from the app** switches the dashboard off, refused above walking pace.
-- **App pairing PIN** - set your own 6-digit code in Setup.
-- **App support can be turned off** in Setup for the sharpest possible throttle.
+- **App pairing PIN** - set your own 6-digit code in Setup. The package answers it, though
+  none of the three apps ever asks: they treat a headlight state change as the pairing
+  confirmation.
+- **App support is off by default** and switchable in Setup - turn it on to use an app,
+  leave it off for the sharpest throttle.
 - Reports firmware 7.0.0 and a `VESC` + ten digit serial so app authors can detect a VESC
   and adapt. Protocol notes: [docs/ninedash.md](ninedash.md).
 
@@ -49,6 +52,16 @@ turn signal lamps, so that button is free.
 talking to its own stock controller, but nobody has run this code on a G2 yet. Please
 report back if you have one.
 
+### Gestures work while riding
+
+The speed above which gestures stop responding is yours to set - **Disable Gestures above**
+in Setup. It defaults to 0.1 km/h, which means standstill only; raise it and modes, the
+headlight and secret mode are all reachable at speed. **Lock** and **power off** are the
+exceptions: they are never accepted with the wheel turning, whatever that is set to.
+
+**Secret OFF** is a new gesture that can only ever *leave* secret mode, so it is a way out
+that cannot turn it on by mistake, and it gained a *Locked* option of its own.
+
 ### Dashboard power control
 
 **ADC1** or **ADC2** can switch the dashboard's supply through a MOSFET - 3.3 V while the
@@ -57,41 +70,49 @@ stays low until the script runs, the dashboard no longer shows error 10 while th
 boots. Off by default. The chosen pin is detached from the ADC app, so it stops working as
 a lever input - the UI warns in red which lever that costs you.
 
-### Rebuilt Control tab
+### Rebuilt UI
 
-- A large speed dial with a **power sub-dial** that scales to the active mode's watt limit,
-  regen shown in a different colour.
+- A large **speed dial** with a power sub-dial that scales to the active mode's watt limit
+  times the number of controllers on the bus, so a dual reads correctly. Regen shown in its
+  own colour.
 - **Battery bar** that walks green to red as the pack drains and alternates between charge
-  and estimated range.
+  and estimated range, with **consumption** (Wh/km or Wh/mi) inside the dial.
 - **Voltage, current, controller and motor temperature** as four cards; the temperatures
   flash red above the warning thresholds set in Setup.
-- **Consumption** (Wh/km or Wh/mi) inside the dial.
-- Power and settings as badges on the dial, a sliding **mode selector**, and lock, secret,
-  light and cruise as full-width buttons.
-- The whole page **scales to the window** and only scrolls once it genuinely cannot fit.
-- Settings are grouped into cards across **General**, **Modes** and **Setup**, reached
-  through the settings badge instead of a tab bar.
+- A function switched off in Setup **reads as off** on the Control tab - cruise and secret
+  grey out and stop responding rather than sitting there coloured.
+- Everything sits on **cards**, on every screen, with one grey for anything you can touch.
+  Settings are grouped across **General**, **Modes** and **Setup**, reached through the
+  settings badge instead of a tab bar.
+- The Control page **scales to the window** and only scrolls once it genuinely cannot fit.
+
+### Backup
+
+**Export** puts every saved setting on the clipboard as a short block of text; **Import**
+takes it back and fills in the fields for you to Save. VESC Tool gives a package no way to
+write a file, so a backup travels as text rather than as a download. The model is not part
+of it, since it belongs to the unit.
 
 ### Other changes
 
 - **Software ADC is switchable per channel** - take throttle from the dashboard and leave
-  brake on a lever wired to the ADC pin, or the other way round.
-- **Light compensation** is only offered for the channels that actually come from the
-  dashboard.
-- **Cruise control's Setup switch is now a master switch** - with it off, cruise cannot be
-  turned on from the Control tab, the app or a gesture.
-- **Secret OFF** gained a *Locked* option, so leaving secret mode can be restricted to the
-  locked state.
+  brake on a lever wired to the ADC pin, or the other way round. **Light compensation** is
+  only offered for the channels that actually come from the dashboard.
+- **Cruise control's Setup switch is a master switch** - with it off, cruise cannot be
+  turned on from the Control tab, an app or a gesture.
 - **Idle display**: pick what the dashboard shows at rest - battery %, pack voltage,
-  controller or motor temperature.
-- **The package says so when the script no longer fits** the controller's const heap,
-  instead of appearing to install and then failing at the next boot.
-- CAN slaves are told to shut down with the master.
+  controller or motor temperature. Off by default now, for both normal and secret modes.
+- **CAN slaves are told to stop** with the master, instead of holding their last command
+  until it times out.
+- **Secret watts** default to 1000 / 1500 / 2000. They were previously unlimited.
+- **The model defaults to Slave**, so a fresh install drives nothing until you tell it which
+  dashboard it has. **Reset** returns it to Slave as well.
 
 ### Upgrading
 
 Install over the old package. Anything older than v4.0 is reconfigured from defaults, so
-**check every tab and re-run the light compensation calibration** after updating.
+**check every tab and re-run the light compensation calibration** after updating. An
+upgrade keeps the model it had; only an explicit Reset returns it to Slave.
 
 ---
 

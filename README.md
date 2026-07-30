@@ -97,9 +97,12 @@ Lock, mode switching, headlight, secret mode and leaving secret mode are fully r
   Control tab, an app or a gesture
 
 ### 📱 Control tab
-- Live speed dial with a power sub-dial that scales to the active mode's watt limit, battery
-  bar alternating charge and estimated range, and voltage, current, controller and motor
-  temperature - the temperatures flash red above the warning thresholds
+- Live speed dial with a power sub-dial that scales to the active mode's watt limit times
+  the number of controllers on the bus, a battery bar alternating charge and estimated
+  range, and voltage, current, controller and motor temperature - the temperatures flash
+  red above the warning thresholds
+- A disabled function reads as off: with cruise or secret switched off in Setup, its button
+  greys out and stops responding rather than sitting there coloured
 - Buttons for power, lock/unlock, headlight, secret, cruise and mode selection
 
 ### 🔗 Third-party app support
@@ -115,7 +118,9 @@ including pairing.
   secret, **Direct power control** toggles the headlight
 - **Battery screen** is populated on Xiaomi - the BMS is emulated
 - **Shutdown from the app** switches the dashboard off, refused above walking pace
-- **App pairing PIN** - set your own 6-digit code in Setup
+- **App pairing PIN** - set your own 6-digit code in Setup. The package answers it, but
+  none of the three apps above ever asks: they treat a headlight state change as the
+  pairing confirmation instead, so the code is there for an app that wants it
 - Can be turned off in **Setup -> Miscellaneous** for the sharpest possible throttle response
 - Protocol details and app pacing measurements:
   [notes for the NineDash developer](docs/ninedash.md)
@@ -130,7 +135,7 @@ including pairing.
   voltage, controller or motor temperature instead. Set separately for normal and secret modes
 - **BMS battery %** - a reporting VESC BMS supplies the percentage, with a temperature
   warning above 50 °C or below 0 °C
-- **mph** - dash speed and every speed-related setting switch between km/h and mph
+- **Use Miles** - dash speed and every speed-related setting switch between km/h and mph
 - **Temperature warning icon** with configurable thresholds
 - **Ninebot Max G2** - the handlebar **horn** sounds the dash buzzer, and **holding the turn
   signal button** for three seconds toggles cruise control
@@ -169,10 +174,6 @@ including pairing.
   until it times out
 - **App traffic never delays the levers** - replies are composed in advance and carried
   inside the dash reply the controller was going to send anyway
-- **Transient faults are trapped** - a BMS, CAN or gyro error cannot kill button, lock and
-  alarm handling
-- **The package says so if the script no longer fits** the controller's memory, instead of
-  installing and then failing at the next boot
 - Hardened UART frame parsing and supervised reader threads
 - Runs from flash; settings stored on the ESC with versioned automatic migrations
 
@@ -269,27 +270,23 @@ as the wiring allows. The electrolytic is polarised: its **marked leg is the min
 and goes to GND**, getting that backwards will destroy it. The ferrite clips over
 the whole bundle anywhere along its length.
 
-> ⚠️ **Check what your VESC's 5V output can supply before wiring it this way.**
-> The dashboard runs from that rail, and a rear/brake light or headlight draws
-> from the same one. On some VESCs it is not enough for all of it. If yours is
-> marginal, power the lights (and/or the dashboard) from a separate step-down
-> converter off the main battery instead, sharing a common ground with the VESC.
-
 #### Rear / brake light (optional)
 
 Driven from the **servo/PPM pin** through an N-channel MOSFET (PWM at 200 Hz - dim tail
 light, full brightness brake light).
 Wiring by [Zodiak1993](https://github.com/Zodiak1993/vesc_m365_dash).
 
-Three things must all be set or the light stays dark:
+Two things must both be set or the light stays dark:
 
 1. **VESC Tool -> App Settings -> General -> `Servo Output` = enabled**
 2. **Setup tab -> `Tail Light Output`** - the master switch. With it off the servo/PPM
    pin is never touched, so it stays free for something else
-3. **Setup tab -> `Always ON Tail Light`** - only if you want the tail light lit
-   independently of the headlight
 
-Power the LED strip from a source that can supply it (see the 5V note above):
+> ⚠️ **Check what your VESC's 5V output can supply before wiring it this way.**
+> The dashboard runs from that rail, and a rear/brake light or headlight draws
+> from the same one. On some VESCs it is not enough for all of it. If yours is
+> marginal, power the lights (and/or the dashboard) from a separate step-down
+> converter off the main battery instead, sharing a common ground with the VESC.
 
 ![Rear / brake light](screenshots/wiring-taillight.svg)
 
