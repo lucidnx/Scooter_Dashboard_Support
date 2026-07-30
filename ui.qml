@@ -122,16 +122,19 @@ Item {
         [0.4607, 0.5703, 0.4487, 0.5998, 0.4589, 0.6275, 0.4872, 0.6404, 0.516, 0.6305, 0.5298, 0.6, 0.5178, 0.5716,
          0.4888, 0.5592]]
 
-    function paintIcon(ctx, rings, size, frac, col) {
+    // dx/dy are fractions of the badge: a shape is centred on its bounding box,
+    // which is not where the eye puts it once something sticks out of one corner
+    function paintIcon(ctx, rings, size, frac, dx, dy, col) {
         ctx.reset()
         var e = size * frac
-        var o = (size - e) / 2
+        var ox = (size - e) / 2 + dx * size
+        var oy = (size - e) / 2 + dy * size
         ctx.beginPath()
         for (var s = 0; s < rings.length; s++) {
             var r = rings[s]
-            ctx.moveTo(o + r[0] * e, o + r[1] * e)
+            ctx.moveTo(ox + r[0] * e, oy + r[1] * e)
             for (var i = 2; i < r.length; i += 2)
-                ctx.lineTo(o + r[i] * e, o + r[i + 1] * e)
+                ctx.lineTo(ox + r[i] * e, oy + r[i + 1] * e)
             ctx.closePath()
         }
         ctx.fillStyle = col
@@ -1551,7 +1554,7 @@ Item {
                                         onInkChanged: requestPaint()
                                         onPaint: root.paintIcon(getContext("2d"),
                                                                 root.iconEngine,
-                                                                width, 0.68, ink)
+                                                                width, 0.75, 0, 0, ink)
                                     }
                                 }
 
@@ -1568,7 +1571,7 @@ Item {
                                         onInkChanged: requestPaint()
                                         onPaint: root.paintIcon(getContext("2d"),
                                                                 root.iconSlip,
-                                                                width, 0.68, ink)
+                                                                width, 0.75, 0, 0.010, ink)
                                         SequentialAnimation on opacity {
                                             running: tcLamp.slipping
                                             loops: Animation.Infinite
