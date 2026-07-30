@@ -1499,36 +1499,47 @@ Item {
                                         property color ink: root.stFault > 0 ? "#dc2e28" : "#4a4a52"
                                         onInkChanged: requestPaint()
                                         onPaint: {
-                                            // engine block in outline, as the lamp is drawn
+                                            // the engine block in outline: an eight sided
+                                            // body stepping out twice on the right, a pill
+                                            // cam cover on a stem, a bracket down the left
                                             var ctx = getContext("2d")
                                             ctx.reset()
                                             var u = width / 100
+                                            var lw = width * 0.058
                                             ctx.strokeStyle = ink
-                                            ctx.lineWidth = width * 0.062
+                                            ctx.lineWidth = lw
                                             ctx.lineJoin = "round"
+                                            var pts = [24,42, 32,32, 58,32, 66,42, 74,42,
+                                                       74,36, 88,36, 88,48, 78,48, 78,56,
+                                                       88,56, 88,68, 74,68, 74,62, 66,62,
+                                                       58,72, 32,72, 24,62]
                                             ctx.beginPath()
-                                            ctx.moveTo(20 * u, 40 * u); ctx.lineTo(30 * u, 40 * u)
-                                            ctx.lineTo(38 * u, 31 * u); ctx.lineTo(58 * u, 31 * u)
-                                            ctx.lineTo(66 * u, 40 * u); ctx.lineTo(76 * u, 40 * u)
-                                            ctx.lineTo(76 * u, 33 * u); ctx.lineTo(88 * u, 33 * u)
-                                            ctx.lineTo(88 * u, 51 * u); ctx.lineTo(76 * u, 51 * u)
-                                            ctx.lineTo(76 * u, 59 * u); ctx.lineTo(66 * u, 59 * u)
-                                            ctx.lineTo(58 * u, 68 * u); ctx.lineTo(34 * u, 68 * u)
-                                            ctx.lineTo(26 * u, 59 * u); ctx.lineTo(20 * u, 59 * u)
+                                            ctx.moveTo(pts[0] * u, pts[1] * u)
+                                            for (var i = 2; i < pts.length; i += 2)
+                                                ctx.lineTo(pts[i] * u, pts[i + 1] * u)
                                             ctx.closePath()
                                             ctx.stroke()
-                                            ctx.beginPath() // cam cover and its stem
-                                            ctx.rect(30 * u, 16 * u, 30 * u, 9 * u)
+                                            ctx.beginPath() // cam cover, a pill
+                                            ctx.moveTo(35.5 * u, 12 * u)
+                                            ctx.lineTo(58.5 * u, 12 * u)
+                                            ctx.arc(58.5 * u, 17.5 * u, 5.5 * u,
+                                                    -Math.PI / 2, Math.PI / 2, false)
+                                            ctx.lineTo(35.5 * u, 23 * u)
+                                            ctx.arc(35.5 * u, 17.5 * u, 5.5 * u,
+                                                    Math.PI / 2, Math.PI * 1.5, false)
+                                            ctx.closePath()
                                             ctx.stroke()
                                             ctx.beginPath()
-                                            ctx.moveTo(45 * u, 25 * u); ctx.lineTo(45 * u, 31 * u)
+                                            ctx.moveTo(47 * u, 23 * u); ctx.lineTo(47 * u, 32 * u)
                                             ctx.stroke()
-                                            ctx.lineCap = "round" // the bracket on the left
+                                            ctx.lineCap = "round"
+                                            ctx.lineWidth = lw * 1.15
                                             ctx.beginPath()
-                                            ctx.moveTo(10 * u, 36 * u); ctx.lineTo(10 * u, 63 * u)
+                                            ctx.moveTo(11 * u, 34 * u); ctx.lineTo(11 * u, 70 * u)
                                             ctx.stroke()
+                                            ctx.lineWidth = lw
                                             ctx.beginPath()
-                                            ctx.moveTo(10 * u, 49 * u); ctx.lineTo(20 * u, 49 * u)
+                                            ctx.moveTo(11 * u, 52 * u); ctx.lineTo(24 * u, 52 * u)
                                             ctx.stroke()
                                         }
                                     }
@@ -1546,47 +1557,51 @@ Item {
                                         property color ink: tcLamp.slipping ? "#e49e26" : "#4a4a52"
                                         onInkChanged: requestPaint()
                                         onPaint: {
-                                            // a ring left open at the lower left, an arrow
-                                            // closing it, and a warning triangle inside
+                                            // ring open at the bottom left, a blunt arrow
+                                            // head closing it pointing down and out, and a
+                                            // warning triangle filling the inside
                                             var ctx = getContext("2d")
                                             ctx.reset()
                                             var c = width / 2
                                             var r = width * 0.375
-                                            var lw = width * 0.100
+                                            var lw = width * 0.115
                                             var rad = Math.PI / 180
+                                            var at = function (a, f) {
+                                                return [c + r * f * Math.cos(a * rad),
+                                                        c + r * f * Math.sin(a * rad)]
+                                            }
                                             ctx.strokeStyle = ink
                                             ctx.fillStyle = ink
                                             ctx.lineWidth = lw
                                             ctx.beginPath()
-                                            ctx.arc(c, c, r, 143 * rad, (95 + 360) * rad, false)
+                                            ctx.arc(c, c, r, 132 * rad, (60 + 360) * rad, false)
                                             ctx.stroke()
+                                            var t = at(148, 1.20)
+                                            var o1 = at(132, 1.45)
+                                            var i1 = at(132, 0.45)
                                             ctx.beginPath()
-                                            ctx.moveTo(c + r * Math.cos(172 * rad),
-                                                       c + r * Math.sin(172 * rad))
-                                            ctx.lineTo(c + (r + lw * 1.05) * Math.cos(143 * rad),
-                                                       c + (r + lw * 1.05) * Math.sin(143 * rad))
-                                            ctx.lineTo(c + (r - lw * 1.05) * Math.cos(143 * rad),
-                                                       c + (r - lw * 1.05) * Math.sin(143 * rad))
+                                            ctx.moveTo(t[0], t[1])
+                                            ctx.lineTo(o1[0], o1[1])
+                                            ctx.lineTo(i1[0], i1[1])
                                             ctx.closePath()
                                             ctx.fill()
-                                            var s = width * 0.46
-                                            var h = s * 0.87
-                                            var cy = c + width * 0.01
-                                            ctx.lineWidth = s * 0.15
+                                            var s = width * 0.52
+                                            var h = s * 0.88
+                                            ctx.lineWidth = s * 0.145
                                             ctx.lineJoin = "round"
                                             ctx.beginPath()
-                                            ctx.moveTo(c, cy - h / 2)
-                                            ctx.lineTo(c + s / 2, cy + h / 2)
-                                            ctx.lineTo(c - s / 2, cy + h / 2)
+                                            ctx.moveTo(c, c - h / 2)
+                                            ctx.lineTo(c + s / 2, c + h / 2)
+                                            ctx.lineTo(c - s / 2, c + h / 2)
                                             ctx.closePath()
                                             ctx.stroke()
-                                            ctx.lineWidth = s * 0.13
+                                            ctx.lineWidth = s * 0.12
                                             ctx.lineCap = "round"
                                             ctx.beginPath()
-                                            ctx.moveTo(c, cy - h * 0.13); ctx.lineTo(c, cy + h * 0.11)
+                                            ctx.moveTo(c, c - h * 0.14); ctx.lineTo(c, c + h * 0.10)
                                             ctx.stroke()
                                             ctx.beginPath()
-                                            ctx.arc(c, cy + h * 0.29, s * 0.072, 0, Math.PI * 2)
+                                            ctx.arc(c, c + h * 0.28, s * 0.065, 0, Math.PI * 2)
                                             ctx.fill()
                                         }
                                         SequentialAnimation on opacity {
