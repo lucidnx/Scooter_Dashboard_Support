@@ -37,3 +37,12 @@ the QML UI and stored in EEPROM — never in separate script variants.
 - `make` produces `vesc_scooter_support.vescpkg` (needs `vesc_tool` on PATH or
   `VESC_TOOL=/path/to/vesc_tool`).
 - Test the built package in VESC Tool before releasing anything.
+
+## Docs
+
+- `README.md` is screenshots, disclaimer, functions, requirements, setup. Nothing else -
+  no per-version "what's new", no hardware lists, no long analysis. Function descriptions
+  are a few lines each; the depth belongs in `docs/`.
+- Release notes go in `docs/release-notes.md`, not the README.
+- Bus captures live in `logs/`, gitignored, named
+  `date_time_dash_build_app_subject.log` and indexed by `logs/README.md`.

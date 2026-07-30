@@ -1,4 +1,5 @@
-(def software-adc true)
+(def software-adc true)  ; ADC1 / throttle from the dashboard
+(def software-adc2 true) ; ADC2 / brake from the dashboard
 ; Decoded lever position counted as a touch. get-adc-decoded is mapped by the
 ; ADC app itself (Start/End voltage + hysteresis, after our light correction),
 ; so >0 already means "past the configured start voltage" - this is just an
@@ -6,8 +7,10 @@
 (def adc-touch 0.02)
 (def temp-warning-motor 80) ; temperature warning for motor in degree celsius
 (def temp-warning-fet 80) ; temperature warning for fet in degree celsius
-(def show-batt-in-idle false) ; battery instead of speed at idle, normal modes
-(def show-batt-idle-secret true) ; same but in secret modes
+(def show-batt-in-idle false) ; show idle-display instead of speed at idle, normal modes
+(def idle-display 0) ; 0 battery %, 1 battery V, 2 controller C, 3 motor C
+(def last-alarm-code 0) ; the code the app reads back after an alarm has cleared
+(def show-batt-idle-secret false) ; same but in secret modes
 (def min-speed 1) ; minimum speed in km/h to enable throttle and brake
 (def button-safety-speed (/ 0.1 3.6)) ; disabling button above 0.1 km/h (due to safety reasons)
 
@@ -36,15 +39,15 @@
 (def secret-enabled true)
 (def secret-eco-speed (/ 27 3.6))
 (def secret-eco-current 1.0)
-(def secret-eco-watts 1200)
+(def secret-eco-watts 1000)
 (def secret-eco-fw 0)
 (def secret-drive-speed (/ 47 3.6))
 (def secret-drive-current 1.0)
-(def secret-drive-watts 1500000)
+(def secret-drive-watts 1500)
 (def secret-drive-fw 0)
 (def secret-sport-speed (/ 1000 3.6)) ; 1000 km/h easy
 (def secret-sport-current 1.0)
-(def secret-sport-watts 1500000)
+(def secret-sport-watts 2000)
 (def secret-sport-fw 10)
 
 ; Per-parameter apply toggles - a disabled parameter is never written to the motor config
@@ -62,9 +65,12 @@
 ; Button gestures (combo: 0=brake+throttle, 1=brake only, 2=throttle only, 3=none)
 ; presses = 0 means no button press needed, the gesture fires from levers alone
 (def secret-presses 1)
+(def secret-off-presses 3) ; a gesture that only ever leaves secret, never enters
+(def secret-off-combo 3)
+(def secret-off-requires-lock false)
 (def secret-combo 0)
 (def secret-requires-lock false) ; secret gesture only works while locked
-(def secret-exit-on-lock true) ; locking drops back to normal modes
+(def secret-exit-on-lock false) ; locking drops back to normal modes
 (def lock-presses 2)
 (def lock-combo 1)
 (def mode-presses 2)
@@ -87,11 +93,17 @@
 (def use-mph false) ; dash shows mph instead of km/h
 (def bms-soc-enable false) ; battery % from a VESC BMS when one reports
 
+; BLE pairing code reported to third-party apps, 6 digits
+(def app-pin 0)
+
 ; Rear light on the servo/PPM pin via PWM (MOSFET driver)
 (def rear-light-enable false)
 (def auto-taillight false) ; taillight on from power on
 (def brake-light-mode 1) ; 0=off, 1=on while braking, 2=blink while braking
-(def taillight-brightness 0.4)
+(def taillight-brightness 0.4) ; tail light duty, 0-1
+(def slip-erpm 1200.0) ; wheel spread that counts as slip, from VESC's own at boot
+(def slip-hold 2.0) ; seconds the slip lamp stays on after the last one
+(def slip-time 0)
 
 ; Overmodulation factor per mode (max recommended 1.15)
 (def eco-om 1.0)
@@ -104,11 +116,12 @@
 (def secret-apply-om false)
 
 ; Cruise control (experimental)
+(def cruise-allow false) ; master switch - without it nothing can turn cruise on
 (def cruise-enabled false)
 (def cruise-delay 5.0) ; seconds of steady speed to activate
 (def cruise-deviation 1.0) ; km/h window counted as "steady"
 (def cruise-min-speed 5.0) ; km/h - cruise can only activate at or above this
-(def cruise-max-speed 100.0) ; km/h - cruise can only activate at or below this
+(def cruise-max-speed 35.0) ; km/h - cruise can only activate at or below this
 
 ; -> Code starts here (DO NOT CHANGE ANYTHING BELOW THIS LINE IF YOU DON'T KNOW WHAT YOU ARE DOING)
 
@@ -119,10 +132,11 @@
 @const-end
 
 ; Model (0=G30, 1=M365/1S/PRO2, 2=Slave)
-(def model 0)
+(def model 2)
 
 ; Protocol offsets, set per model in main
 (def tx-base 7) ; first dash field in tx-frame
+(def tx-hdr-sum 0) ; fixed part of the dash checksum, summed once in main
 (def thr-idx 5) ; throttle byte in uart-buf
 (def brk-idx 6) ; brake byte in uart-buf
 
@@ -146,6 +160,7 @@
 
 ; dash link watchdog: last time a throttle frame was received
 (def last-rx (systime))
+(def rx-gap-avg 0.05) ; running average gap between lever frames
 
 ; lever-only gesture state (gestures configured with 0 presses)
 (def lever-state 0)
@@ -156,11 +171,79 @@
 ; per-frame dash reply doesn't run CAN queries and allocations itself
 (def cur-speed-kmh 0.0)
 (def cur-batt 0.0)
+(def cur-vin 0.0)
+(def cur-amps 0.0)
+(def cur-range 0.0)
+(def cur-trip 0)
+(def cur-odo 0)
+(def cur-runtime 0)
+(def cur-fet 0.0)
+(def cur-mot 0.0)
+(def cur-maxkmh 0.0)
+(def cur-cells 10)
+(def cur-cap 0)
 
 
 ; BMS state
 (def bms-active false)
 (def bms-warn false)
+
+; app protocol state - buffers are built in main, they must stay out of flash
+(def app-boot-time (systime))
+(def app-cache-time (systime))
+(def app-slow-time (systime))
+(def app-slow-step 0)
+(def cur-wh-tot 0.0)
+(def app-reply-time (systime))
+(def quick-sum 0)   ; checksum contribution of the prebuilt 0xB0 block
+(def quick-used false) ; only worth maintaining while an app is actually asking
+(def b0-wanted false)  ; the 52 byte block is 26 lookups - only rebuild it when asked
+(def app-dst 0x3e)     ; address the app last asked from
+(def g2-aux 0x40)      ; last G2 horn / turn signal byte, for edge detection
+; Control writes must not do slow work in the reader thread: a mode change
+; means conf-set plus CAN round trips with retries, and persisting a setting
+; means a flash write - either stalls the lever frames for as long as it takes,
+; and the app repeats every write several times. Writes only record what
+; changed; the button loop carries it out.
+(def app-todo 0) ; 1 cruise, 2 taillight, 4 buzzer, 8 pin, 16 apply-mode, 32 lock, 64 power off
+; A reply of 20 bytes or more holds the line long enough to lose a lever frame,
+; and the cell voltage read alone is over one a second. Those are diagnostics,
+; not riding data, so they wait until the levers are released.
+(def levers-active false)
+; worst gap between lever frames as we actually process them, in ms. The wire
+; says they arrive every 30 ms; if this is much larger we are being starved.
+; uart-write switches the receiver off and hands the job of switching it back on
+; to a shared worker thread without waiting for it, so the deaf window lasts
+; until that worker runs - measured at up to 470 ms while the bus was carrying
+; frames every 30 ms. Transmitting again before it recovers extends the window.
+; So an app answer rides along inside the next dash answer: framing is by header
+; and length, not by transmission, and this halves the number of writes.
+(def app-pend false)
+(def power-pin 0) ; dashboard supply switch: 0 off, 1 ADC1, 2 ADC2
+(def dash-power-held false) ; the pin symbol once it is ours, false otherwise
+(def pend-dev 0)
+(def pend-src 0)
+(def pend-reg 0)
+(def pend-n 0)
+
+; Lever detection for the deferral above works off the raw dash bytes against a
+; learned resting value, not the corrected voltage against the ADC start point -
+; the correction shifts with the headlight and the start point can sit below the
+; resting reading, either of which leaves this stuck on or stuck off.
+(def thr-rest 255)
+(def brk-rest 255)
+; In half duplex the firmware switches the receiver off for the whole of every
+; uart-write and leaves it off a millisecond or two afterwards, so every
+; transmission is a window in which the dash's lever frames are simply lost.
+; Answering every single 0x64 costs about a sixth of all receive time and the
+; display does not need that rate. 0 restores a reply to every poll.
+(def dash-tx-iv 0.05)
+(def dash-tx-time (systime))
+; Answer third-party apps at all. Transmitting makes the receiver deaf for as
+; long as the firmware's worker takes to switch it back on, so a connected app
+; costs lever responsiveness - turn this off to ride with the sharpest throttle.
+(def app-enable false)
+(def cur-cell-mv 0) ; one division, not fifteen per cell read
 
 ; rear light state
 (def pwm-started false)
@@ -204,12 +287,13 @@
 
 @const-start
 
-(def settings-version 310i32)
+(def settings-version 410i32)
 
 ; Persistent settings: (label . (eeprom-offset type))
 (def eeprom-addrs '(
     (ver-code              . (0 i))
     (software-adc          . (1 b))
+    (software-adc2         . (87 b))
     (min-adc-throttle      . (2 f)) ; legacy, unused - kept so old migrations keep working
     (min-adc-brake         . (3 f)) ; legacy, unused - the ADC app start voltages rule now
     (temp-warning-motor    . (4 f))
@@ -251,6 +335,10 @@
     (apply-watts           . (40 b))
     (apply-fw              . (41 b))
     (secret-presses        . (42 i))
+    (secret-off-presses    . (89 i))
+    (secret-off-combo      . (90 i))
+    (secret-off-requires-lock . (91 b))
+    (idle-display          . (92 i))
     (secret-combo          . (43 i))
     (secret-requires-lock  . (44 b))
     (lock-presses          . (45 i))
@@ -292,6 +380,12 @@
     (light-offset-brk      . (79 f))
     (light-gain-thr        . (80 f))
     (light-gain-brk        . (81 f))
+    (app-pin               . (84 i))
+    (taillight-brightness  . (94 f))
+    (app-enable            . (85 b))
+    (dash-power-out        . (86 b)) ; kept so the v404 migration can read it
+    (power-pin             . (88 i))
+    (cruise-allow          . (93 b))
 ))
 
 (def last-button-state false)
@@ -319,7 +413,7 @@
 )))
 
 (defun valid-model (m) ; eeprom reads nil when never written
-    (and (not (eq m nil)) (>= m 0) (<= m 2))
+    (and (not (eq m nil)) (>= m 0) (<= m 3))
 )
 
 (defun write-secret-mode-toggles () ; settings added in v303
@@ -334,10 +428,72 @@
 ; (raw wasn't shifted by a constant volts - it scaled non-linearly with lever
 ; position). A flat offset from v308 would be WRONG under the new formula
 ; (sign-inverted at points), so it's reset here - recalibrate with Sample.
+; the secret-off gesture only shipped as a default nobody had reason to keep
+(defun write-v407-defaults () ; settings added in v407
+    (write-setting 'idle-display 0)
+)
+
+; the single cruise switch splits in two: the old one becomes the master, and
+; the Control tab gets its own that starts on, so the master alone decides
+(defun write-v410-defaults () ; settings changed in v410
+    ; the old ceiling was 100, which is no ceiling at all - leave anyone who
+    ; picked their own alone
+    (if (>= (read-setting 'cruise-max-speed) 100.0)
+        (write-setting 'cruise-max-speed 35.0))
+)
+
+(defun write-v409-defaults () ; settings added in v409
+    (write-setting 'taillight-brightness 0.4)
+)
+
+(defun write-v408-defaults () ; settings added in v408
+    {
+        (write-setting 'cruise-allow (read-setting 'cruise-enabled))
+        (write-setting 'cruise-enabled true)
+    }
+)
+
+(defun write-v406-defaults () ; settings added in v406
+    {
+        (write-setting 'secret-off-presses 3)
+        (write-setting 'secret-off-combo 3)
+        (write-setting 'secret-off-requires-lock false)
+    }
+)
+
+(defun write-v405-defaults () ; settings added in v405
+    {
+        (write-setting 'secret-off-presses 3)
+        (write-setting 'secret-off-combo 3)
+    }
+)
+
+; the ADC2-only bool becomes a pin selector
+(defun write-v404-defaults () ; settings added in v404
+    (write-setting 'power-pin (if (read-setting 'dash-power-out) 2 0))
+)
+
+; the brake channel keeps whatever the single old switch was set to
+(defun write-v403-defaults () ; settings added in v403
+    (write-setting 'software-adc2 (read-setting 'software-adc))
+)
+
+(defun write-v402-defaults () ; settings added in v402
+    (write-setting 'dash-power-out false)
+)
+
+(defun write-v401-defaults () ; settings added in v401
+    (write-setting 'app-enable false)
+)
+
+(defun write-v400-defaults () ; settings added in v400
+    (write-setting 'app-pin 0)
+)
+
 (defun write-v310-defaults () ; settings added in v310
     {
         (write-setting 'cruise-min-speed 5.0)
-        (write-setting 'cruise-max-speed 100.0)
+        (write-setting 'cruise-max-speed 35.0)
     }
 )
 
@@ -358,7 +514,7 @@
 )
 
 (defun write-v307-defaults () ; settings added in v307
-    (write-setting 'secret-exit-on-lock true)
+    (write-setting 'secret-exit-on-lock false)
 )
 
 (defun write-v306-defaults () ; settings added in v306
@@ -367,6 +523,7 @@
         (write-setting 'rear-light-enable false)
         (write-setting 'auto-taillight false)
         (write-setting 'brake-light-mode 1)
+        (write-setting 'taillight-brightness 0.4)
         (write-setting 'eco-om 1.0)
         (write-setting 'drive-om 1.0)
         (write-setting 'sport-om 1.0)
@@ -419,6 +576,17 @@
         (write-v308-defaults)
         (write-v309-defaults)
         (write-v310-defaults)
+        (write-v400-defaults)
+        (write-v401-defaults)
+        (write-v402-defaults)
+        (write-v403-defaults)
+        (write-v404-defaults)
+        (write-v405-defaults)
+        (write-v406-defaults)
+        (write-v407-defaults)
+        (write-v408-defaults)
+        (write-v409-defaults)
+        (write-v410-defaults)
         (write-setting 'secret-presses 1)
         (write-setting 'secret-combo 0)
         (write-setting 'secret-requires-lock false)
@@ -427,15 +595,16 @@
     }
 )
 
-(defun restore-defaults ()
+(defun restore-defaults (keep-model)
     {
-        (var cur-model (read-setting 'model)) ; keep model across restores
+        (var cur-model (read-setting 'model))
         (write-setting 'software-adc true)
+        (write-setting 'software-adc2 true)
         (write-setting 'min-adc-throttle 0.1)
         (write-setting 'min-adc-brake 0.1)
         (write-setting 'temp-warning-motor 80.0)
         (write-setting 'temp-warning-fet 80.0)
-        (write-setting 'show-batt-in-idle true)
+        (write-setting 'show-batt-in-idle false)
         (write-setting 'min-speed-kmh 1.0)
         (write-setting 'alarm-tone true)
         (write-setting 'alarm-speed-threshold 0.5)
@@ -456,18 +625,18 @@
         (write-setting 'secret-enabled true)
         (write-setting 'secret-eco-speed-kmh 27.0)
         (write-setting 'secret-eco-current 1.0)
-        (write-setting 'secret-eco-watts 1200.0)
+        (write-setting 'secret-eco-watts 1000.0)
         (write-setting 'secret-eco-fw 0.0)
         (write-setting 'secret-drive-speed-kmh 47.0)
         (write-setting 'secret-drive-current 1.0)
-        (write-setting 'secret-drive-watts 1500000.0)
+        (write-setting 'secret-drive-watts 1500.0)
         (write-setting 'secret-drive-fw 0.0)
         (write-setting 'secret-sport-speed-kmh 1000.0)
         (write-setting 'secret-sport-current 1.0)
-        (write-setting 'secret-sport-watts 1500000.0)
+        (write-setting 'secret-sport-watts 2000.0)
         (write-setting 'secret-sport-fw 10.0)
         (restore-gesture-apply-defaults)
-        (write-setting 'model (if (valid-model cur-model) cur-model 0))
+        (write-setting 'model (if (and keep-model (valid-model cur-model)) cur-model 2))
         (write-setting 'ver-code settings-version)
     }
 )
@@ -475,168 +644,59 @@
 (defun load-settings ()
     {
         (var ver (read-setting 'ver-code))
+        ; Each release only writes the settings it added, so an upgrade runs every
+        ; writer newer than the stored version and keeps everything else. Anything
+        ; older than v4.0 is reconfigured from defaults rather than migrated.
         (if (not-eq ver settings-version)
-            (cond
-                ((eq ver 300i32) { ; upgrades only write the added settings, everything else is kept
-                    (restore-gesture-apply-defaults)
+            (if (or (eq ver nil) (< ver 400i32) (> ver settings-version))
+                (restore-defaults true) ; an upgrade keeps the dashboard it had
+                {
+                    (if (< ver 401i32) (write-v401-defaults))
+                    (if (< ver 402i32) (write-v402-defaults))
+                    (if (< ver 403i32) (write-v403-defaults))
+                    (if (< ver 404i32) (write-v404-defaults))
+                    (if (< ver 405i32) (write-v405-defaults))
+                    (if (< ver 406i32) (write-v406-defaults))
+                    (if (< ver 407i32) (write-v407-defaults))
+                    (if (< ver 408i32) (write-v408-defaults))
+                    (if (< ver 409i32) (write-v409-defaults))
+                    (if (< ver 410i32) (write-v410-defaults))
                     (write-setting 'ver-code settings-version)
-                })
-                ((eq ver 301i32) {
-                    (write-setting 'secret-apply-fw true)
-                    (write-secret-mode-toggles)
-                    (write-remap-defaults)
-                    (write-v305-defaults)
-                    (write-v306-defaults)
-                    (write-v307-defaults)
-                    (write-v308-defaults)
-                    (write-v309-defaults)
-                    (write-v310-defaults)
-                    (write-setting 'ver-code settings-version)
-                })
-                ((eq ver 302i32) {
-                    (write-secret-mode-toggles)
-                    (write-remap-defaults)
-                    (write-v305-defaults)
-                    (write-v306-defaults)
-                    (write-v307-defaults)
-                    (write-v308-defaults)
-                    (write-v309-defaults)
-                    (write-v310-defaults)
-                    (write-setting 'ver-code settings-version)
-                })
-                ((eq ver 303i32) {
-                    (write-remap-defaults)
-                    (write-v305-defaults)
-                    (write-v306-defaults)
-                    (write-v307-defaults)
-                    (write-v308-defaults)
-                    (write-v309-defaults)
-                    (write-v310-defaults)
-                    (write-setting 'ver-code settings-version)
-                })
-                ((eq ver 304i32) {
-                    (write-v305-defaults)
-                    (write-v306-defaults)
-                    (write-v307-defaults)
-                    (write-v308-defaults)
-                    (write-v309-defaults)
-                    (write-v310-defaults)
-                    (write-setting 'ver-code settings-version)
-                })
-                ((eq ver 305i32) {
-                    (write-v306-defaults)
-                    (write-v307-defaults)
-                    (write-v308-defaults)
-                    (write-v309-defaults)
-                    (write-v310-defaults)
-                    (write-setting 'ver-code settings-version)
-                })
-                ((eq ver 306i32) {
-                    (write-v307-defaults)
-                    (write-v308-defaults)
-                    (write-v309-defaults)
-                    (write-v310-defaults)
-                    (write-setting 'ver-code settings-version)
-                })
-                ((eq ver 307i32) {
-                    (write-v308-defaults)
-                    (write-v309-defaults)
-                    (write-v310-defaults)
-                    (write-setting 'ver-code settings-version)
-                })
-                ((eq ver 308i32) {
-                    (write-v309-defaults)
-                    (write-v310-defaults)
-                    (write-setting 'ver-code settings-version)
-                })
-                ((eq ver 309i32) {
-                    (write-v310-defaults)
-                    (write-setting 'ver-code settings-version)
-                })
-                (t (restore-defaults))
+                }
             )
         )
 
-        (set 'software-adc (read-setting 'software-adc))
-        (set 'temp-warning-motor (read-setting 'temp-warning-motor))
-        (set 'temp-warning-fet (read-setting 'temp-warning-fet))
-        (set 'show-batt-in-idle (read-setting 'show-batt-in-idle))
-        (set 'show-batt-idle-secret (read-setting 'show-batt-idle-secret))
+        ; Every setting whose runtime variable carries the same name. Spelling these
+        ; out one by one cost about six hundred cells of the const heap.
+        (loopforeach n '(
+            software-adc software-adc2 temp-warning-motor temp-warning-fet
+            show-batt-in-idle show-batt-idle-secret alarm-tone alarm-speed-threshold
+            alarm-gyro-threshold alarm-voltage eco-current eco-watts eco-fw
+            drive-current drive-watts drive-fw sport-current sport-watts sport-fw
+            secret-enabled secret-eco-current secret-eco-watts secret-eco-fw
+            secret-drive-current secret-drive-watts secret-drive-fw
+            secret-sport-current secret-sport-watts secret-sport-fw apply-speed
+            apply-current apply-watts apply-fw secret-apply-fw secret-apply-speed
+            secret-apply-current secret-apply-watts secret-presses secret-combo
+            secret-requires-lock secret-exit-on-lock light-offset-thr light-gain-thr
+            light-offset-brk light-gain-brk lock-presses lock-combo mode-presses
+            mode-combo mode-requires-lock light-presses light-combo
+            light-requires-lock light-on-boot boot-mode use-mph rear-light-enable
+            power-pin auto-taillight brake-light-mode taillight-brightness
+            eco-om drive-om sport-om
+            secret-eco-om secret-drive-om secret-sport-om apply-om secret-apply-om
+            bms-soc-enable cruise-allow cruise-enabled cruise-delay cruise-deviation
+            cruise-min-speed cruise-max-speed app-pin app-enable secret-off-presses
+            secret-off-combo secret-off-requires-lock idle-display
+        ) (set n (let ((v (read-setting n))) (if (eq v nil) (eval n) v))))
         (set 'min-speed (read-setting 'min-speed-kmh))
-        (set 'alarm-tone (read-setting 'alarm-tone))
-        (set 'alarm-speed-threshold (read-setting 'alarm-speed-threshold))
-        (set 'alarm-gyro-threshold (read-setting 'alarm-gyro-threshold))
-        (set 'alarm-voltage (read-setting 'alarm-voltage))
         (set 'eco-speed (/ (read-setting 'eco-speed-kmh) 3.6))
-        (set 'eco-current (read-setting 'eco-current))
-        (set 'eco-watts (read-setting 'eco-watts))
-        (set 'eco-fw (read-setting 'eco-fw))
         (set 'drive-speed (/ (read-setting 'drive-speed-kmh) 3.6))
-        (set 'drive-current (read-setting 'drive-current))
-        (set 'drive-watts (read-setting 'drive-watts))
-        (set 'drive-fw (read-setting 'drive-fw))
         (set 'sport-speed (/ (read-setting 'sport-speed-kmh) 3.6))
-        (set 'sport-current (read-setting 'sport-current))
-        (set 'sport-watts (read-setting 'sport-watts))
-        (set 'sport-fw (read-setting 'sport-fw))
-        (set 'secret-enabled (read-setting 'secret-enabled))
         (set 'secret-eco-speed (/ (read-setting 'secret-eco-speed-kmh) 3.6))
-        (set 'secret-eco-current (read-setting 'secret-eco-current))
-        (set 'secret-eco-watts (read-setting 'secret-eco-watts))
-        (set 'secret-eco-fw (read-setting 'secret-eco-fw))
         (set 'secret-drive-speed (/ (read-setting 'secret-drive-speed-kmh) 3.6))
-        (set 'secret-drive-current (read-setting 'secret-drive-current))
-        (set 'secret-drive-watts (read-setting 'secret-drive-watts))
-        (set 'secret-drive-fw (read-setting 'secret-drive-fw))
         (set 'secret-sport-speed (/ (read-setting 'secret-sport-speed-kmh) 3.6))
-        (set 'secret-sport-current (read-setting 'secret-sport-current))
-        (set 'secret-sport-watts (read-setting 'secret-sport-watts))
-        (set 'secret-sport-fw (read-setting 'secret-sport-fw))
-        (set 'apply-speed (read-setting 'apply-speed))
-        (set 'apply-current (read-setting 'apply-current))
-        (set 'apply-watts (read-setting 'apply-watts))
-        (set 'apply-fw (read-setting 'apply-fw))
-        (set 'secret-apply-fw (read-setting 'secret-apply-fw))
-        (set 'secret-apply-speed (read-setting 'secret-apply-speed))
-        (set 'secret-apply-current (read-setting 'secret-apply-current))
-        (set 'secret-apply-watts (read-setting 'secret-apply-watts))
-        (set 'secret-presses (read-setting 'secret-presses))
-        (set 'secret-combo (read-setting 'secret-combo))
-        (set 'secret-requires-lock (read-setting 'secret-requires-lock))
-        (set 'secret-exit-on-lock (read-setting 'secret-exit-on-lock))
-        (set 'light-offset-thr (read-setting 'light-offset-thr))
-        (set 'light-gain-thr (read-setting 'light-gain-thr))
-        (set 'light-offset-brk (read-setting 'light-offset-brk))
-        (set 'light-gain-brk (read-setting 'light-gain-brk))
-        (set 'lock-presses (read-setting 'lock-presses))
-        (set 'lock-combo (read-setting 'lock-combo))
-        (set 'mode-presses (read-setting 'mode-presses))
-        (set 'mode-combo (read-setting 'mode-combo))
-        (set 'mode-requires-lock (read-setting 'mode-requires-lock))
-        (set 'light-presses (read-setting 'light-presses))
-        (set 'light-combo (read-setting 'light-combo))
-        (set 'light-requires-lock (read-setting 'light-requires-lock))
-        (set 'light-on-boot (read-setting 'light-on-boot))
         (set 'button-safety-speed (/ (read-setting 'button-speed-kmh) 3.6))
-        (set 'boot-mode (read-setting 'boot-mode))
-        (set 'use-mph (read-setting 'use-mph))
-        (set 'rear-light-enable (read-setting 'rear-light-enable))
-        (set 'auto-taillight (read-setting 'auto-taillight))
-        (set 'brake-light-mode (read-setting 'brake-light-mode))
-        (set 'eco-om (read-setting 'eco-om))
-        (set 'drive-om (read-setting 'drive-om))
-        (set 'sport-om (read-setting 'sport-om))
-        (set 'secret-eco-om (read-setting 'secret-eco-om))
-        (set 'secret-drive-om (read-setting 'secret-drive-om))
-        (set 'secret-sport-om (read-setting 'secret-sport-om))
-        (set 'apply-om (read-setting 'apply-om))
-        (set 'secret-apply-om (read-setting 'secret-apply-om))
-        (set 'bms-soc-enable (read-setting 'bms-soc-enable))
-        (set 'cruise-enabled (read-setting 'cruise-enabled))
-        (set 'cruise-delay (read-setting 'cruise-delay))
-        (set 'cruise-deviation (read-setting 'cruise-deviation))
-        (set 'cruise-min-speed (read-setting 'cruise-min-speed))
-        (set 'cruise-max-speed (read-setting 'cruise-max-speed))
 
         (var m (read-setting 'model))
         (if (not (valid-model m)) {
@@ -647,18 +707,67 @@
     }
 )
 
+; 1 detaches both channels, 2 only the throttle, 3 only the brake - so each
+; lever can come from the dashboard or from a lever wired to the pin
 (defun apply-software-adc ()
-    (if software-adc
-        (app-adc-detach 3 1)
-        (app-adc-detach 3 0)
+    (let ((d1 (or software-adc (= power-pin 1)))   ; a pin driving the supply must
+          (d2 (or software-adc2 (= power-pin 2)))) ; never be read as a lever
+        {
+            ; mode 3 detaches the levers and the buttons, mode 2 only the buttons.
+            ; Cruise presses the ADC app's own cruise button, so that has to stay
+            ; ours even when both levers come straight from their pins.
+            (let ((d (cond ((and d1 d2) 1) (d1 2) (d2 3) (t 0))))
+                (if (= d 0)
+                    (app-adc-detach 2 1)
+                    (app-adc-detach 3 d)
+                )
+            )
+            ; a channel we detached but do not feed would otherwise keep the last
+            ; value the dashboard put there
+            (if (and d1 (not software-adc)) (app-adc-override 0 0))
+            (if (and d2 (not software-adc2)) (app-adc-override 1 0))
+            ; the calibration sequencer only runs on dashboard lever frames, so a
+            ; run left open when both channels are switched off would never finish
+            (if (and (not software-adc) (not software-adc2) (not (eq calib-stage 'idle))) {
+                (set 'calib-stage 'idle)
+                (send-data "calib-aborted")
+            })
+        }
+    )
+)
+
+; ADC2 switches the dashboard's supply: high while the scooter is on, low when
+; it is off. Only ever driven with software ADC on, where the ADC app replaces
+; both pin readings with ours - without it ADC2 is the brake input, and a driven
+; pin would read as brake. The level is written before the pin becomes an output
+; so claiming it cannot glitch the supply, and the mode is only touched when the
+; setting changes, never on an ordinary save.
+(defun apply-dash-power ()
+    (let ((pin (if (= power-pin 1) 'pin-adc1 'pin-adc2)))
+        (if (> power-pin 0)
+            (if (not (eq dash-power-held pin)) {
+                (if dash-power-held (gpio-configure dash-power-held 'pin-mode-analog))
+                (gpio-write pin (if off 0 1))
+                (gpio-configure pin 'pin-mode-out)
+                (set 'dash-power-held pin)
+            })
+            (if dash-power-held {
+                (gpio-configure dash-power-held 'pin-mode-analog)
+                (set 'dash-power-held false)
+            })
+        )
     )
 )
 
 (defun apply-runtime-settings ()
     {
         (load-settings)
+        ; the ADC app fades the motor out between 60 ERPM of wheel spread and its
+        ; own limit, so light the lamp once it has taken away nearly half
+        (trap (let ((v (* 0.4 (conf-get 'adc-tc-max-diff)))) (if (> v 60) (setq slip-erpm v))))
         (if (!= model 2) { ; slave must not push conf to the master
             (apply-software-adc)
+            (apply-dash-power)
             (apply-mode)
             (if rear-light-enable
                 (if (not pwm-started) {
@@ -671,10 +780,13 @@
     }
 )
 
-(defun save-general-settings (adc show-batt show-batt-secret min-speed-kmh)
+(defun save-general-settings (adc adc2 show-batt show-batt-secret min-speed-kmh app idle)
     {
+        (write-setting 'app-enable app)
         (write-setting 'software-adc adc)
+        (write-setting 'software-adc2 adc2)
         (write-setting 'show-batt-in-idle show-batt)
+        (write-setting 'idle-display idle)
         (write-setting 'show-batt-idle-secret show-batt-secret)
         (write-setting 'min-speed-kmh min-speed-kmh)
     }
@@ -753,7 +865,7 @@
     }
 )
 
-(defun save-gesture-settings (s-presses s-combo s-locked l-presses l-combo m-presses m-combo m-locked li-presses li-combo li-locked)
+(defun save-gesture-settings (s-presses s-combo s-locked l-presses l-combo m-presses m-combo m-locked li-presses li-combo li-locked so-presses so-combo so-locked)
     {
         (write-setting 'secret-presses s-presses)
         (write-setting 'secret-combo s-combo)
@@ -766,16 +878,21 @@
         (write-setting 'light-presses li-presses)
         (write-setting 'light-combo li-combo)
         (write-setting 'light-requires-lock li-locked)
+        (write-setting 'secret-off-presses so-presses)
+        (write-setting 'secret-off-combo so-combo)
+        (write-setting 'secret-off-requires-lock so-locked)
     }
 )
 
-(defun save-misc-settings (auto-light btn-speed-kmh mph bms secret-exit)
+(defun save-misc-settings (auto-light btn-speed-kmh mph bms secret-exit pin dash-power)
     {
+        (write-setting 'power-pin dash-power)
         (write-setting 'light-on-boot auto-light)
         (write-setting 'button-speed-kmh btn-speed-kmh)
         (write-setting 'use-mph mph)
         (write-setting 'bms-soc-enable bms)
         (write-setting 'secret-exit-on-lock secret-exit)
+        (write-setting 'app-pin pin)
     }
 )
 
@@ -788,16 +905,20 @@
     }
 )
 
-(defun save-rear-settings (enable auto-tail brake-mode)
+(defun save-rear-settings (enable auto-tail brake-mode bright)
     {
         (write-setting 'rear-light-enable enable)
         (write-setting 'auto-taillight auto-tail)
         (write-setting 'brake-light-mode brake-mode)
+        (write-setting 'taillight-brightness bright)
     }
 )
 
-(defun save-cruise-settings (delay deviation min-speed max-speed)
-    { ; enable is toggled live from the Control tab (ctrl-cruise), not here
+(defun save-cruise-settings (allow delay deviation min-speed max-speed)
+    { ; the Control tab switch (ctrl-cruise) is a separate setting under this one
+        (set 'cruise-allow allow)
+        (write-setting 'cruise-allow allow)
+        (if (not allow) (cruise-cancel))
         (write-setting 'cruise-delay delay)
         (write-setting 'cruise-deviation deviation)
         (write-setting 'cruise-min-speed min-speed)
@@ -817,7 +938,7 @@
 ; UI restarts lisp after "model-ok" so the new model takes effect
 (defun save-model (m)
     {
-        (write-setting 'model (if (valid-model m) m 0))
+        (write-setting 'model (if (valid-model m) m 2))
         (send-data "model-ok")
     }
 )
@@ -832,8 +953,9 @@
 
 (defun restore-settings-ui ()
     {
-        (restore-defaults)
-        (finish-settings-save)
+        (restore-defaults false) ; back to Slave, like a fresh install
+        (apply-runtime-settings)
+        (send-data "reset-ok") ; the model only takes effect on a restart
     }
 )
 
@@ -866,9 +988,9 @@
 ; survives a reboot, and cancels any active hold when switched off.
 (defun ctrl-cruise (on)
     {
-        (set 'cruise-enabled on)
-        (write-setting 'cruise-enabled on)
-        (if (not on) (cruise-cancel))
+        (set 'cruise-enabled (and on cruise-allow))
+        (write-setting 'cruise-enabled cruise-enabled)
+        (if (not cruise-enabled) (cruise-cancel))
     }
 )
 
@@ -907,7 +1029,15 @@
         (str-from-n (send-state-amps) "%.1f ")
         (str-from-n (send-state-maxkmh) "%.0f ")
         (if cruising "true " "false ")
-        (if cruise-enabled "true" "false")
+        (if cruise-enabled "true " "false ")
+        (if cruise-allow "true " "false ")
+        (if img-ok "true " "false ")
+        (str-from-n (highest-temp cur-fet canget-temp-fet) "%.0f ")
+        (str-from-n (highest-temp cur-mot canget-temp-motor) "%.0f ")
+        (if secret-enabled "true " "false ")
+        (str-from-n (+ 1 (length (can-list-devs))) "%d ")
+        (str-from-n (get-fault) "%d ")
+        (str-from-n (wheel-slip) "%d")
     ))
 )
 
@@ -940,7 +1070,7 @@
 (defun batt-wh-tot ()
         ; Li-ion assumed (scooter default, si-battery-type isn't a valid
         ; conf-get param in fw 7.0). Matches VESC Tool: 0.85 usable * 3.7 V/cell
-        (* 0.85 (conf-get 'si-battery-ah) (* 3.7 (conf-get 'si-battery-cells)))
+        cur-wh-tot
 )
 
 (defun send-state-range () {
@@ -951,133 +1081,147 @@
         )
 })
 
+; Reading a setting straight into a state line is the same two shapes ninety
+; times over, and each spelled-out copy costs const heap.
+(defun setting-bool (n) (if (read-setting n) "true " "false "))
+(defun setting-num (n f) (str-from-n (read-setting n) f))
+
 (defun send-settings ()
     {
         (send-data (str-merge
             "model "
-            (str-from-n (read-setting 'model) "%d")
+            (setting-num 'model "%d")
         ))
         (sleep 0.05)
         ; misc goes early so the UI knows the km/h vs mph unit before it
         ; renders the speed fields that follow
         (send-data (str-merge
             "misc "
-            (if (read-setting 'light-on-boot) "true " "false ")
-            (str-from-n (read-setting 'button-speed-kmh) "%.1f ")
-            (if (read-setting 'use-mph) "true " "false ")
-            (if (read-setting 'bms-soc-enable) "true " "false ")
-            (if (read-setting 'secret-exit-on-lock) "true " "false ")
-            (str-from-n (read-setting 'light-offset-thr) "%.3f ")
-            (str-from-n (read-setting 'light-gain-thr) "%.3f ")
-            (str-from-n (read-setting 'light-offset-brk) "%.3f ")
-            (str-from-n (read-setting 'light-gain-brk) "%.3f")
+            (setting-bool 'light-on-boot)
+            (setting-num 'button-speed-kmh "%.1f ")
+            (setting-bool 'use-mph)
+            (setting-bool 'bms-soc-enable)
+            (setting-bool 'secret-exit-on-lock)
+            (setting-num 'light-offset-thr "%.3f ")
+            (setting-num 'light-gain-thr "%.3f ")
+            (setting-num 'light-offset-brk "%.3f ")
+            (setting-num 'light-gain-brk "%.3f ")
+            (setting-num 'app-pin "%d ")
+            (setting-num 'power-pin "%d")
         ))
         (sleep 0.05)
         (send-data (str-merge
             "general "
-            (if (read-setting 'software-adc) "true " "false ")
-            (if (read-setting 'show-batt-in-idle) "true " "false ")
-            (if (read-setting 'show-batt-idle-secret) "true " "false ")
-            (str-from-n (read-setting 'min-speed-kmh) "%.1f")
+            (setting-bool 'software-adc)
+            (setting-bool 'software-adc2)
+            (setting-bool 'show-batt-in-idle)
+            (setting-bool 'show-batt-idle-secret)
+            (setting-num 'min-speed-kmh "%.1f ")
+            (setting-bool 'app-enable)
+            (setting-num 'idle-display "%d")
         ))
         (sleep 0.05)
         (send-data (str-merge
             "temps "
-            (str-from-n (read-setting 'temp-warning-motor) "%.1f ")
-            (str-from-n (read-setting 'temp-warning-fet) "%.1f")
+            (setting-num 'temp-warning-motor "%.1f ")
+            (setting-num 'temp-warning-fet "%.1f")
         ))
         (sleep 0.05)
         (send-data (str-merge
             "modes "
-            (str-from-n (read-setting 'eco-speed-kmh) "%.1f ")
-            (str-from-n (read-setting 'eco-current) "%.2f ")
-            (str-from-n (read-setting 'eco-watts) "%.0f ")
-            (str-from-n (read-setting 'eco-fw) "%.1f ")
-            (str-from-n (read-setting 'drive-speed-kmh) "%.1f ")
-            (str-from-n (read-setting 'drive-current) "%.2f ")
-            (str-from-n (read-setting 'drive-watts) "%.0f ")
-            (str-from-n (read-setting 'drive-fw) "%.1f ")
-            (str-from-n (read-setting 'sport-speed-kmh) "%.1f ")
-            (str-from-n (read-setting 'sport-current) "%.2f ")
-            (str-from-n (read-setting 'sport-watts) "%.0f ")
-            (str-from-n (read-setting 'sport-fw) "%.1f ")
-            (str-from-n (read-setting 'boot-mode) "%d ")
-            (str-from-n (read-setting 'eco-om) "%.3f ")
-            (str-from-n (read-setting 'drive-om) "%.3f ")
-            (str-from-n (read-setting 'sport-om) "%.3f")
+            (setting-num 'eco-speed-kmh "%.1f ")
+            (setting-num 'eco-current "%.2f ")
+            (setting-num 'eco-watts "%.0f ")
+            (setting-num 'eco-fw "%.1f ")
+            (setting-num 'drive-speed-kmh "%.1f ")
+            (setting-num 'drive-current "%.2f ")
+            (setting-num 'drive-watts "%.0f ")
+            (setting-num 'drive-fw "%.1f ")
+            (setting-num 'sport-speed-kmh "%.1f ")
+            (setting-num 'sport-current "%.2f ")
+            (setting-num 'sport-watts "%.0f ")
+            (setting-num 'sport-fw "%.1f ")
+            (setting-num 'boot-mode "%d ")
+            (setting-num 'eco-om "%.3f ")
+            (setting-num 'drive-om "%.3f ")
+            (setting-num 'sport-om "%.3f")
         ))
         (sleep 0.05)
         (send-data (str-merge
             "secret "
-            (if (read-setting 'secret-enabled) "true " "false ")
-            (str-from-n (read-setting 'secret-eco-speed-kmh) "%.1f ")
-            (str-from-n (read-setting 'secret-eco-current) "%.2f ")
-            (str-from-n (read-setting 'secret-eco-watts) "%.0f ")
-            (str-from-n (read-setting 'secret-eco-fw) "%.1f ")
-            (str-from-n (read-setting 'secret-drive-speed-kmh) "%.1f ")
-            (str-from-n (read-setting 'secret-drive-current) "%.2f ")
-            (str-from-n (read-setting 'secret-drive-watts) "%.0f ")
-            (str-from-n (read-setting 'secret-drive-fw) "%.1f ")
-            (str-from-n (read-setting 'secret-sport-speed-kmh) "%.1f ")
-            (str-from-n (read-setting 'secret-sport-current) "%.2f ")
-            (str-from-n (read-setting 'secret-sport-watts) "%.0f ")
-            (str-from-n (read-setting 'secret-sport-fw) "%.1f ")
-            (str-from-n (read-setting 'secret-eco-om) "%.3f ")
-            (str-from-n (read-setting 'secret-drive-om) "%.3f ")
-            (str-from-n (read-setting 'secret-sport-om) "%.3f")
+            (setting-bool 'secret-enabled)
+            (setting-num 'secret-eco-speed-kmh "%.1f ")
+            (setting-num 'secret-eco-current "%.2f ")
+            (setting-num 'secret-eco-watts "%.0f ")
+            (setting-num 'secret-eco-fw "%.1f ")
+            (setting-num 'secret-drive-speed-kmh "%.1f ")
+            (setting-num 'secret-drive-current "%.2f ")
+            (setting-num 'secret-drive-watts "%.0f ")
+            (setting-num 'secret-drive-fw "%.1f ")
+            (setting-num 'secret-sport-speed-kmh "%.1f ")
+            (setting-num 'secret-sport-current "%.2f ")
+            (setting-num 'secret-sport-watts "%.0f ")
+            (setting-num 'secret-sport-fw "%.1f ")
+            (setting-num 'secret-eco-om "%.3f ")
+            (setting-num 'secret-drive-om "%.3f ")
+            (setting-num 'secret-sport-om "%.3f")
         ))
         (sleep 0.05)
         (send-data (str-merge
             "apply "
-            (if (read-setting 'apply-speed) "true " "false ")
-            (if (read-setting 'apply-current) "true " "false ")
-            (if (read-setting 'apply-watts) "true " "false ")
-            (if (read-setting 'apply-fw) "true " "false ")
-            (if (read-setting 'apply-om) "true " "false ")
-            (if (read-setting 'secret-apply-speed) "true " "false ")
-            (if (read-setting 'secret-apply-current) "true " "false ")
-            (if (read-setting 'secret-apply-watts) "true " "false ")
-            (if (read-setting 'secret-apply-fw) "true " "false ")
+            (setting-bool 'apply-speed)
+            (setting-bool 'apply-current)
+            (setting-bool 'apply-watts)
+            (setting-bool 'apply-fw)
+            (setting-bool 'apply-om)
+            (setting-bool 'secret-apply-speed)
+            (setting-bool 'secret-apply-current)
+            (setting-bool 'secret-apply-watts)
+            (setting-bool 'secret-apply-fw)
             (if (read-setting 'secret-apply-om) "true" "false")
         ))
         (sleep 0.05)
         (send-data (str-merge
             "gesture "
-            (str-from-n (read-setting 'secret-presses) "%d ")
-            (str-from-n (read-setting 'secret-combo) "%d ")
-            (if (read-setting 'secret-requires-lock) "true " "false ")
-            (str-from-n (read-setting 'lock-presses) "%d ")
-            (str-from-n (read-setting 'lock-combo) "%d ")
-            (str-from-n (read-setting 'mode-presses) "%d ")
-            (str-from-n (read-setting 'mode-combo) "%d ")
-            (if (read-setting 'mode-requires-lock) "true " "false ")
-            (str-from-n (read-setting 'light-presses) "%d ")
-            (str-from-n (read-setting 'light-combo) "%d ")
-            (if (read-setting 'light-requires-lock) "true" "false")
+            (setting-num 'secret-presses "%d ")
+            (setting-num 'secret-combo "%d ")
+            (setting-bool 'secret-requires-lock)
+            (setting-num 'lock-presses "%d ")
+            (setting-num 'lock-combo "%d ")
+            (setting-num 'mode-presses "%d ")
+            (setting-num 'mode-combo "%d ")
+            (setting-bool 'mode-requires-lock)
+            (setting-num 'light-presses "%d ")
+            (setting-num 'light-combo "%d ")
+            (setting-bool 'light-requires-lock)
+            (setting-num 'secret-off-presses "%d ")
+            (setting-num 'secret-off-combo "%d ")
+            (setting-bool 'secret-off-requires-lock)
         ))
         (sleep 0.05)
         (send-data (str-merge
             "rear "
-            (if (read-setting 'rear-light-enable) "true " "false ")
-            (if (read-setting 'auto-taillight) "true " "false ")
-            (str-from-n (read-setting 'brake-light-mode) "%d")
+            (setting-bool 'rear-light-enable)
+            (setting-bool 'auto-taillight)
+            (setting-num 'brake-light-mode "%d ")
+            (setting-num 'taillight-brightness "%.2f")
         ))
         (sleep 0.05)
         (send-data (str-merge
             "cruise "
-            (if (read-setting 'cruise-enabled) "true " "false ")
-            (str-from-n (read-setting 'cruise-delay) "%.1f ")
-            (str-from-n (read-setting 'cruise-deviation) "%.1f ")
-            (str-from-n (read-setting 'cruise-min-speed) "%.1f ")
-            (str-from-n (read-setting 'cruise-max-speed) "%.1f")
+            (setting-bool 'cruise-allow)
+            (setting-num 'cruise-delay "%.1f ")
+            (setting-num 'cruise-deviation "%.1f ")
+            (setting-num 'cruise-min-speed "%.1f ")
+            (setting-num 'cruise-max-speed "%.1f")
         ))
         (sleep 0.05)
         (send-data (str-merge
             "alarm "
-            (if (read-setting 'alarm-tone) "true " "false ")
-            (str-from-n (read-setting 'alarm-speed-threshold) "%.1f ")
-            (str-from-n (read-setting 'alarm-gyro-threshold) "%.1f ")
-            (str-from-n (read-setting 'alarm-voltage) "%.1f")
+            (setting-bool 'alarm-tone)
+            (setting-num 'alarm-speed-threshold "%.1f ")
+            (setting-num 'alarm-gyro-threshold "%.1f ")
+            (setting-num 'alarm-voltage "%.1f")
         ))
     }
 )
@@ -1241,6 +1385,19 @@
 
 (defun adc-input(buffer) ; Frame 0x65
     {
+        ; The dash serves the app out of its own transmission budget, so lever
+        ; frames arrive four times slower while an app is connected. Track the
+        ; real rate so the watchdog below scales with it instead of firing.
+        ; widen immediately when the dash slows, narrow slowly when it speeds up,
+        ; so connecting an app cannot trip the watchdog before the average catches up
+        (let ((gap (secs-since last-rx)))
+            (if (< gap 1.0)
+                (if (> gap rx-gap-avg)
+                    (set 'rx-gap-avg gap)
+                    (set 'rx-gap-avg (+ (* 0.98 rx-gap-avg) (* 0.02 gap)))
+                )
+            )
+        )
         (set 'last-rx (systime)) ; feed the dash link watchdog
 
         (set 'dash-thr-raw (bufget-u8 uart-buf thr-idx)) ; raw physical throttle (before override)
@@ -1252,6 +1409,13 @@
         ; gain=1/offset=0 (uncalibrated default) makes this a no-op.
         (var throttle (if light (/ (- thr-raw-v light-offset-thr) light-gain-thr) thr-raw-v))
         (var brake (if light (/ (- brk-raw-v light-offset-brk) light-gain-brk) brk-raw-v))
+        ; a dash that is not powered up yet reports both levers at 0x0a, far
+        ; under any real rest position - taking that as the rest would leave the
+        ; levers looking active for good and starve the app of its bulk reads
+        (if (and (> dash-thr-raw 16) (< dash-thr-raw thr-rest)) (set 'thr-rest dash-thr-raw))
+        (if (and (> dash-brk-raw 16) (< dash-brk-raw brk-rest)) (set 'brk-rest dash-brk-raw))
+        (set 'levers-active (or (> dash-thr-raw (+ thr-rest 10))
+                                (> dash-brk-raw (+ brk-rest 10))))
 
         (if (< throttle 0.0) (setq throttle 0.0))
         (if (> throttle 3.3) (setq throttle 3.3))
@@ -1271,12 +1435,12 @@
         ; needed; safe to calibrate stopped on the road like people actually do)
         (if (eq calib-stage 'idle)
             {
-                (app-adc-override 0 throttle)
-                (app-adc-override 1 brake)
+                (if software-adc (app-adc-override 0 throttle))
+                (if software-adc2 (app-adc-override 1 brake))
             }
             {
-                (app-adc-override 0 0)
-                (app-adc-override 1 0)
+                (if software-adc (app-adc-override 0 0))
+                (if software-adc2 (app-adc-override 1 0))
             }
         )
 
@@ -1352,17 +1516,22 @@
 ; PID-holds the speed and mirrors current to the slaves. Any lever input
 ; returns control instantly at firmware level; we just release the button.
 (defun handle-cruise(speed-kmh)
-    (if (and cruise-enabled (not off) (not lock))
+    (if (and cruise-allow cruise-enabled (not off) (not lock))
         {
             (var thr (get-adc-decoded 0))
             (var brk (get-adc-decoded 1))
             (if cruising
                 {
-                    ; Released = corrected lever voltage back under the ADC app's
-                    ; own start voltage, i.e. exactly what the firmware counts as
-                    ; "no throttle". Safety timeout after 3 s so the throttle can
-                    ; never stay masked if the lever simply isn't released.
-                    (if (or (< thr-corr-v cruise-v1-start) (> (secs-since cruise-shown-time) 3))
+                    ; Released = the lever is back under what the firmware counts
+                    ; as "no throttle". The dashboard value is masked to zero until
+                    ; release, so that path needs the pre-mask voltage; a lever on
+                    ; the pin is never masked and reads true straight from the app.
+                    ; Safety timeout after 3 s so the throttle can never stay masked
+                    ; if the lever simply isn't released.
+                    (if (or (if software-adc
+                                (< thr-corr-v cruise-v1-start)
+                                (<= thr adc-touch))
+                            (> (secs-since cruise-shown-time) 3))
                         (set 'cruise-thr-released true)
                     )
                     ; After release, any lever touch past the ADC mapping start
@@ -1380,7 +1549,10 @@
                         (set 'cruise-ref speed-kmh)
                         (set 'cruise-since (systime))
                     }
-                    (if (and (not cruise-blocked) (>= speed-kmh cruise-min-speed) (<= speed-kmh cruise-max-speed))
+                    ; also never below the kick-start speed - output is disabled
+                    ; down there, so cruise would arm against a dead motor
+                    (if (and (not cruise-blocked) (>= speed-kmh min-speed)
+                             (>= speed-kmh cruise-min-speed) (<= speed-kmh cruise-max-speed))
                         {
                             (if (> (abs (- speed-kmh cruise-ref)) cruise-deviation) {
                                 (set 'cruise-ref speed-kmh)
@@ -1411,6 +1583,7 @@
 (defun handle-features()
     {
         (set 'cur-speed-kmh (* (get-lowest-speed) 3.6))
+        (check-slip)
 
         ; battery %: BMS reads can throw if no BMS is present - keep them from
         ; skipping the safety-critical output/lock handling below
@@ -1427,14 +1600,18 @@
         )
         (var current-speed cur-speed-kmh)
 
-        ; Dash link watchdog: release the ADC overrides when throttle frames stop
-        ; coming, otherwise the last (possibly full) throttle value stays applied
-        (if (and software-adc (> (secs-since last-rx) 0.5))
-            {
-                (app-adc-override 0 0)
-                (app-adc-override 1 0)
-                (cruise-cancel)
-            }
+        ; Dash link watchdog. The levers are not zeroed here - writing an override
+        ; resets the firmware's command timeout, so doing it every pass would hold
+        ; off the failsafe the timeout exists to provide. Going quiet is the
+        ; release: the ADC app stops driving once the timeout expires. Only cruise
+        ; is dropped, because the virtual button is ours to let go of.
+        ; Scaled to the measured frame rate - a fixed half second fires by itself
+        ; once an app is connected and the dash drops to ten frames a second.
+        (var wd (* 8 rx-gap-avg))
+        (if (< wd 0.5) (setq wd 0.5))
+        (if (> wd 1.5) (setq wd 1.5))
+        (if (and (or software-adc software-adc2) (> (secs-since last-rx) wd))
+            (cruise-cancel)
         )
 
         (trap (handle-cruise current-speed)) ; experimental - never let it break the loop
@@ -1445,11 +1622,7 @@
                     (app-adc-override 0 0)
                     (app-adc-override 1 0)
                     (app-disable-output -1)
-                    (set-current 0)
-                    ; rcode canset
-                    ;(loopforeach i (can-list-devs)
-                    ;    (canset-current i 0)
-                    ;)
+                    (stop-current)
                 }
             )
             (if (app-is-output-disabled) ; Enable output when scooter is turned on
@@ -1457,26 +1630,62 @@
             )
         )
 
+        (trap (build-dash-frame))
+        (trap (app-run-todo))
+        (trap (app-cache-update))
         (trap (handle-taillight))
+        (if dash-power-held (gpio-write dash-power-held (if off 0 1)))
+        ; A detached ADC app stops resetting the timeout itself - the script has to,
+        ; or a pin taken for the supply kills the other channel too even when a real
+        ; lever is wired to it. Only when neither lever comes from the dashboard:
+        ; when one does, adc-input keeps the timeout alive and its silence is the
+        ; failsafe, which this would otherwise hold off.
+        (if (and (not software-adc) (not software-adc2)) {
+            (if (= power-pin 1) (app-adc-override 0 0))
+            (if (= power-pin 2) (app-adc-override 1 0))
+        })
         (handle-lock (abs current-speed))
-    }
+            }
 )
 
-(defun update-dash(buffer) ; Frame 0x64
+; What the dashboard shows instead of the speed while standing still.
+(defun highest-temp (local canget)
+    (let ((hi local))
+        {
+            (loopforeach i (can-list-devs)
+                (let ((c (canget i))) (if (> c hi) (setq hi c))))
+            hi
+        }
+    )
+)
+
+(defun idle-value ()
+    (cond
+        ((= idle-display 1) (to-i cur-vin))
+        ((= idle-display 2) (to-i (highest-temp cur-fet canget-temp-fet)))
+        ((= idle-display 3) (to-i (highest-temp cur-mot canget-temp-motor)))
+        (t (to-i cur-batt))
+    )
+)
+
+(defun build-dash-frame () ; contents of the 0x64 reply
     {
         (var current-speed (abs cur-speed-kmh))
         (var disp-speed (+ (if use-mph (* current-speed 0.621371) current-speed) 0.5)) ; rounded for the dash
         (var battery cur-batt)
-        (var crc-end (- (buflen tx-frame) 2)) ; crc bytes at end of frame
 
-        ; mode field (1=drive, 2=eco, 4=sport, 8=charge, 16=off, 32=lock)
+        ; mode field (1=drive, 2=eco, 4=sport, 8=charge, 16=off, 32=lock,
+        ; 64=mph on the G2, 128=overheat). A stock G2 cycles 2 -> 0 -> 4, so
+        ; drive is no bit set there, not bit 0.
+        (var mode-base (+ (if (and (= model 3) (= speedmode 1)) 0 speedmode)
+                          (if (and (= model 3) use-mph) 64 0)))
         (if off
             (bufset-u8 tx-frame tx-base 16)
             (if lock
                 (bufset-u8 tx-frame tx-base 32) ; lock display
                 (if (or (> (get-temp-fet) temp-warning-fet) (> (get-temp-mot) temp-warning-motor) bms-warn) ; temp icon will show up above warning degree
-                    (bufset-u8 tx-frame tx-base (+ 128 speedmode))
-                    (bufset-u8 tx-frame tx-base speedmode)
+                    (bufset-u8 tx-frame tx-base (+ 128 mode-base))
+                    (bufset-u8 tx-frame tx-base mode-base)
                 )
             )
         )
@@ -1487,22 +1696,17 @@
             (bufset-u8 tx-frame (+ tx-base 1) battery)
         )
 
-        ; light field
+        ; light field - the G2 packs headlight, park and cruise into one byte,
+        ; and its headlight is bit 4, the only bit a stock G2 was seen to set
         (if (not off)
             (if (> alarm 4)
                 (bufset-u8 tx-frame (+ tx-base 2) 1) ; alarm on
-                (bufset-u8 tx-frame (+ tx-base 2) (if light 1 0))
+                (bufset-u8 tx-frame (+ tx-base 2) (if (= model 3)
+                    (+ (if light 16 0) (if lock 2 0) (if cruising 4 0))
+                    (if light 1 0)
+                ))
             )
             (bufset-u8 tx-frame (+ tx-base 2) 0)
-        )
-
-        ; beep field
-        (if (> feedback 0)
-            {
-                (bufset-u8 tx-frame (+ tx-base 3) 1)
-                (set 'feedback (- feedback 1))
-            }
-            (bufset-u8 tx-frame (+ tx-base 3) 0)
         )
 
         ; speed field
@@ -1513,7 +1717,7 @@
                 (if (if unlock show-batt-idle-secret show-batt-in-idle)
                     (if (> current-speed 1)
                         (bufset-u8 tx-frame (+ tx-base 4) disp-speed)
-                        (bufset-u8 tx-frame (+ tx-base 4) battery))
+                        (bufset-u8 tx-frame (+ tx-base 4) (idle-value)))
                     (bufset-u8 tx-frame (+ tx-base 4) disp-speed)
                 )
             )
@@ -1525,18 +1729,585 @@
             (bufset-u8 tx-frame (+ tx-base 5) (get-fault))
         )
 
-        ; calc crc
+    }
+)
 
-        (var crcout 0)
-        (looprange i 2 crc-end
-        (set 'crcout (+ crcout (bufget-u8 tx-frame i))))
-        (set 'crcout (bitwise-xor crcout 0xFFFF))
+; The beep must be spent by a frame that actually goes out. The feature loop
+; builds faster than the dash is answered, so counting it down there dropped and
+; doubled beeps at random. Sealing the frame here also covers the beep byte.
+(defun seal-dash-frame ()
+    {
+        (if (> feedback 0)
+            {
+                (bufset-u8 tx-frame (+ tx-base 3) 1)
+                (set 'feedback (- feedback 1))
+            }
+            (bufset-u8 tx-frame (+ tx-base 3) 0)
+        )
+        (var crc-end (- (buflen tx-frame) 2)) ; crc bytes at end of frame
+        (var crcout tx-hdr-sum) ; header bytes never change, only the fields do
+        (looprange i tx-base crc-end
+            (setq crcout (+ crcout (bufget-u8 tx-frame i))))
+        (setq crcout (bitwise-xor crcout 0xFFFF))
         (bufset-u8 tx-frame crc-end crcout)
         (bufset-u8 tx-frame (+ crc-end 1) (shr crcout 8))
-
-        ; write
-        (uart-write tx-frame)
     }
+)
+
+(defun update-dash(buffer) { (seal-dash-frame) (uart-write tx-frame) })
+
+; -> App protocol (NineDash, m365 Dashboard)
+; The dash BLE module bridges app frames onto this same half-duplex bus, so
+; their reads arrive here addressed to the ESC (0x20) or, on Xiaomi, to the
+; BMS (0x22) - a VESC has no Xiaomi BMS on the bus, so that device is emulated.
+; Replies are request-driven: never answer a frame the app did not send.
+
+(def app-ver 0x0700) ; 7.0.0 - above every stock version, marks this as a VESC
+
+; "VESC" plus ten digits derived from the controller UUID, so a VESC is
+; identifiable at a glance and every unit reads differently. Together with
+; firmware version 7.0.0 this is what an app keys off to detect the package.
+(defun app-build-serial ()
+    (let ((n 0))
+        {
+            (trap (loopforeach b (sysinfo 'uuid) (setq n (+ (* n 31) b))))
+            (var lo (mod (bitwise-and n 0x7FFFFFFF) 100000))
+            (var hi (mod (bitwise-and (shr n 7) 0x7FFFFFFF) 100000))
+            (var s (str-merge "VESC" (str-from-n hi "%05d") (str-from-n lo "%05d")))
+            (looprange i 0 14 (bufset-u8 app-serial i (bufget-u8 s i)))
+            ; 0xDA-0xDF is the ESC CPU id, and apps print it as plain hex. Pack
+            ; the serial digits two per byte so it reads back as the serial
+            ; instead of as an unrecognisable number.
+            (looprange i 0 5 (bufset-u8 app-cpuid i
+                (+ (shl (- (bufget-u8 s (+ 4 (* i 2))) 48) 4)
+                   (- (bufget-u8 s (+ 5 (* i 2))) 48))))
+        }
+    )
+)
+
+(defun app-build-pin ()
+    (let ((s (str-from-n app-pin "%06d")))
+        (looprange i 0 6 (bufset-u8 app-pin-buf i (bufget-u8 s i)))
+    )
+)
+
+(defun app-word (buf idx) ; register pair out of a byte string, little endian
+    (+ (bufget-u8 buf (* idx 2)) (shl (bufget-u8 buf (+ (* idx 2) 1)) 8))
+)
+
+(defun app-clamp16 (v)
+    (cond ((> v 32767) 32767) ((< v -32768) -32768) (t (to-i v)))
+)
+
+(defun app-sysinfo (key) (let ((v 0)) { (trap (setq v (sysinfo key))) (to-i v) }))
+
+; One bulk read asks for 26 registers at once, so nothing below may query CAN
+; or read the config - the reply path has to stay cheap, same as the dash
+; frame. Everything expensive is sampled once per cycle in app-cache-update.
+(defun app-cache-update ()
+    {
+        ; Five times a second: only what genuinely moves that fast.
+        (if (> (secs-since app-cache-time) 0.2) {
+            (set 'app-cache-time (systime))
+            (set 'cur-vin (get-vin))
+            (set 'cur-amps (setup-current-in))
+            (set 'cur-fet (get-temp-fet))
+            (set 'cur-mot (get-temp-mot))
+            (set 'cur-cell-mv (app-clamp16 (/ (* cur-vin 1000) cur-cells)))
+            (build-app-frame app-f-b4 0xb4 6)
+            (build-app-frame app-f-7b 0x7b 6)
+            (build-app-frame-from app-f-33 0x22 0x33 4 true)
+            (build-app-frame-from app-f-35 0x22 0x35 2 true)
+        })
+        ; The slow figures - range, odometer, runtime, pack capacity - crawl, and
+        ; conf-get and sysinfo are expensive. They run one group per tick rather
+        ; than all together, so no single pass can hold the evaluator for long.
+        (if (> (secs-since app-slow-time) 0.5) {
+            (set 'app-slow-time (systime))
+            (cond
+                ((= app-slow-step 0) {
+                    (set 'cur-wh-tot (* 0.85 (conf-get 'si-battery-ah) (* 3.7 (conf-get 'si-battery-cells))))
+                    (set 'cur-range (send-state-range))
+                    (set 'cur-trip (to-i (get-dist-abs)))
+                })
+                ((= app-slow-step 1) {
+                    (set 'cur-odo (app-sysinfo 'odometer))
+                    (set 'cur-runtime (app-sysinfo 'runtime))
+                    (set 'cur-maxkmh (send-state-maxkmh))
+                })
+                ((= app-slow-step 2) {
+                    (build-app-frame-from app-f-31 0x22 0x31 2 true)
+                    (build-app-frame-from app-f-40 0x22 0x40 30 true)
+                    (build-app-frame app-f-25 0x25 2)
+                    (build-app-frame app-f-3b 0x3b 2)
+                    (build-app-frame app-f-75 0x75 2)
+                })
+                (t (if b0-wanted {
+                    (set 'b0-wanted false)
+                    (build-app-frame app-f-b0 0xb0 52)
+                }))
+            )
+            (set 'app-slow-step (mod (+ app-slow-step 1) 4))
+        })
+    }
+)
+
+; The dash's throttle and brake frames share this bus and this thread, and a
+; reply holds the line while it transmits - 5.3 ms for the 52 byte bulk read at
+; 115200 baud. Nothing may delay the lever path while riding, so above walking
+; pace only short replies are answered and the big blocks wait for a standstill.
+; The app re-requests what it misses, which the traces show it already does.
+(defun app-speed-01 () (app-clamp16 (* (abs cur-speed-kmh) 10))) ; 0.1 km/h
+(defun app-trip-m () cur-trip)
+(defun app-volt-cv () (app-clamp16 (* cur-vin 100))) ; 0.01 V
+(defun app-amp-ca () (app-clamp16 (* cur-amps 100))) ; 0.01 A, negative = charging
+(defun app-range-10m () (app-clamp16 (* cur-range 100)))
+(defun app-fet-01 () (app-clamp16 (* cur-fet 10)))
+(defun app-cell-mv () cur-cell-mv)
+
+; The app fetches 0xB0..0xC9 as a single 52 byte read. Assembling that is 26
+; register lookups and 104 buffer operations, so it is done once per cache
+; cycle and only when something actually asks for it.
+(defunret app-pend-buf ()
+    {
+        (if (= pend-dev 0x22)
+            (return (cond
+                ((and (= pend-reg 0x33) (= pend-n 4)) app-f-33)
+                ((and (= pend-reg 0x35) (= pend-n 2)) app-f-35)
+                ((and (= pend-reg 0x31) (= pend-n 2)) app-f-31)
+                ((and (= pend-reg 0x40) (= pend-n 30)) app-f-40)
+                (t nil)
+            ))
+        )
+        (cond
+            ((and (= pend-reg 0xb4) (= pend-n 6)) app-f-b4)
+            ((and (= pend-reg 0xb0) (= pend-n 52)) app-f-b0)
+            ((and (= pend-reg 0x7b) (= pend-n 6)) app-f-7b)
+            ((and (= pend-reg 0x1a) (= pend-n 2)) app-f-1a)
+            ((and (= pend-reg 0x25) (= pend-n 2)) app-f-25)
+            ((and (= pend-reg 0x3b) (= pend-n 2)) app-f-3b)
+            ((and (= pend-reg 0x75) (= pend-n 2)) app-f-75)
+            ((and (= pend-reg 0xda) (= pend-n 12)) app-f-da)
+            (t nil)
+        )
+    }
+)
+
+; one buffer per app answer size that can occur - never resized, never allocated
+(defun combo-buf (al)
+    (cond ((= al 11) combo11) ((= al 13) combo13) ((= al 15) combo15)
+          ((= al 21) combo21) ((= al 39) combo39) ((= al 61) combo61) (t nil))
+)
+
+(defun send-dash-and-app ()
+    (let ((ab (app-pend-buf)))
+        {
+            (set 'app-pend false)
+            (seal-dash-frame)
+            (if (eq ab nil)
+                { (uart-write tx-frame) (nb-send pend-dev pend-src 0x04 pend-reg pend-n (= pend-dev 0x22)) }
+                (let ((cb (combo-buf (buflen ab))) (dl (buflen tx-frame)))
+                    (if (eq cb nil)
+                        { (uart-write tx-frame) (uart-write ab) }
+                        {
+                            (bufcpy cb 0 tx-frame 0 dl)
+                            (bufcpy cb dl ab 0 (buflen ab))
+                            (uart-write cb)
+                        }
+                    )
+                )
+            )
+        }
+    )
+)
+
+(defun build-app-frame-from (buf from reg n bms)
+    (let ((crc (+ n from app-dst 0x04 reg)))
+        {
+            (bufset-u16 buf 0 0x5aa5)
+            (bufset-u8 buf 2 n)
+            (bufset-u8 buf 3 from)
+            (bufset-u8 buf 4 app-dst)
+            (bufset-u8 buf 5 0x04)
+            (bufset-u8 buf 6 reg)
+            (looprange i 0 (/ n 2) {
+                (var w (if bms (xm-bms-word (+ reg i)) (nb-word (+ reg i))))
+                (var lo (bitwise-and w 0xFF))
+                (var hi (bitwise-and (shr w 8) 0xFF))
+                (bufset-u8 buf (+ 7 (* i 2)) lo)
+                (bufset-u8 buf (+ 8 (* i 2)) hi)
+                (setq crc (+ crc lo hi))
+            })
+            (setq crc (bitwise-xor crc 0xFFFF))
+            (bufset-u8 buf (+ n 7) (bitwise-and crc 0xFF))
+            (bufset-u8 buf (+ n 8) (bitwise-and (shr crc 8) 0xFF))
+        }
+    )
+)
+
+(defun build-app-frame (buf reg n) (build-app-frame-from buf 0x20 reg n false))
+
+(defun build-quick ()
+    (let ((sum 0))
+        {
+            (looprange i 0 26 {
+                (var w (nb-word (+ 0xb0 i)))
+                (var lo (bitwise-and w 0xFF))
+                (var hi (bitwise-and (shr w 8) 0xFF))
+                (bufset-u8 quick-buf (* i 2) lo)
+                (bufset-u8 quick-buf (+ (* i 2) 1) hi)
+                (setq sum (+ sum lo hi))
+            })
+            (set 'quick-sum sum)
+        }
+    )
+)
+(defun app-cap-mah () cur-cap)
+
+; NB_INF_BOOL: bit0 speed limited, bit1 locked, bit2 buzzer, bit11 activated
+(defun app-bool-word ()
+    (+ (if (= speedmode 2) 1 0) (if lock 2 0) (if (> alarm 0) 4 0) 2048)
+)
+
+(defun app-workmode () (cond ((= speedmode 2) 1) ((= speedmode 4) 2) (t 0)))
+
+; Writes shared by both protocols. Speed limits are acknowledged but never
+; applied - the app must not silently overwrite the configured profiles.
+(defun app-write (reg val)
+    (cond
+        ; lock and unlock are only valid in non-riding mode
+        ((= reg 0x70) (if (and (!= val 0) (not lock) (<= (abs cur-speed-kmh) 0.5))
+            (set 'app-todo (bitwise-or app-todo 32))))
+        ((= reg 0x71) (if (and (!= val 0) lock (<= (abs cur-speed-kmh) 0.5))
+            (set 'app-todo (bitwise-or app-todo 32))))
+        ((= reg 0x75) (let ((m (cond ((= val 1) 2) ((= val 2) 4) (t 1))))
+            (if (!= m speedmode) {
+                (set 'speedmode m)
+                (set 'app-todo (bitwise-or app-todo 16))
+            })))
+        ; 0x7A is Reserved in the Ninebot protocol, so it is free for a proper
+        ; headlight switch. Note that changing the headlight ends the BLE
+        ; session on this hardware whatever triggers it - see docs/ninedash.md
+        ((= reg 0x7a) (let ((v (!= val 0)))
+            (if (not (eq v light)) {
+                (set 'light v)
+                (build-app-frame app-f-7b 0x7b 6)
+            })))
+        ((= reg 0x7c) (let ((v (and (!= val 0) cruise-allow)))
+            (if (not (eq v cruise-enabled)) {
+                (set 'cruise-enabled v)
+                (build-app-frame app-f-7b 0x7b 6)
+                (set 'app-todo (bitwise-or app-todo 1))
+            })))
+        ((= reg 0x7d) (let ((v (!= val 0)))
+            (if (not (eq v auto-taillight)) {
+                (set 'auto-taillight v)
+                (build-app-frame app-f-7b 0x7b 6)
+                (set 'app-todo (bitwise-or app-todo 2))
+            })))
+        ; The app's KERS selector, walk-mode and direct-power-control toggles
+        ; have no VESC equivalent, so they drive speed mode, secret and the
+        ; headlight instead.
+        ((= reg 0x7b) (let ((m (cond ((= val 1) 1) ((= val 2) 4) (t 2)))) ; weak eco, medium drive, strong sport
+            (if (!= m speedmode) {
+                (set 'speedmode m)
+                (set 'app-todo (bitwise-or app-todo 16))
+            })))
+        ((= reg 0x77) (let ((u (!= val 0)))
+            (if (not (eq u unlock)) {
+                (set 'unlock u)
+                (set 'app-todo (bitwise-or app-todo 16))
+            })))
+        ((= reg 0x76) (let ((v (!= val 0)))
+            (if (not (eq v light)) {
+                (set 'light v)
+                (build-app-frame app-f-7b 0x7b 6)
+            })))
+        ((= reg 0x90) (set 'light (!= val 0)))
+        ; 0x79 powerdown: the dashboard is powered separately from a VESC, so
+        ; this turns it off the same way the appUI button and a long press do,
+        ; rather than cutting the whole vehicle
+        ((= reg 0x79) (if (!= val 0) (set 'app-todo (bitwise-or app-todo 64))))
+        ((= reg 0x7e) (if (!= val 0) (set 'feedback 3))) ; find my scooter
+        ((or (= reg 0x91) (= reg 0x92)) (let ((v (!= val 0)))
+            (if (not (eq v alarm-tone)) {
+                (set 'alarm-tone v)
+                (set 'app-todo (bitwise-or app-todo 4))
+            })))
+        ((= reg 0x17) (if (and (>= val 0) (<= val 999999) (!= val app-pin)) {
+            (set 'app-pin val)
+            (app-build-pin)
+            (set 'app-todo (bitwise-or app-todo 8))
+        }))
+    )
+)
+
+(defun app-run-todo ()
+    (if (!= app-todo 0)
+        (let ((td app-todo))
+            {
+                (set 'app-todo 0)
+                (if (= (bitwise-and td 64) 64) (ctrl-power false)) ; speed guarded there
+                (if (= (bitwise-and td 32) 32) (toggle-lock))
+                (if (= (bitwise-and td 16) 16) (apply-mode))
+                (if (= (bitwise-and td 1) 1) (write-setting 'cruise-enabled cruise-enabled))
+                (if (= (bitwise-and td 2) 2) (write-setting 'auto-taillight auto-taillight))
+                (if (= (bitwise-and td 4) 4) (write-setting 'alarm-tone alarm-tone))
+                (if (= (bitwise-and td 8) 8) (write-setting 'app-pin app-pin))
+            }
+        )
+    )
+)
+
+; 0xb0~0xbd mirrors the commonly polled values so the app can fetch them in a
+; single read, and it does - one bulk read asks for 26 registers at once. That
+; block is split out and tested first, so a bulk read does not walk the whole
+; table 26 times over.
+(defun nb-quick (reg)
+    (cond
+        ((= reg 0xb0) (get-fault))
+        ((= reg 0xb1) (if (> alarm 0) 9 0))
+        ((= reg 0xb2) (app-bool-word))
+        ((= reg 0xb3) (+ (bitwise-and (to-i cur-batt) 0xFF) (shl (bitwise-and (to-i cur-batt) 0xFF) 8)))
+        ((= reg 0xb4) (to-i cur-batt))
+        ((or (= reg 0xb5) (= reg 0xb6)) (app-speed-01))
+        ((= reg 0xb7) (bitwise-and cur-odo 0xFFFF))
+        ((= reg 0xb8) (shr cur-odo 16))
+        ((= reg 0xb9) (app-clamp16 (/ (app-trip-m) 10)))
+        ((= reg 0xba) (to-i (secs-since app-boot-time)))
+        ((= reg 0xbb) (app-fet-01))
+        ((= reg 0xbe) last-alarm-code) ; the alarm that just cleared
+        ((= reg 0xbc) (+ (bitwise-and (to-i cur-maxkmh) 0xFF) ; low: current limit, high: full speed
+                         (shl (bitwise-and (to-i cur-maxkmh) 0xFF) 8)))
+        (t 0)
+    )
+)
+
+; ordered by how often the app asks, the interpreter walks this top to bottom
+(defun nb-word (reg)
+    (if (>= reg 0xb0)
+        (nb-quick reg)
+        (cond
+            ((= reg 0x1a) app-ver)
+            ((= reg 0x75) (app-workmode))
+            ((= reg 0x7b) (cond ((= speedmode 1) 1) ((= speedmode 4) 2) (t 0))) ; shows the speed mode
+            ((= reg 0x77) (if unlock 1 0))
+            ((= reg 0x76) (if light 1 0))
+            ((= reg 0x7c) (if (and cruise-allow cruise-enabled) 1 0))
+            ((= reg 0x7d) (if auto-taillight 2 0)) ; the app writes 2 for on
+            ((or (= reg 0x24) (= reg 0x25)) (app-range-10m))
+            ((= reg 0x3a) (to-i (secs-since app-boot-time)))
+            ((= reg 0x3b) (to-i (secs-since app-boot-time)))
+            ((and (>= reg 0x10) (< reg 0x17)) (app-word app-serial (- reg 0x10)))
+            ((and (>= reg 0x17) (< reg 0x1a)) (app-word app-pin-buf (- reg 0x17)))
+            ((= reg 0x1b) (get-fault))
+            ((= reg 0x1c) (if (> alarm 0) 9 0)) ; ALARM_CODE_LOCKED
+            ((= reg 0x1d) (app-bool-word))
+            ((= reg 0x1f) (app-workmode))
+            ((= reg 0x22) (to-i cur-batt))
+            ((= reg 0x26) (app-speed-01))
+            ((= reg 0x29) (bitwise-and cur-odo 0xFFFF))
+            ((= reg 0x2a) (shr cur-odo 16))
+            ((= reg 0x2f) (app-clamp16 (/ (app-trip-m) 10)))
+            ((= reg 0x32) (bitwise-and cur-runtime 0xFFFF))
+            ((= reg 0x33) (shr cur-runtime 16))
+            ((= reg 0x3e) (app-fet-01))
+            ((= reg 0x41) (app-clamp16 (* cur-mot 10)))
+            ((= reg 0x47) (app-volt-cv))
+            ((= reg 0x65) (app-speed-01))
+            ((or (= reg 0x66) (= reg 0x67) (= reg 0x68)) app-ver)
+            ((or (= reg 0x72) (= reg 0x73) (= reg 0x74)) (app-clamp16 (* cur-maxkmh 10)))
+            ((= reg 0x7a) (if light 1 0))
+            ((= reg 0x90) (if light 1 0))
+            ((or (= reg 0x91) (= reg 0x92)) (if alarm-tone 1 0))
+            (t 0)
+        )
+    )
+)
+
+(defun nb-send (from dst cmd reg n bms) ; frame: 5A A5 len src dst cmd arg payload crc
+    (let ((buf (array-create (+ n 9))) (crc 0))
+        {
+            (trap {
+            (bufset-u16 buf 0 0x5aa5)
+            (bufset-u8 buf 2 n)
+            (bufset-u8 buf 3 from)
+            (bufset-u8 buf 4 dst)
+            (bufset-u8 buf 5 cmd)
+            (bufset-u8 buf 6 reg)
+            (setq crc (+ n from dst cmd reg)) ; summed as the frame is built
+            (if (= cmd 0x05) ; a read answers with 0x04, a write acks with 0x05
+                {
+                    (bufset-u8 buf 7 1) ; write ack payload
+                    (setq crc (+ crc 1))
+                }
+                (if (and (not bms) (= reg 0xb0) (= n 52)) ; the app's bulk read, prebuilt
+                    {
+                        (build-quick)
+                        (bufcpy buf 7 quick-buf 0 52)
+                        (setq crc (+ crc quick-sum))
+                    }
+                    (looprange i 0 (/ n 2) {
+                        (var w (if bms (xm-bms-word (+ reg i)) (nb-word (+ reg i))))
+                        (var lo (bitwise-and w 0xFF))
+                        (var hi (bitwise-and (shr w 8) 0xFF))
+                        (bufset-u8 buf (+ 7 (* i 2)) lo)
+                        (bufset-u8 buf (+ 8 (* i 2)) hi)
+                        (setq crc (+ crc lo hi))
+                    })
+                )
+            )
+            (setq crc (bitwise-xor crc 0xFFFF))
+            (bufset-u8 buf (+ n 7) (bitwise-and crc 0xFF))
+            (bufset-u8 buf (+ n 8) (bitwise-and (shr crc 8) 0xFF))
+            (uart-write buf)
+            })
+            (free buf)
+        }
+    )
+)
+
+(defun nb-app-frame (dev src cmd reg len)
+    (cond
+        ; a read carries the wanted byte count as its only payload byte; some
+        ; requests omit it entirely, in which case one register is meant
+        ((= cmd 0x01) (let ((n (if (> len 0) (bufget-u8 uart-buf 4) 2))) {
+            (if (or (< n 2) (> n 64)) (setq n 2))
+            (setq n (bitwise-and n 0xFE))
+            (if (!= src app-dst) (set 'app-dst src))
+            (set 'quick-used true)
+            (if (and (= reg 0xb0) (= n 52)) (set 'b0-wanted true))
+            ; held for the next dash answer; one arriving while another waits is
+            ; dropped and the app re-asks, which is cheaper than a transmission
+            (if (and (not app-pend) (not (and (>= n 20) levers-active))) {
+                (set 'pend-dev dev) (set 'pend-src src)
+                (set 'pend-reg reg) (set 'pend-n n)
+                (set 'app-pend true)
+            })
+        }))
+        ((or (= cmd 0x02) (= cmd 0x03)) {
+            (if (and (> len 0) (!= dev 0x22))
+                (app-write reg (if (> len 1) ; controls send one byte, the checksum follows it
+                    (+ (bufget-u8 uart-buf 4) (shl (bufget-u8 uart-buf 5) 8))
+                    (bufget-u8 uart-buf 4)
+                ))
+            )
+            (nb-send dev src 0x05 reg 1 false)
+        })
+    )
+)
+
+; Xiaomi: single device byte, 0x20/0x23 for the ESC and 0x22/0x25 for the BMS.
+; Speed is metres/hour here, so it saturates the u16 at 65 km/h.
+(defun xm-word (reg)
+    (cond
+        ((and (>= reg 0x10) (< reg 0x17)) (app-word app-serial (- reg 0x10)))
+        ((and (>= reg 0x17) (< reg 0x1a)) (app-word app-pin-buf (- reg 0x17)))
+        ((= reg 0x1a) app-ver)
+        ((= reg 0x25) (app-range-10m))
+        ((= reg 0x3b) (to-i (secs-since app-boot-time)))
+        ((= reg 0x3e) (app-fet-01))
+        ((= reg 0x67) app-ver)
+        ((= reg 0x75) (if (= speedmode 2) 1 0))
+        ((= reg 0x7a) (if light 1 0))
+        ((= reg 0x7b) (cond ((= speedmode 1) 1) ((= speedmode 4) 2) (t 0)))
+        ((= reg 0x77) (if unlock 1 0))
+        ((= reg 0x76) (if light 1 0))
+        ((= reg 0x7c) (if (and cruise-allow cruise-enabled) 1 0))
+        ((= reg 0x7d) (if auto-taillight 2 0))
+        ((= reg 0xb0) (get-fault))
+        ((= reg 0xb4) (to-i cur-batt))
+        ((or (= reg 0xb5) (= reg 0xb6)) (app-clamp16 (* (abs cur-speed-kmh) 1000)))
+        ((= reg 0xb7) (bitwise-and cur-odo 0xFFFF))
+        ((= reg 0xb8) (shr cur-odo 16))
+        ((= reg 0xb9) (app-clamp16 (/ (app-trip-m) 10)))
+        ((= reg 0xbb) (app-fet-01))
+        ((= reg 0xbe) last-alarm-code) ; the alarm that just cleared
+        ((and (>= reg 0xda) (<= reg 0xdf)) (app-word app-cpuid (- reg 0xda))) ; NB_CPUID_A-F
+        (t 0)
+    )
+)
+
+(defun xm-bms-word (reg)
+    (cond
+        ((and (>= reg 0x10) (< reg 0x17)) (app-word app-serial (- reg 0x10)))
+        ((= reg 0x17) app-ver)
+        ((= reg 0x18) (app-cap-mah))
+        ((= reg 0x20) 0x3021) ; 7 bit year from 2000, 4 bit month, 5 bit day
+        ((= reg 0x31) (app-clamp16 (/ (* cur-batt cur-cap) 100)))
+        ((= reg 0x32) (to-i cur-batt))
+        ((= reg 0x33) (app-amp-ca))
+        ((= reg 0x34) (app-volt-cv))
+        ((= reg 0x35) (let ((tc (bitwise-and (+ (to-i cur-fet) 20) 0xFF))) ; both sensors +20
+                          (+ tc (shl tc 8))))
+        ((= reg 0x3b) 100) ; health
+        ((and (>= reg 0x40) (< reg 0x4a)) (app-cell-mv))
+        (t 0)
+    )
+)
+
+(defun xm-send (dev reg n bms) ; frame: 55 AA len addr cmd arg payload crc
+    (let ((buf (array-create (+ n 8))) (crc 0))
+        {
+            (trap {
+            (bufset-u16 buf 0 0x55aa)
+            (bufset-u8 buf 2 (+ n 2))
+            (bufset-u8 buf 3 dev)
+            (bufset-u8 buf 4 0x01)
+            (bufset-u8 buf 5 reg)
+            (setq crc (+ n 2 dev 0x01 reg)) ; summed as the frame is built
+            (looprange i 0 (/ n 2) {
+                (var w (if bms (xm-bms-word (+ reg i)) (xm-word (+ reg i))))
+                (var lo (bitwise-and w 0xFF))
+                (var hi (bitwise-and (shr w 8) 0xFF))
+                (bufset-u8 buf (+ 6 (* i 2)) lo)
+                (bufset-u8 buf (+ 7 (* i 2)) hi)
+                (setq crc (+ crc lo hi))
+            })
+            (setq crc (bitwise-xor crc 0xFFFF))
+            (bufset-u8 buf (+ n 6) (bitwise-and crc 0xFF))
+            (bufset-u8 buf (+ n 7) (bitwise-and (shr crc 8) 0xFF))
+            (uart-write buf)
+            })
+            (free buf)
+        }
+    )
+)
+
+(defun xm-app-frame (dev cmd reg len)
+    (cond
+        ((= cmd 0x01) (let ((n (bitwise-and (bufget-u8 uart-buf 3) 0xFE)))
+            (if (and (> n 1) (<= n 64)) (xm-send (if (= dev 0x22) 0x25 0x23) reg n (= dev 0x22)))
+        ))
+        ((= cmd 0x03) (if (!= dev 0x22)
+            (app-write reg (if (> len 3)
+                (+ (bufget-u8 uart-buf 3) (shl (bufget-u8 uart-buf 4) 8))
+                (bufget-u8 uart-buf 3)
+            ))
+        ))
+    )
+)
+
+
+; The G2 handlebar has a horn and a turn signal button, and reports them one
+; byte past the brake: 0x40 nothing pressed, 0x50 turn signal held for three
+; seconds, 0x60 horn. The turn signal is sent in a single frame, so every lever
+; frame has to be looked at - 0x64 alone is only a fifth of them. The dash drives its own turn signal lamps, so the hold is
+; free to toggle cruise; the horn has no VESC output and sounds the dash buzzer.
+(defun g2-extras (len)
+    (if (>= len 4)
+        (let ((a (bufget-u8 uart-buf 7)))
+            {
+                (if (= a 0x60) (set 'feedback 1)) ; refreshed while held
+                (if (and (= a 0x50) (!= g2-aux 0x50) cruise-allow (not off) (not lock)) {
+                    (set 'cruise-enabled (not cruise-enabled))
+                    (set 'feedback 2)
+                    (set 'app-todo (bitwise-or app-todo 1)) ; the flash write waits for the feature loop
+                })
+                (set 'g2-aux a)
+            }
+        )
+    )
 )
 
 (defun read-frames-g30()
@@ -1545,29 +2316,69 @@
             (loopwhile t
                 {
                     (uart-read-bytes uart-buf 3 0)
-                    (if (= (bufget-u16 uart-buf 0) 0x5aa5)
+                    ; slide a byte at a time until the header lines up - a three
+                    ; byte window can stay misaligned and drop every lever frame
+                    (loopwhile (!= (bufget-u16 uart-buf 0) 0x5aa5) {
+                        (bufset-u8 uart-buf 0 (bufget-u8 uart-buf 1))
+                        (bufset-u8 uart-buf 1 (bufget-u8 uart-buf 2))
+                        (uart-read-bytes uart-buf 1 2)
+                    })
+                    (var len (bufget-u8 uart-buf 2))
+                    (if (< len 59) ; len+6 must fit the 64 byte buffer, len 0 is a valid read
                         {
-                            (var len (bufget-u8 uart-buf 2))
-                            (var crc len)
-                            (if (and (> len 0) (< len 59)) ; len+6 must fit the 64 byte buffer
+                            (uart-read-bytes uart-buf (+ len 6) 0) ; rest of the frame, overwrites the header
+                            (var dst (bufget-u8 uart-buf 1))
+                            (var code (bufget-u8 uart-buf 2))
+                            ; Verify only what we act on. The dash sends a steady
+                            ; stream of 0x61 we have no use for, and every byte
+                            ; checked costs interpreter time the lever path needs.
+                            (if (or (= code 0x64) (= code 0x65)
+                                    (and (or (= dst 0x20) (= dst 0x22))
+                                         (or (= code 0x01) (= code 0x02) (= code 0x03))))
                                 {
-                                    (uart-read-bytes uart-buf (+ len 6) 0) ;read remaining 6 bytes + payload, overwrite buffer
-
-                                    (let ((code (bufget-u8 uart-buf 2)) (checksum (bufget-u16 uart-buf (+ len 4))))
-                                        {
-                                            (looprange i 0 (+ len 4) (set 'crc (+ crc (bufget-u8 uart-buf i))))
-
-                                            (if (= checksum (bitwise-and (+ (shr (bitwise-xor crc 0xFFFF) 8) (shl (bitwise-xor crc 0xFFFF) 8)) 65535)) ;If the calculated checksum matches with sent checksum, forward comman
-                                                {
-                                                    (if (and (= code 0x65) software-adc (>= len 3)) ; frame must actually carry the throttle/brake bytes
+                                    (var crc len)
+                                    (looprange i 0 (+ len 4) (setq crc (+ crc (bufget-u8 uart-buf i))))
+                                    (setq crc (bitwise-xor crc 0xFFFF))
+                                    (if (= (bufget-u16 uart-buf (+ len 4))
+                                           (bitwise-and (+ (shr crc 8) (shl crc 8)) 65535))
+                                        (cond
+                                                ; 0x61 is a lever frame the dash switches to while
+                                                ; it serves an app - same payload layout as 0x65, and
+                                                ; the most frequent of the three in that state
+                                                ((= code 0x61) {
+                                                    (if (and (or software-adc software-adc2) (>= len 3))
                                                         (adc-input uart-buf)
                                                     )
-                                                    (if (= code 0x64) ; dash reply only on 0x64
-                                                        (update-dash uart-buf)
+                                                    (if (= model 3) (g2-extras len))
+                                                })
+                                                ((= code 0x65) {
+                                                    (if (and (or software-adc software-adc2) (>= len 3)) ; frame must carry the lever bytes
+                                                        (adc-input uart-buf)
                                                     )
-                                                }
-                                            )
-                                        }
+                                                    (if (= model 3) (g2-extras len))
+                                                })
+                                                ((= code 0x64) {
+                                                    ; 0x64 carries throttle and brake at the same
+                                                    ; offsets as 0x65. The dash halves its 0x65 rate
+                                                    ; while serving an app but keeps sending 0x64, so
+                                                    ; ignoring these threw away half the lever data
+                                                    ; exactly when it was scarce.
+                                                    (if (and (or software-adc software-adc2) (>= len 7))
+                                                        (adc-input uart-buf)
+                                                    )
+                                                    (if (= model 3) (g2-extras len))
+                                                    (if (> (secs-since dash-tx-time) dash-tx-iv) {
+                                                        (set 'dash-tx-time (systime))
+                                                        (if app-pend
+                                                            (send-dash-and-app)
+                                                            (update-dash uart-buf)
+                                                        )
+                                                    })
+                                                })
+                                                (t (if app-enable
+                                                    (trap (nb-app-frame dst (bufget-u8 uart-buf 0) code (bufget-u8 uart-buf 3) len))
+                                                ))
+                                        )
                                     )
                                 }
                             )
@@ -1576,7 +2387,7 @@
                 }
             )
         )
-        (sleep 0.1) ; only reached after an error
+        (sleep 0.005) ; only reached after an error
     })
 )
 
@@ -1586,6 +2397,13 @@
             (loopwhile t
                 {
                     (uart-read-bytes uart-buf 3 0)
+                    ; slide a byte at a time until the header lines up - a three
+                    ; byte window can stay misaligned and drop every lever frame
+                    (loopwhile (!= (bufget-u16 uart-buf 0) 0x55aa) {
+                        (bufset-u8 uart-buf 0 (bufget-u8 uart-buf 1))
+                        (bufset-u8 uart-buf 1 (bufget-u8 uart-buf 2))
+                        (uart-read-bytes uart-buf 1 2)
+                    })
                     (if (= (bufget-u16 uart-buf 0) 0x55aa)
                         {
                             (var len (bufget-u8 uart-buf 2))
@@ -1594,13 +2412,20 @@
                                 {
                                     (uart-read-bytes uart-buf (+ len 4) 0)
                                     (looprange i 0 len
-                                        (set 'crc (+ crc (bufget-u8 uart-buf i))))
+                                        (setq crc (+ crc (bufget-u8 uart-buf i))))
                                     (if (=(+(shl(bufget-u8 uart-buf (+ len 2))8) (bufget-u8 uart-buf (+ len 1))) (bitwise-xor crc 0xFFFF))
                                         {
-                                            (if (and (= (bufget-u8 uart-buf 1) 0x65) software-adc (>= len 2)) ; frame must actually carry the throttle/brake bytes
+                                            (if (and (= (bufget-u8 uart-buf 1) 0x65) (or software-adc software-adc2) (>= len 2)) ; frame must actually carry the throttle/brake bytes
                                                 (adc-input uart-buf)
                                             )
-                                            (update-dash uart-buf) ; dash expects a reply on every frame
+                                            ; the dash also addresses 0x20 - only the command
+                                            ; separates its frames from app register access
+                                            (let ((cmd (bufget-u8 uart-buf 1)))
+                                                (if (or (= cmd 0x01) (= cmd 0x03))
+                                                    (trap (xm-app-frame (bufget-u8 uart-buf 0) cmd (bufget-u8 uart-buf 2) len))
+                                                    (update-dash uart-buf) ; dash expects a reply on every frame
+                                                )
+                                            )
                                         }
                                     )
                                 }
@@ -1610,7 +2435,7 @@
                 }
             )
         )
-        (sleep 0.1) ; only reached after an error
+        (sleep 0.005) ; only reached after an error
     })
 )
 
@@ -1666,6 +2491,14 @@
     (set 'light (not light))
 )
 
+; Gestures stop above the speed set in Setup - 0.1 km/h by default, so standstill
+; only, but raise it and modes, headlight and secret can be reached while riding.
+; Locking and switching off are never allowed with the wheel turning, whatever
+; that is set to.
+(def lock-safety-speed (/ 0.1 3.6))
+(defun gestures-allowed() (or off (<= (abs (get-speed)) button-safety-speed)))
+(defun at-standstill() (or off (<= (abs (get-speed)) lock-safety-speed)))
+
 ; Button gestures. Matching order: power-on, secret, lock, modes, light.
 (defun handle-button()
     {
@@ -1681,6 +2514,13 @@
                     (stats-reset) ; reset stats when turning on
                 }
             )
+            ((and unlock
+                    (if secret-off-requires-lock lock (not lock))
+                    (> secret-off-presses 0)
+                    (= presses secret-off-presses)
+                    (combo-held secret-off-combo thr brk))
+                (toggle-secret) ; unlock is set, so this can only turn it off
+            )
             ((and secret-enabled
                     (> secret-presses 0)
                     (= presses secret-presses)
@@ -1691,7 +2531,7 @@
             ((and (> lock-presses 0)
                     (= presses lock-presses)
                     (combo-held lock-combo thr brk))
-                (toggle-lock)
+                (if (at-standstill) (toggle-lock)) ; never while moving
             )
             ((and (if mode-requires-lock lock (not lock))
                     (> mode-presses 0)
@@ -1726,6 +2566,14 @@
 
         (if (and lever-armed (> state 0) (> (secs-since lever-since) 0.5))
             (cond
+                ((and unlock (= secret-off-presses 0)
+                        (if secret-off-requires-lock lock (not lock))
+                        (combo-state-match secret-off-combo state))
+                    {
+                        (set 'lever-armed false)
+                        (toggle-secret)
+                    }
+                )
                 ((and secret-enabled
                         (= secret-presses 0)
                         (combo-state-match secret-combo state)
@@ -1816,6 +2664,7 @@
     (if (= alarm 0)
         {
             (set 'alarm 1)
+            (set 'last-alarm-code 9) ; ALARM_CODE_LOCKED, kept for 0xBE
             (set 'alarm-time (systime))
             (print "Alarm started")
         }
@@ -1831,6 +2680,17 @@
             (print "Alarm stopped")
         }
     )
+)
+
+; Disabling the output stops the master driving, but a slave holds its last
+; command until the master's own timeout runs out - tell them directly.
+(defun stop-current()
+    {
+        (set-current-rel 0)
+        (loopforeach id (can-list-devs)
+            (rcode-run-noret id '(set-current-rel 0))
+        )
+    }
 )
 
 (defun handle-lock(speed)
@@ -1932,6 +2792,23 @@
     }
 )
 
+; Sampled in the feature loop, not when the UI asks: a slip is over long before
+; the next poll, so asking on demand almost always looks at a wheel that has
+; already gripped again.
+(defun check-slip ()
+    (let ((lo (abs (get-rpm))) (hi (abs (get-rpm))))
+        {
+            (loopforeach i (can-list-devs)
+                (trap (let ((v (abs (canget-rpm i))))
+                    { (if (< v lo) (setq lo v)) (if (> v hi) (setq hi v)) })))
+            (if (> (- hi lo) slip-erpm) (set 'slip-time (systime)))
+        }
+    )
+)
+
+(defun wheel-slip ()
+    (if (and (> slip-time 0) (< (secs-since slip-time) slip-hold)) 1 0))
+
 (defun get-lowest-speed()
     {
         (var speed (get-speed))
@@ -2009,9 +2886,7 @@
                 ; button, lock, alarm and output handling - trap and keep looping.
                 (trap {
                     (button-apply button-state)
-                    (if (and (not off) (<= (abs (get-speed)) button-safety-speed))
-                        (handle-lever-gestures)
-                    )
+                    (if (and (not off) (gestures-allowed)) (handle-lever-gestures))
                     (handle-features)
                 })
             }
@@ -2022,21 +2897,21 @@
 (defun button-apply(button)
     {
         (var time-passed (- (systime) press-time))
-        (var is-active (or off (<= (get-speed) button-safety-speed)))
 
-        (if (> time-passed 2500) ; after 2500 ms
+        ; systime ticks are 0.1 ms, so these are 300 ms and 600 ms
+        (if (> time-passed 3000)
             (if button ; check button is still pressed
-                (if (> time-passed 6000) ; long press after 6000 ms
+                (if (> time-passed 6000) ; long press
                     {
-                        (if is-active
-                            (handle-holding-button)
+                        (if (at-standstill)
+                            (handle-holding-button) ; switching off, so standstill only
                         )
                         (reset-button) ; reset button
                     }
                 )
                 (if (> presses 0) ; if presses > 0
                     {
-                        (if is-active
+                        (if (gestures-allowed)
                             (handle-button) ; handle button presses
                         )
                         (reset-button) ; reset button
@@ -2068,6 +2943,47 @@
             (gpio-configure 'pin-rx 'pin-mode-in-pu)
             (def uart-buf (array-create 64))
 
+            ; app protocol identity - mutable, so it is built here and not in flash
+            (def app-serial (array-create 14))
+            (def app-cpuid (array-create 12))
+            (def app-pin-buf (array-create 6))
+            (def quick-buf (array-create 52))
+            (def app-f-b0 (array-create 61)) ; prepared replies, sent as-is
+            (def app-f-b4 (array-create 15))
+            (def app-f-7b (array-create 15))
+            (def app-f-1a (array-create 11))
+            (def app-f-25 (array-create 11))
+            (def app-f-3b (array-create 11))
+            (def app-f-75 (array-create 11))
+            (def app-f-da (array-create 21))
+            (def app-f-33 (array-create 13)) ; the BMS reads, also prepared
+            (def app-f-35 (array-create 11))
+            (def app-f-31 (array-create 11))
+            (def app-f-40 (array-create 39))
+            (set 'cur-cells (let ((n (conf-get 'si-battery-cells))) (if (> n 0) n 10)))
+            (set 'cur-wh-tot (* 0.85 (conf-get 'si-battery-ah) (* 3.7 (conf-get 'si-battery-cells))))
+            (set 'cur-cap (app-clamp16 (* (conf-get 'si-battery-ah) 1000)))
+            ; timestamps captured at load are frozen into the image - reset them
+            ; here or the first measurement after a boot compares against a
+            ; reference from whenever the image was written
+            (set 'last-rx (systime))
+            (set 'app-cache-time (systime))
+            (set 'app-slow-time (systime))
+            (set 'app-reply-time (systime))
+            (set 'dash-tx-time (systime))
+            (set 'press-time (systime))
+            (set 'alarm-time (systime))
+            (set 'lever-since (systime))
+            (set 'blink-since (systime))
+            (set 'cruise-since (systime))
+            (set 'cruise-shown-time (systime))
+            (set 'calib-since (systime))
+            (app-build-serial)
+            (app-build-pin)
+            (build-app-frame app-f-1a 0x1a 2) ; constant, built once
+            (build-app-frame app-f-da 0xda 12)
+            (set 'app-boot-time (systime))
+
             (if (= model 1) {
                 (define tx-frame (array-create 14))
                 (bufset-u16 tx-frame 0 0x55AA) ;Xiaomi protocol
@@ -2077,25 +2993,47 @@
                 (set 'thr-idx 4)
                 (set 'brk-idx 5)
             } {
-                (define tx-frame (array-create 15))
+                (define tx-frame (array-create (if (= model 3) 17 15)))
                 (bufset-u16 tx-frame 0 0x5AA5) ;Ninebot protocol
-                (bufset-u8 tx-frame 2 0x06) ;Payload length is 5 bytes
+                (bufset-u8 tx-frame 2 (if (= model 3) 0x08 0x06)) ;Payload length
                 (bufset-u16 tx-frame 3 0x2021) ; Packet is from ESC to BLE
                 (bufset-u16 tx-frame 5 0x6400) ; Packet is from ESC to BLE
+                ; the G2 reply carries two more payload bytes - what they mean is
+                ; not known, these are what a stock G2 sends once it has booted
+                (if (= model 3) {
+                    (bufset-u8 tx-frame 13 0x04)
+                    (bufset-u8 tx-frame 14 0x91)
+                })
                 (set 'tx-base 7)
                 (set 'thr-idx 5)
                 (set 'brk-idx 6)
             })
 
+            (looprange i 2 tx-base (set 'tx-hdr-sum (+ tx-hdr-sum (bufget-u8 tx-frame i))))
+
+            ; dash answer plus each app answer size - the dash frame is two bytes
+            ; longer on the G2, so they can only be sized once it exists
+            (let ((dl (buflen tx-frame)))
+                {
+                    (def combo11 (array-create (+ dl 11)))
+                    (def combo13 (array-create (+ dl 13)))
+                    (def combo15 (array-create (+ dl 15)))
+                    (def combo21 (array-create (+ dl 21)))
+                    (def combo39 (array-create (+ dl 39)))
+                    (def combo61 (array-create (+ dl 61)))
+                }
+            )
+
             (apply-software-adc)
+            (apply-dash-power)
 
             ; Apply mode on start-up
             (apply-mode)
 
             ; Spawn UART reading frames thread
-            (if (= model 1) ; 200 words: the unlock display branch + trap wrapper need headroom
-                (spawn 200 read-frames-m365)
-                (spawn 200 read-frames-g30)
+            (if (= model 1) ; 500 words: app register replies allocate and nest deeper
+                (spawn 500 read-frames-m365)
+                (spawn 500 read-frames-g30)
             )
             (button-logic) ; Start button logic in main thread - this will block the main thread
         })
@@ -2103,5 +3041,15 @@
 
 @const-end
 
-(image-save)
+; Without an image the firmware reparses the whole script on every boot, and it
+; rewrites the const heap from the same base pointer each time - the second boot
+; then collides with the first. With one, main is found in the restored
+; environment and only (main) runs.
+;
+; image-save returns nil when the script has outgrown the const heap. Nothing
+; breaks until the next boot, so catch it here: true is what goes into the image,
+; so a boot that came from one always reports success.
+(def img-ok true)
+(set 'img-ok (image-save))
+(if (not img-ok) (print "image-save failed - script too big, will not boot"))
 (main)

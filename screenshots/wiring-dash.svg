@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 690" width="1280" height="690" font-family="Inter, Roboto, system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <rect x="0" y="0" width="1280" height="690" fill="#ffffff"/>
+
+  <!-- wires -->
+  <g stroke-width="4" fill="none">
+    <path d="M360 226 L990 226" stroke="#e8453c"/>
+    <path d="M360 381 L990 381" stroke="#9e9e9e"/>
+    <path d="M360 460 L990 460" stroke="#f0a72a"/>
+    <path d="M360 538 L990 538" stroke="#6aa61e"/>
+    <path d="M360 305 L400 305" stroke="#9e9e9e"/>
+  </g>
+
+  <!-- 1k from VCC/3.3V down to RX, hopping the lines it crosses -->
+  <g stroke-width="3" fill="none" stroke="#8a8a8a">
+    <path d="M445 305 L483 305 L483 373"/>
+    <path d="M483 373 A 8 8 0 0 1 483 389"/>
+    <path d="M483 389 L483 452"/>
+    <path d="M483 452 A 8 8 0 0 1 483 468"/>
+    <path d="M483 468 L483 538"/>
+  </g>
+  <rect x="400" y="294" width="45" height="22" fill="#111111"/>
+  <text x="422" y="281" text-anchor="middle" font-size="17" fill="#7a7a7a">1k&#8486;</text>
+
+  <!-- 220uF across 5V and GND -->
+  <g stroke-width="3" fill="none" stroke="#8a8a8a">
+    <path d="M693 226 L693 274"/>
+    <path d="M693 291 L693 381"/>
+  </g>
+  <g stroke="#8a8a8a" stroke-width="3">
+    <line x1="671" y1="274" x2="715" y2="274"/>
+    <line x1="671" y1="291" x2="715" y2="291"/>
+  </g>
+  <text x="731" y="284" font-size="17" fill="#9e9e9e">220&#181;F 25V</text>
+
+  <!-- 1uF from the button line to GND, hopping TX -->
+  <g stroke-width="3" fill="none" stroke="#8a8a8a">
+    <path d="M848 381 L848 397"/>
+    <path d="M848 414 L848 452"/>
+    <path d="M848 452 A 8 8 0 0 1 848 468"/>
+    <path d="M848 468 L848 538"/>
+  </g>
+  <g stroke="#8a8a8a" stroke-width="3">
+    <line x1="826" y1="397" x2="870" y2="397"/>
+    <line x1="826" y1="414" x2="870" y2="414"/>
+  </g>
+  <text x="884" y="412" font-size="17" fill="#9e9e9e">1&#181;F X7R</text>
+
+  <text x="641" y="444" text-anchor="middle" font-size="17" fill="#b3b3b3">no cap on this line</text>
+
+  <!-- junctions -->
+  <circle cx="483" cy="538" r="5" fill="#6aa61e"/>
+  <circle cx="693" cy="226" r="5" fill="#e8453c"/>
+  <circle cx="693" cy="381" r="5" fill="#9e9e9e"/>
+  <circle cx="848" cy="381" r="5" fill="#9e9e9e"/>
+  <circle cx="848" cy="538" r="5" fill="#6aa61e"/>
+
+  <!-- boxes -->
+  <rect x="120" y="120" width="240" height="485" rx="8" fill="#453d9e"/>
+  <text x="240" y="175" text-anchor="middle" font-size="22" font-weight="600" fill="#ffffff">VESC</text>
+  <g font-size="18" text-anchor="end" fill="#e9e7f7">
+    <text x="345" y="233">5V</text>
+    <text x="345" y="312">VCC/3.3V</text>
+    <text x="345" y="388">GND</text>
+    <text x="345" y="467">TX</text>
+    <text x="345" y="545">RX</text>
+  </g>
+
+  <rect x="990" y="120" width="170" height="485" rx="8" fill="#14594a"/>
+  <text x="1075" y="175" text-anchor="middle" font-size="22" font-weight="600" fill="#ffffff">Dashboard</text>
+  <g font-size="18" fill="#dfeae6">
+    <text x="1006" y="233">5V</text>
+    <text x="1006" y="388">GND</text>
+    <text x="1006" y="467">yellow</text>
+    <text x="1006" y="545">green</text>
+  </g>
+
+  <!-- pin dots -->
+  <g>
+    <circle cx="360" cy="226" r="5" fill="#e8453c"/>
+    <circle cx="360" cy="305" r="5" fill="#9e9e9e"/>
+    <circle cx="360" cy="381" r="5" fill="#9e9e9e"/>
+    <circle cx="360" cy="460" r="5" fill="#f0a72a"/>
+    <circle cx="360" cy="538" r="5" fill="#6aa61e"/>
+    <circle cx="990" cy="226" r="5" fill="#e8453c"/>
+    <circle cx="990" cy="381" r="5" fill="#9e9e9e"/>
+    <circle cx="990" cy="460" r="5" fill="#f0a72a"/>
+    <circle cx="990" cy="538" r="5" fill="#6aa61e"/>
+  </g>
+</svg>
