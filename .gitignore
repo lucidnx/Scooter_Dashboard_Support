@@ -12,6 +12,7 @@ tools/*
 logs/
 *.log
 bus_sniff.py
+__pycache__/
 screenshots/*-old.*
 build/
 padded.lisp
