@@ -152,6 +152,9 @@ including pairing.
   Save. The model is not part of a backup, since it belongs to the unit
 - VESC Tool gives a package no way to write a file on the phone or the desktop, so a
   backup travels as text rather than as a download
+- ⚠️ **Installing a new version returns every setting to its default**, so export
+  before you update and import afterwards. The model is kept, and the light
+  compensation calibration has to be run again
 
 ### 🎚️ Throttle & brake
 - **Software ADC** per channel - take throttle from the dashboard and leave brake on a lever

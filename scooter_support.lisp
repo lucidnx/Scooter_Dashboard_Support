@@ -290,110 +290,113 @@
 (def settings-version 410i32)
 
 ; Persistent settings: (label . (eeprom-offset type))
-(def eeprom-addrs '(
-    (ver-code              . (0 i))
-    (software-adc          . (1 b))
-    (software-adc2         . (87 b))
-    (min-adc-throttle      . (2 f)) ; legacy, unused - kept so old migrations keep working
-    (min-adc-brake         . (3 f)) ; legacy, unused - the ADC app start voltages rule now
-    (temp-warning-motor    . (4 f))
-    (temp-warning-fet      . (5 f))
-    (show-batt-in-idle     . (6 b))
-    (min-speed-kmh         . (7 f))
-    (alarm-tone            . (8 b))
-    (alarm-speed-threshold . (9 f))
-    (alarm-gyro-threshold  . (10 f))
-    (alarm-voltage         . (11 f))
-    (eco-speed-kmh         . (12 f))
-    (eco-current           . (13 f))
-    (eco-watts             . (14 f))
-    (eco-fw                . (15 f))
-    (drive-speed-kmh       . (16 f))
-    (drive-current         . (17 f))
-    (drive-watts           . (18 f))
-    (drive-fw              . (19 f))
-    (sport-speed-kmh       . (20 f))
-    (sport-current         . (21 f))
-    (sport-watts           . (22 f))
-    (sport-fw              . (23 f))
-    (secret-enabled        . (24 b))
-    (secret-eco-speed-kmh  . (25 f))
-    (secret-eco-current    . (26 f))
-    (secret-eco-watts      . (27 f))
-    (secret-eco-fw         . (28 f))
-    (secret-drive-speed-kmh . (29 f))
-    (secret-drive-current  . (30 f))
-    (secret-drive-watts    . (31 f))
-    (secret-drive-fw       . (32 f))
-    (secret-sport-speed-kmh . (33 f))
-    (secret-sport-current  . (34 f))
-    (secret-sport-watts    . (35 f))
-    (secret-sport-fw       . (36 f))
-    (model                 . (37 i))
-    (apply-speed           . (38 b))
-    (apply-current         . (39 b))
-    (apply-watts           . (40 b))
-    (apply-fw              . (41 b))
-    (secret-presses        . (42 i))
-    (secret-off-presses    . (89 i))
-    (secret-off-combo      . (90 i))
-    (secret-off-requires-lock . (91 b))
-    (idle-display          . (92 i))
-    (secret-combo          . (43 i))
-    (secret-requires-lock  . (44 b))
-    (lock-presses          . (45 i))
-    (lock-combo            . (46 i))
-    (secret-apply-fw       . (47 b))
-    (secret-apply-speed    . (48 b))
-    (secret-apply-current  . (49 b))
-    (secret-apply-watts    . (50 b))
-    (mode-presses          . (51 i))
-    (mode-combo            . (52 i))
-    (light-presses         . (53 i))
-    (light-combo           . (54 i))
-    (light-on-boot         . (55 b))
-    (button-speed-kmh      . (56 f))
-    (boot-mode             . (57 i))
-    (show-batt-idle-secret . (58 b))
-    (mode-requires-lock    . (59 b))
-    (light-requires-lock   . (60 b))
-    (use-mph               . (61 b))
-    (rear-light-enable     . (62 b))
-    (auto-taillight        . (63 b))
-    (brake-light-mode      . (64 i))
-    (eco-om                . (65 f))
-    (drive-om              . (66 f))
-    (sport-om              . (67 f))
-    (secret-eco-om         . (68 f))
-    (secret-drive-om       . (69 f))
-    (secret-sport-om       . (70 f))
-    (apply-om              . (71 b))
-    (secret-apply-om       . (72 b))
-    (bms-soc-enable        . (73 b))
-    (cruise-enabled        . (74 b))
-    (cruise-delay          . (75 f))
-    (cruise-deviation      . (76 f))
-    (cruise-min-speed      . (82 f))
-    (cruise-max-speed      . (83 f))
-    (secret-exit-on-lock   . (77 b))
-    (light-offset-thr      . (78 f))
-    (light-offset-brk      . (79 f))
-    (light-gain-thr        . (80 f))
-    (light-gain-brk        . (81 f))
-    (app-pin               . (84 i))
-    (taillight-brightness  . (94 f))
-    (app-enable            . (85 b))
-    (dash-power-out        . (86 b)) ; kept so the v404 migration can read it
-    (power-pin             . (88 i))
-    (cruise-allow          . (93 b))
+; Every setting in one place: name, eeprom slot, type, default. read-setting
+; and write-setting look up the first two, restore-defaults writes the last,
+; so a new setting is one line here and nowhere else.
+(def setting-defs '(
+    (ver-code 0 i 0)
+    (software-adc 1 b true)
+    (software-adc2 87 b true)
+    (min-adc-throttle 2 f 0.1)
+    (min-adc-brake 3 f 0.1)
+    (temp-warning-motor 4 f 80.0)
+    (temp-warning-fet 5 f 80.0)
+    (show-batt-in-idle 6 b false)
+    (min-speed-kmh 7 f 1.0)
+    (alarm-tone 8 b true)
+    (alarm-speed-threshold 9 f 0.5)
+    (alarm-gyro-threshold 10 f 10.0)
+    (alarm-voltage 11 f 24.0)
+    (eco-speed-kmh 12 f 7.0)
+    (eco-current 13 f 0.6)
+    (eco-watts 14 f 400.0)
+    (eco-fw 15 f 0.0)
+    (drive-speed-kmh 16 f 17.0)
+    (drive-current 17 f 0.7)
+    (drive-watts 18 f 500.0)
+    (drive-fw 19 f 0.0)
+    (sport-speed-kmh 20 f 22.0)
+    (sport-current 21 f 1.0)
+    (sport-watts 22 f 700.0)
+    (sport-fw 23 f 0.0)
+    (secret-enabled 24 b true)
+    (secret-eco-speed-kmh 25 f 27.0)
+    (secret-eco-current 26 f 1.0)
+    (secret-eco-watts 27 f 1000.0)
+    (secret-eco-fw 28 f 0.0)
+    (secret-drive-speed-kmh 29 f 47.0)
+    (secret-drive-current 30 f 1.0)
+    (secret-drive-watts 31 f 1500.0)
+    (secret-drive-fw 32 f 0.0)
+    (secret-sport-speed-kmh 33 f 1000.0)
+    (secret-sport-current 34 f 1.0)
+    (secret-sport-watts 35 f 2000.0)
+    (secret-sport-fw 36 f 10.0)
+    (model 37 i 2)
+    (apply-speed 38 b true)
+    (apply-current 39 b true)
+    (apply-watts 40 b true)
+    (apply-fw 41 b true)
+    (secret-presses 42 i 1)
+    (secret-off-presses 89 i 3)
+    (secret-off-combo 90 i 3)
+    (secret-off-requires-lock 91 b false)
+    (idle-display 92 i 0)
+    (secret-combo 43 i 0)
+    (secret-requires-lock 44 b false)
+    (lock-presses 45 i 2)
+    (lock-combo 46 i 1)
+    (secret-apply-fw 47 b true)
+    (secret-apply-speed 48 b true)
+    (secret-apply-current 49 b true)
+    (secret-apply-watts 50 b true)
+    (mode-presses 51 i 2)
+    (mode-combo 52 i 3)
+    (light-presses 53 i 1)
+    (light-combo 54 i 3)
+    (light-on-boot 55 b false)
+    (button-speed-kmh 56 f 0.1)
+    (boot-mode 57 i 1)
+    (show-batt-idle-secret 58 b false)
+    (mode-requires-lock 59 b false)
+    (light-requires-lock 60 b false)
+    (use-mph 61 b false)
+    (rear-light-enable 62 b false)
+    (auto-taillight 63 b false)
+    (brake-light-mode 64 i 1)
+    (eco-om 65 f 1.0)
+    (drive-om 66 f 1.0)
+    (sport-om 67 f 1.0)
+    (secret-eco-om 68 f 1.0)
+    (secret-drive-om 69 f 1.0)
+    (secret-sport-om 70 f 1.0)
+    (apply-om 71 b false)
+    (secret-apply-om 72 b false)
+    (bms-soc-enable 73 b false)
+    (cruise-enabled 74 b true)
+    (cruise-delay 75 f 5.0)
+    (cruise-deviation 76 f 1.0)
+    (cruise-min-speed 82 f 5.0)
+    (cruise-max-speed 83 f 35.0)
+    (secret-exit-on-lock 77 b false)
+    (light-offset-thr 78 f 0.0)
+    (light-offset-brk 79 f 0.0)
+    (light-gain-thr 80 f 1.0)
+    (light-gain-brk 81 f 1.0)
+    (app-pin 84 i 0)
+    (taillight-brightness 94 f 0.4)
+    (app-enable 85 b false)
+    (dash-power-out 86 b false)
+    (power-pin 88 i 0)
+    (cruise-allow 93 b true)
 ))
 
 (def last-button-state false)
 
 (defun read-setting (name)
     (let (
-            (addr (first (assoc eeprom-addrs name)))
-            (type (second (assoc eeprom-addrs name)))
+            (addr (first (assoc setting-defs name)))
+            (type (second (assoc setting-defs name)))
         )
         (cond
             ((eq type 'i) (eeprom-read-i addr))
@@ -403,8 +406,8 @@
 
 (defun write-setting (name val)
     (let (
-            (addr (first (assoc eeprom-addrs name)))
-            (type (second (assoc eeprom-addrs name)))
+            (addr (first (assoc setting-defs name)))
+            (type (second (assoc setting-defs name)))
         )
         (cond
             ((eq type 'i) (eeprom-store-i addr val))
@@ -416,255 +419,27 @@
     (and (not (eq m nil)) (>= m 0) (<= m 3))
 )
 
-(defun write-secret-mode-toggles () ; settings added in v303
-    {
-        (write-setting 'secret-apply-speed true)
-        (write-setting 'secret-apply-current true)
-        (write-setting 'secret-apply-watts true)
-    }
-)
-
-; v309 replaces the flat light offset with a gain+offset affine correction
-; (raw wasn't shifted by a constant volts - it scaled non-linearly with lever
-; position). A flat offset from v308 would be WRONG under the new formula
-; (sign-inverted at points), so it's reset here - recalibrate with Sample.
-; the secret-off gesture only shipped as a default nobody had reason to keep
-(defun write-v407-defaults () ; settings added in v407
-    (write-setting 'idle-display 0)
-)
-
-; the single cruise switch splits in two: the old one becomes the master, and
-; the Control tab gets its own that starts on, so the master alone decides
-(defun write-v410-defaults () ; settings changed in v410
-    ; the old ceiling was 100, which is no ceiling at all - leave anyone who
-    ; picked their own alone
-    (if (>= (read-setting 'cruise-max-speed) 100.0)
-        (write-setting 'cruise-max-speed 35.0))
-)
-
-(defun write-v409-defaults () ; settings added in v409
-    (write-setting 'taillight-brightness 0.4)
-)
-
-(defun write-v408-defaults () ; settings added in v408
-    {
-        (write-setting 'cruise-allow (read-setting 'cruise-enabled))
-        (write-setting 'cruise-enabled true)
-    }
-)
-
-(defun write-v406-defaults () ; settings added in v406
-    {
-        (write-setting 'secret-off-presses 3)
-        (write-setting 'secret-off-combo 3)
-        (write-setting 'secret-off-requires-lock false)
-    }
-)
-
-(defun write-v405-defaults () ; settings added in v405
-    {
-        (write-setting 'secret-off-presses 3)
-        (write-setting 'secret-off-combo 3)
-    }
-)
-
-; the ADC2-only bool becomes a pin selector
-(defun write-v404-defaults () ; settings added in v404
-    (write-setting 'power-pin (if (read-setting 'dash-power-out) 2 0))
-)
-
-; the brake channel keeps whatever the single old switch was set to
-(defun write-v403-defaults () ; settings added in v403
-    (write-setting 'software-adc2 (read-setting 'software-adc))
-)
-
-(defun write-v402-defaults () ; settings added in v402
-    (write-setting 'dash-power-out false)
-)
-
-(defun write-v401-defaults () ; settings added in v401
-    (write-setting 'app-enable false)
-)
-
-(defun write-v400-defaults () ; settings added in v400
-    (write-setting 'app-pin 0)
-)
-
-(defun write-v310-defaults () ; settings added in v310
-    {
-        (write-setting 'cruise-min-speed 5.0)
-        (write-setting 'cruise-max-speed 35.0)
-    }
-)
-
-(defun write-v309-defaults ()
-    {
-        (write-setting 'light-offset-thr 0.0)
-        (write-setting 'light-gain-thr 1.0)
-        (write-setting 'light-offset-brk 0.0)
-        (write-setting 'light-gain-brk 1.0)
-    }
-)
-
-(defun write-v308-defaults () ; settings added in v308
-    {
-        (write-setting 'light-offset-thr 0.0)
-        (write-setting 'light-offset-brk 0.0)
-    }
-)
-
-(defun write-v307-defaults () ; settings added in v307
-    (write-setting 'secret-exit-on-lock false)
-)
-
-(defun write-v306-defaults () ; settings added in v306
-    {
-        (write-setting 'use-mph false)
-        (write-setting 'rear-light-enable false)
-        (write-setting 'auto-taillight false)
-        (write-setting 'brake-light-mode 1)
-        (write-setting 'taillight-brightness 0.4)
-        (write-setting 'eco-om 1.0)
-        (write-setting 'drive-om 1.0)
-        (write-setting 'sport-om 1.0)
-        (write-setting 'secret-eco-om 1.0)
-        (write-setting 'secret-drive-om 1.0)
-        (write-setting 'secret-sport-om 1.0)
-        (write-setting 'apply-om false)
-        (write-setting 'secret-apply-om false)
-        (write-setting 'bms-soc-enable false)
-        (write-setting 'cruise-enabled false)
-        (write-setting 'cruise-delay 5.0)
-        (write-setting 'cruise-deviation 1.0)
-    }
-)
-
-(defun write-v305-defaults () ; settings added in v305
-    {
-        ; battery-on-idle used to act in secret modes only - keep that behavior
-        (write-setting 'show-batt-idle-secret (read-setting 'show-batt-in-idle))
-        (write-setting 'show-batt-in-idle false)
-        (write-setting 'mode-requires-lock false)
-        (write-setting 'light-requires-lock false)
-    }
-)
-
-(defun write-remap-defaults () ; settings added in v304
-    {
-        (write-setting 'mode-presses 2)
-        (write-setting 'mode-combo 3)
-        (write-setting 'light-presses 1)
-        (write-setting 'light-combo 3)
-        (write-setting 'light-on-boot false)
-        (write-setting 'button-speed-kmh 0.1)
-        (write-setting 'boot-mode 1)
-    }
-)
-
-(defun restore-gesture-apply-defaults () ; settings added in v301+
-    {
-        (write-setting 'apply-speed true)
-        (write-setting 'apply-current true)
-        (write-setting 'apply-watts true)
-        (write-setting 'apply-fw true)
-        (write-setting 'secret-apply-fw true)
-        (write-secret-mode-toggles)
-        (write-remap-defaults)
-        (write-v305-defaults)
-        (write-v306-defaults)
-        (write-v307-defaults)
-        (write-v308-defaults)
-        (write-v309-defaults)
-        (write-v310-defaults)
-        (write-v400-defaults)
-        (write-v401-defaults)
-        (write-v402-defaults)
-        (write-v403-defaults)
-        (write-v404-defaults)
-        (write-v405-defaults)
-        (write-v406-defaults)
-        (write-v407-defaults)
-        (write-v408-defaults)
-        (write-v409-defaults)
-        (write-v410-defaults)
-        (write-setting 'secret-presses 1)
-        (write-setting 'secret-combo 0)
-        (write-setting 'secret-requires-lock false)
-        (write-setting 'lock-presses 2)
-        (write-setting 'lock-combo 1)
-    }
-)
-
 (defun restore-defaults (keep-model)
     {
         (var cur-model (read-setting 'model))
-        (write-setting 'software-adc true)
-        (write-setting 'software-adc2 true)
-        (write-setting 'min-adc-throttle 0.1)
-        (write-setting 'min-adc-brake 0.1)
-        (write-setting 'temp-warning-motor 80.0)
-        (write-setting 'temp-warning-fet 80.0)
-        (write-setting 'show-batt-in-idle false)
-        (write-setting 'min-speed-kmh 1.0)
-        (write-setting 'alarm-tone true)
-        (write-setting 'alarm-speed-threshold 0.5)
-        (write-setting 'alarm-gyro-threshold 10.0)
-        (write-setting 'alarm-voltage 24.0)
-        (write-setting 'eco-speed-kmh 7.0)
-        (write-setting 'eco-current 0.6)
-        (write-setting 'eco-watts 400.0)
-        (write-setting 'eco-fw 0.0)
-        (write-setting 'drive-speed-kmh 17.0)
-        (write-setting 'drive-current 0.7)
-        (write-setting 'drive-watts 500.0)
-        (write-setting 'drive-fw 0.0)
-        (write-setting 'sport-speed-kmh 22.0)
-        (write-setting 'sport-current 1.0)
-        (write-setting 'sport-watts 700.0)
-        (write-setting 'sport-fw 0.0)
-        (write-setting 'secret-enabled true)
-        (write-setting 'secret-eco-speed-kmh 27.0)
-        (write-setting 'secret-eco-current 1.0)
-        (write-setting 'secret-eco-watts 1000.0)
-        (write-setting 'secret-eco-fw 0.0)
-        (write-setting 'secret-drive-speed-kmh 47.0)
-        (write-setting 'secret-drive-current 1.0)
-        (write-setting 'secret-drive-watts 1500.0)
-        (write-setting 'secret-drive-fw 0.0)
-        (write-setting 'secret-sport-speed-kmh 1000.0)
-        (write-setting 'secret-sport-current 1.0)
-        (write-setting 'secret-sport-watts 2000.0)
-        (write-setting 'secret-sport-fw 10.0)
-        (restore-gesture-apply-defaults)
-        (write-setting 'model (if (and keep-model (valid-model cur-model)) cur-model 2))
+        ; the version first: a restore cut short by a reset cannot come back and
+        ; repeat itself. One write at a time, yielding between them - each locks
+        ; interrupts, reconfigures the watchdog and waits for the motor to release.
         (write-setting 'ver-code settings-version)
+        (write-setting 'model (if (and keep-model (valid-model cur-model)) cur-model 2))
+        (loopforeach s setting-defs
+            (let ((n (ix s 0)))
+                (if (not (or (eq n 'model) (eq n 'ver-code)))
+                    { (write-setting n (ix s 3)) (sleep 0.02) })))
     }
 )
 
 (defun load-settings ()
     {
-        (var ver (read-setting 'ver-code))
-        ; Each release only writes the settings it added, so an upgrade runs every
-        ; writer newer than the stored version and keeps everything else. Anything
-        ; older than v4.0 is reconfigured from defaults rather than migrated.
-        (if (not-eq ver settings-version)
-            (if (or (eq ver nil) (< ver 400i32) (> ver settings-version))
-                (restore-defaults true) ; an upgrade keeps the dashboard it had
-                {
-                    (if (< ver 401i32) (write-v401-defaults))
-                    (if (< ver 402i32) (write-v402-defaults))
-                    (if (< ver 403i32) (write-v403-defaults))
-                    (if (< ver 404i32) (write-v404-defaults))
-                    (if (< ver 405i32) (write-v405-defaults))
-                    (if (< ver 406i32) (write-v406-defaults))
-                    (if (< ver 407i32) (write-v407-defaults))
-                    (if (< ver 408i32) (write-v408-defaults))
-                    (if (< ver 409i32) (write-v409-defaults))
-                    (if (< ver 410i32) (write-v410-defaults))
-                    (write-setting 'ver-code settings-version)
-                }
-            )
-        )
+        ; A version that does not match is reconfigured from defaults. The script
+        ; carries no migrations, so every release starts from a known set rather
+        ; than from whatever an older one happened to leave behind.
+        (if (not-eq (read-setting 'ver-code) settings-version) (restore-defaults true))
 
         ; Every setting whose runtime variable carries the same name. Spelling these
         ; out one by one cost about six hundred cells of the const heap.

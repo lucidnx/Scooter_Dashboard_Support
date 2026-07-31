@@ -16,7 +16,24 @@ streams, so a bug here fails the build instead of reaching the scooter.
 import sys
 
 
-TOKEN_WARN = 16200
+# Measured with :info in the VESC Tool Lisp console, on two units running the
+# v4.0 release. The const heap and the image share 128 KB:
+#
+#   unit  const heap   image   free   extensions
+#   A         109684   21372     16   307 of 322
+#   B         109672   21320     80   304 of 319
+#
+# Sixteen bytes. The image holds the symbol table, so a firmware build with a
+# few more extensions than unit A has none - image-save fails, and a script that
+# cannot save an image bootloops the controller with no way in but an ST-Link.
+# The two units' images differ by 52 bytes over 3 extensions, so the ceiling is
+# that 128 KB less the largest image seen and 6 KB - about a hundred times the
+# variation measured, and room for the image itself to grow by a third.
+BYTES_PER_TOKEN = 6.694
+IMAGE_BYTES = 21372
+MARGIN_BYTES = 6144
+TOKEN_MAX = int((131072 - IMAGE_BYTES - MARGIN_BYTES) / BYTES_PER_TOKEN)
+TOKEN_WARN = TOKEN_MAX - 600
 
 
 def tokenize(src):
@@ -134,12 +151,18 @@ def main():
     # 16312 tokens boots reliably, 16888 leaves image-save no room, so the script
     # is reparsed on every boot and collides with the previous one.
     n = len(tokenize(dst))
-    print(f"const-heap tokens: {n} of about 16450 "
+    print(f"const-heap tokens: {n} of {TOKEN_MAX} "
           f"({n * 6.694 / 1024:.0f} KB of the 128 KB const heap, image takes 20)")
+    if n > TOKEN_MAX:
+        raise SystemExit(
+            f"minify: {n} tokens is over the {TOKEN_MAX} ceiling. image-save will "
+            f"fail on units with less room than the one this was measured on, and "
+            f"a script that cannot save an image bootloops the controller on the "
+            f"next reboot. Take tokens out before building.")
     if n > TOKEN_WARN:
-        print(f"WARNING: {n} tokens is close to the limit - image-save may fail "
-              f"and the script will not start after a reboot. Check :info in the "
-              f"VESC Tool Lisp console for the exact free bytes", file=sys.stderr)
+        print(f"WARNING: {n} tokens leaves little room - check :info in the VESC "
+              f"Tool Lisp console for the free bytes on the target unit",
+              file=sys.stderr)
 
 
 if __name__ == "__main__":
