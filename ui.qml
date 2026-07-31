@@ -1545,11 +1545,9 @@ Item {
                                 anchors.verticalCenterOffset: dial.dcy - dial.drad * 0.56
                                 spacing: Math.round(dial.ccd * 0.30)
 
-                                Rectangle {
+                                Item {
                                     width: dial.ccd
                                     height: width
-                                    radius: width / 2
-                                    color: "#33333a"
                                     visible: root.stFault > 0
                                     Canvas {
                                         anchors.fill: parent
@@ -1561,12 +1559,10 @@ Item {
                                     }
                                 }
 
-                                Rectangle {
+                                Item {
                                     id: tcLamp
                                     width: dial.ccd
                                     height: width
-                                    radius: width / 2
-                                    color: "#33333a"
                                     readonly property bool slipping: root.stSlip > 0
                                     visible: slipping
                                     Canvas {
