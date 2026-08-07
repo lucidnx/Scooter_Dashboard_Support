@@ -292,7 +292,7 @@ Wiring by [Zodiak1993](https://github.com/Zodiak1993/vesc_m365_dash).
 Two things must both be set or the light stays dark:
 
 1. **VESC Tool -> App Settings -> General -> `Servo Output` = enabled**
-2. **Setup tab -> `Tail Light Output`** - the master switch. With it off the servo/PPM
+2. **Setup tab -> `Tail Light Output (Servo/PPM)`** - the master switch. With it off the servo/PPM
    pin is never touched, so it stays free for something else
 
 > ⚠️ **Check what your VESC's 5V output can supply before wiring it this way.**
@@ -320,9 +320,10 @@ don't let it touch anything.
 Switches the step-down converter that feeds the dashboard, with a P-channel MOSFET
 on the battery side driven from ADC1 or ADC2 - 3.3 V on that pin while the scooter
 is on, 0 V when it is off. The optocoupler keeps the pack away from the VESC's
-3.3 V pin, so the two sides never share anything but ground.
+3.3 V pin, and the two sides share nothing at all - the step-down's ground goes
+straight to the battery, both optocoupler pins sit on VESC GND.
 
-Set **Setup tab -> `Dashboard power Control`** to whichever pin you wired, and leave
+Set **Setup tab -> `Dashboard Power Pin`** to whichever pin you wired, and leave
 that channel's software ADC off.
 
 ![Dashboard power control](screenshots/wiring-dash-power.svg)
