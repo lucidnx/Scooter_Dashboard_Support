@@ -1,106 +1,112 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 690" width="1280" height="690" font-family="Inter, Roboto, system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
   <rect x="0" y="0" width="1280" height="690" fill="#ffffff"/>
 
-  <!-- Harness: battery in on the left, switched supply out on the right, the
-       enable pin below it, one ground along the bottom. Nothing crosses. -->
+  <!-- Two grounds that never meet here: the stepdown returns straight to the
+       pack, and both optocoupler pins 2 and 3 sit on VESC GND. -->
   <g stroke-width="4" fill="none">
-    <path d="M330 240 L620 240" stroke="#e8453c"/>
-    <path d="M790 240 L1010 240" stroke="#e8453c"/>
-    <path d="M330 465 L600 465" stroke="#f0a72a"/>
-    <path d="M330 610 L1010 610" stroke="#9e9e9e"/>
+    <path d="M330 190 L620 190" stroke="#e8453c"/>
+    <path d="M790 190 L1010 190" stroke="#e8453c"/>
+    <path d="M90 225 L45 225 L45 600 L1010 600" stroke="#9e9e9e"/>
+    <path d="M330 435 L600 435" stroke="#f0a72a"/>
+    <path d="M330 483 L600 483" stroke="#9e9e9e"/>
+    <path d="M790 483 L930 483 L930 555 L400 555 L400 483" stroke="#9e9e9e"/>
   </g>
 
   <!-- Gate net. R1 holds the gate at the source, so the MOSFET stays off until
        the optocoupler pulls it down through R2. -->
   <g stroke-width="3" fill="none" stroke="#8a8a8a">
-    <path d="M390 240 L390 272"/>
-    <path d="M390 317 L390 350"/>
-    <path d="M390 350 L870 350"/>
-    <path d="M705 350 L705 295"/>
-    <path d="M540 240 L540 290"/>
-    <path d="M540 312 L540 350"/>
-    <path d="M870 350 L870 385"/>
-    <path d="M870 430 L870 465 L790 465"/>
-    <path d="M790 510 L930 510 L930 610"/>
-    <path d="M600 510 L520 510 L520 610"/>
+    <path d="M390 190 L390 225"/>
+    <path d="M390 270 L390 330"/>
+    <path d="M390 330 L870 330"/>
+    <path d="M705 330 L705 245"/>
+    <path d="M540 190 L540 245"/>
+    <path d="M540 267 L540 330"/>
+    <path d="M870 330 L870 355"/>
+    <path d="M870 400 L870 435 L790 435"/>
   </g>
 
   <!-- R1 10k, gate to source -->
-  <rect x="379" y="272" width="22" height="45" fill="#111111"/>
-  <text x="412" y="300" font-size="17" fill="#9e9e9e">R1 10k&#8486;</text>
+  <rect x="379" y="225" width="22" height="45" fill="#111111"/>
+  <text x="412" y="253" font-size="17" fill="#9e9e9e">R1 10k&#8486;</text>
 
   <!-- D2 zener clamps Vgs. Cathode to the source, anode to the gate. -->
   <g stroke="#111111" stroke-width="3" fill="none">
-    <path d="M524 290 L556 290"/>
-    <path d="M524 290 L518 297"/>
-    <path d="M556 290 L562 283"/>
+    <path d="M524 245 L556 245"/>
+    <path d="M524 245 L518 252"/>
+    <path d="M556 245 L562 238"/>
   </g>
-  <path d="M528 312 L552 312 L540 290 Z" fill="#111111"/>
-  <text x="566" y="318" font-size="17" fill="#9e9e9e">D2 BZX79-C10</text>
-  <text x="566" y="337" font-size="15" fill="#b3b3b3">10 V zener</text>
+  <path d="M528 267 L552 267 L540 245 Z" fill="#111111"/>
+  <text x="566" y="273" font-size="17" fill="#9e9e9e">D2 BZX79-C10</text>
+  <text x="566" y="292" font-size="15" fill="#b3b3b3">10 V zener</text>
 
   <!-- R2 27k, gate down to the optocoupler collector -->
-  <rect x="859" y="385" width="22" height="45" fill="#111111"/>
-  <text x="895" y="413" font-size="17" fill="#9e9e9e">R2 27k&#8486;</text>
+  <rect x="859" y="355" width="22" height="45" fill="#111111"/>
+  <text x="895" y="383" font-size="17" fill="#9e9e9e">R2 27k&#8486;</text>
 
   <!-- R3 220R sets the LED current from the 3.3 V pin -->
-  <rect x="450" y="454" width="45" height="22" fill="#111111"/>
-  <text x="472" y="441" text-anchor="middle" font-size="17" fill="#9e9e9e">R3 220&#8486;</text>
+  <rect x="450" y="424" width="45" height="22" fill="#111111"/>
+  <text x="472" y="411" text-anchor="middle" font-size="17" fill="#9e9e9e">R3 220&#8486;</text>
 
   <!-- junctions -->
-  <circle cx="390" cy="240" r="5" fill="#e8453c"/>
-  <circle cx="540" cy="240" r="5" fill="#e8453c"/>
-  <circle cx="540" cy="350" r="5" fill="#8a8a8a"/>
-  <circle cx="705" cy="350" r="5" fill="#8a8a8a"/>
-  <circle cx="520" cy="610" r="5" fill="#9e9e9e"/>
-  <circle cx="930" cy="610" r="5" fill="#9e9e9e"/>
+  <circle cx="390" cy="190" r="5" fill="#e8453c"/>
+  <circle cx="540" cy="190" r="5" fill="#e8453c"/>
+  <circle cx="540" cy="330" r="5" fill="#8a8a8a"/>
+  <circle cx="705" cy="330" r="5" fill="#8a8a8a"/>
+  <circle cx="400" cy="483" r="5" fill="#9e9e9e"/>
 
   <!-- P-channel MOSFET, source on the battery side -->
-  <rect x="620" y="185" width="170" height="110" rx="8" fill="#2f3437"/>
-  <text x="705" y="228" text-anchor="middle" font-size="20" font-weight="600" fill="#ffffff">P-MOSFET</text>
-  <text x="705" y="256" text-anchor="middle" font-size="15" fill="#b9bec1">IRF9540N</text>
+  <rect x="620" y="135" width="170" height="110" rx="8" fill="#2f3437"/>
+  <text x="705" y="178" text-anchor="middle" font-size="20" font-weight="600" fill="#ffffff">P-MOSFET</text>
+  <text x="705" y="206" text-anchor="middle" font-size="15" fill="#b9bec1">IRF9540N</text>
   <g font-size="16" fill="#9e9e9e">
-    <text x="612" y="232" text-anchor="end">3 S</text>
-    <text x="798" y="232">2 D</text>
-    <text x="717" y="322">1 G</text>
+    <text x="612" y="182" text-anchor="end">3 S</text>
+    <text x="798" y="182">2 D</text>
+    <text x="717" y="272">1 G</text>
   </g>
 
   <!-- optocoupler keeps the pack side off the VESC's 3.3 V pin -->
-  <rect x="600" y="420" width="190" height="115" rx="8" fill="#2f3437"/>
-  <text x="695" y="470" text-anchor="middle" font-size="20" font-weight="600" fill="#ffffff">Optocoupler</text>
-  <text x="695" y="498" text-anchor="middle" font-size="15" fill="#b9bec1">PC357</text>
+  <rect x="600" y="400" width="190" height="115" rx="8" fill="#2f3437"/>
+  <text x="695" y="450" text-anchor="middle" font-size="20" font-weight="600" fill="#ffffff">Optocoupler</text>
+  <text x="695" y="478" text-anchor="middle" font-size="15" fill="#b9bec1">PC357</text>
   <g font-size="16" fill="#9e9e9e">
-    <text x="592" y="455" text-anchor="end">1 A</text>
-    <text x="592" y="503" text-anchor="end">2 K</text>
-    <text x="798" y="455">4 C</text>
-    <text x="798" y="503">3 E</text>
+    <text x="592" y="429" text-anchor="end">1 A</text>
+    <text x="592" y="477" text-anchor="end">2 K</text>
+    <text x="798" y="429">4 C</text>
+    <text x="798" y="477">3 E</text>
   </g>
 
   <!-- boxes -->
-  <rect x="90" y="120" width="240" height="520" rx="8" fill="#453d9e"/>
-  <text x="210" y="175" text-anchor="middle" font-size="22" font-weight="600" fill="#ffffff">VESC</text>
-  <g font-size="18" text-anchor="end" fill="#e9e7f7">
-    <text x="315" y="247">Battery +</text>
-    <text x="315" y="472">ADC1 / ADC2</text>
-    <text x="315" y="617">GND</text>
+  <rect x="90" y="140" width="240" height="120" rx="8" fill="#8c2f2f"/>
+  <text x="210" y="185" text-anchor="middle" font-size="22" font-weight="600" fill="#ffffff">Battery</text>
+  <g font-size="18" fill="#f7e9e9">
+    <text x="315" y="197" text-anchor="end">+</text>
+    <text x="105" y="232">&#8722;</text>
   </g>
 
-  <rect x="1010" y="120" width="180" height="520" rx="8" fill="#14594a"/>
-  <text x="1100" y="175" text-anchor="middle" font-size="22" font-weight="600" fill="#ffffff">Stepdown</text>
+  <rect x="90" y="380" width="240" height="160" rx="8" fill="#453d9e"/>
+  <text x="210" y="422" text-anchor="middle" font-size="22" font-weight="600" fill="#ffffff">VESC</text>
+  <g font-size="18" text-anchor="end" fill="#e9e7f7">
+    <text x="315" y="466">ADC1 / ADC2</text>
+    <text x="315" y="514">GND</text>
+  </g>
+
+  <rect x="1010" y="140" width="180" height="490" rx="8" fill="#14594a"/>
+  <text x="1100" y="185" text-anchor="middle" font-size="22" font-weight="600" fill="#ffffff">Stepdown</text>
   <g font-size="18" fill="#dfeae6">
-    <text x="1026" y="247">+</text>
-    <text x="1026" y="617">GND</text>
+    <text x="1026" y="197">+</text>
+    <text x="1026" y="607">GND</text>
   </g>
 
   <!-- pin dots -->
   <g>
-    <circle cx="330" cy="240" r="5" fill="#e8453c"/>
-    <circle cx="330" cy="465" r="5" fill="#f0a72a"/>
-    <circle cx="330" cy="610" r="5" fill="#9e9e9e"/>
-    <circle cx="1010" cy="240" r="5" fill="#e8453c"/>
-    <circle cx="1010" cy="610" r="5" fill="#9e9e9e"/>
+    <circle cx="330" cy="190" r="5" fill="#e8453c"/>
+    <circle cx="90" cy="225" r="5" fill="#9e9e9e"/>
+    <circle cx="330" cy="435" r="5" fill="#f0a72a"/>
+    <circle cx="330" cy="483" r="5" fill="#9e9e9e"/>
+    <circle cx="1010" cy="190" r="5" fill="#e8453c"/>
+    <circle cx="1010" cy="600" r="5" fill="#9e9e9e"/>
   </g>
 
-  <text x="670" y="659" text-anchor="middle" font-size="17" fill="#b3b3b3">3.3 V on the pin switches the stepdown on, 0 V switches it off</text>
-  <text x="670" y="679" text-anchor="middle" font-size="15" fill="#c4c4c4">values shown are for a 15S pack - 80 V ceiling, set by the optocoupler</text>
+  <text x="640" y="660" text-anchor="middle" font-size="17" fill="#b3b3b3">3.3 V on the pin switches the stepdown on, 0 V switches it off</text>
+  <text x="640" y="680" text-anchor="middle" font-size="15" fill="#c4c4c4">values shown are for a 15S pack - 80 V ceiling, set by the optocoupler</text>
 </svg>
