@@ -220,6 +220,12 @@ few controller settings must be set (in VESC Tool, not the package UI):
 - **App Settings -> General -> App to Use = `ADC`**
 - **App Settings -> ADC -> General -> Control Type = `Current No Reverse Brake ADC2`**
 - **App Settings -> ADC -> General -> Multiple VESCs Over CAN = `True`** (dual-motor setups)
+- **App Settings -> ADC -> General -> Negative Ramping Time = `0.00 s`** - the dashboard
+  already sends the lever position ten to forty times a second, so a second ramp on top of
+  it only delays what the rider asked for
+- **App Settings -> ADC -> General -> Update Rate = `1000 Hz`** - the package overrides the
+  ADC input as each dash frame arrives, and a slow update rate makes the app read a stale
+  override between frames
 - Keep **Software ADC** enabled in the package **Setup** tab (default) - the dashboard
   supplies throttle/brake over UART; the package overrides the ADC app inputs. Throttle
   and brake are switchable separately, so you can take one from the dashboard and leave
@@ -311,9 +317,35 @@ don't let it touch anything.
 
 #### Dashboard power control (optional)
 
-ℹ️ **The schematic for this one is coming soon.** It switches the dashboard's supply
-through a MOSFET driven from ADC1 or ADC2 - 3.3 V on that pin while the scooter is
-on, 0 V when it is off. The diagram will be added here.
+Switches the step-down converter that feeds the dashboard, with a P-channel MOSFET
+on the battery side driven from ADC1 or ADC2 - 3.3 V on that pin while the scooter
+is on, 0 V when it is off. The optocoupler keeps the pack away from the VESC's
+3.3 V pin, so the two sides never share anything but ground.
+
+Set **Setup tab -> `Dashboard power Control`** to whichever pin you wired, and leave
+that channel's software ADC off.
+
+![Dashboard power control](screenshots/wiring-dash-power.svg)
+
+| Part | | |
+|---|---|---|
+| Q1 | IRF9540N | P-channel, source to the battery, drain to the step-down |
+| U1 | PC357 | optocoupler, isolates the 3.3 V pin from the pack |
+| D2 | BZX79-C10 | clamps the gate to 10 V below the source |
+| R1 | 10 kΩ | holds the gate at the source, so the default is off |
+| R2 | 27 kΩ | gate pull-down through the optocoupler |
+| R3 | 220 Ω | LED current from the 3.3 V pin |
+
+> ⚠️ **These values are for a 15S pack.** R1 and R2 divide the pack voltage to set
+> how hard the MOSFET is driven, so a different cell count needs different
+> resistors - too low and the MOSFET only partly turns on and overheats.
+>
+> **Ceiling is 80 V, and the optocoupler sets it.** While the MOSFET is off its
+> collector sits at the full pack voltage, which is the PC357's limit - so **above
+> 18S the optocoupler has to change too**, not just the resistors. The IRF9540N
+> itself is good to 100 V.
+
+The MOSFET's tab is the Drain and sits at battery voltage - treat it as live.
 
 ## 🙏 Thanks
 

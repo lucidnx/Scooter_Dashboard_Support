@@ -11,9 +11,10 @@ all: $(PKG)
 
 # The packager stores the script as source text, so comments and indentation are
 # charged against the Lisp data budget. Build from a stripped copy.
-$(PKG): $(SRC) tools/minify_lisp.py tools/check_qml.py tools/pkg_readme.py
+$(PKG): $(SRC) tools/minify_lisp.py tools/check_qml.py tools/check_lisp.py tools/pkg_readme.py
 	@mkdir -p $(BUILD)
 	python3 tools/check_qml.py ui.qml
+	python3 tools/check_lisp.py scooter_support.lisp
 	python3 tools/minify_lisp.py scooter_support.lisp $(BUILD)/scooter_support.lisp
 	python3 tools/pkg_readme.py README.md $(BUILD)/README.md
 	@cp pkgdesc.qml ui.qml version $(BUILD)/

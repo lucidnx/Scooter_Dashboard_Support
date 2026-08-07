@@ -2,10 +2,11 @@
 
 [VESC Scooter Support](https://github.com/lucidnx/vesc_scooter_support) lets a VESC
 controller drive a stock Ninebot G30 or Xiaomi M365 dashboard. Since v4.0 it also answers
-the app protocol, so NineDash works against it exactly as against a stock ESC.
+the app protocol, so NineDash works against it exactly as against a stock ESC. Since v4.1
+that covers the Xiaomi bus as well, where the same reads arrive under a different framing.
 
-Everything below comes from logic-level captures of the internal UART bus on a real G30
-dash, not from guesswork. Frame counts and timings are measured.
+Everything below comes from logic-level captures of the internal UART bus on real G30 and
+M365 dashes, not from guesswork. Frame counts and timings are measured.
 
 The captures themselves are kept outside the repository - they are diagnostic material, not
 part of the package. In a working copy they live in `logs/`, one file per session, named
@@ -28,9 +29,11 @@ stock release and every `version >= x` check passes.
 ## What a VESC cannot do
 
 **Shutdown (`0x79`)** works, with one difference worth knowing. On a stock scooter the ESC
-powers down the whole vehicle; on a VESC the dashboard is powered separately, so the
-command switches the dashboard off exactly as the package's own power button and a long
-press of the scooter button do. The controller stays live. Refused above walking pace.
+powers down the whole vehicle; on a VESC the command switches the dashboard off exactly as
+the package's own power button and a long press of the scooter button do, and the
+controller stays live. Refused above walking pace. Where the installer has wired the
+optional supply switch, that off also cuts the dashboard's power a moment later, once the
+shutdown beep has been sent.
 
 **KERS (`0x7B`)** has no VESC equivalent — regenerative braking is configured in VESC Tool
 and is not a three-level setting.
@@ -66,9 +69,10 @@ So the cost of a poll is **one transmission**, not one byte. Big reads are cheap
 reads are expensive.
 
 The package answers the app by packing the reply inside the dash reply it was going to send
-anyway. That is free. But it can only do that if the request arrives before the dash's own
-poll in that cycle — otherwise the reply needs a transmission of its own, and that is what
-costs throttle response.
+anyway. That is free. Two replies fit on one frame, so a pair of requests arriving in the
+same cycle still costs nothing. But it can only do that if they arrive before the dash's
+own poll in that cycle — otherwise the reply needs a transmission of its own, and that is
+what costs throttle response.
 
 ### Measured, three apps, same scooter, same firmware
 

@@ -3,9 +3,11 @@ vesc_tool
 tools/*
 !tools/minify_lisp.py
 !tools/check_qml.py
+!tools/check_lisp.py
 !tools/pkg_readme.py
 !tools/pad_lisp.py
 !tools/svg_to_canvas.py
+!tools/dash_bench.py
 !tools/icons/
 .DS_Store
 # diagnostic captures and tools, not part of the package
@@ -16,3 +18,4 @@ __pycache__/
 screenshots/*-old.*
 build/
 padded.lisp
+docs/*.pdf
