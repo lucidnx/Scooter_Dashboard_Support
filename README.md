@@ -98,9 +98,11 @@ Lock, mode switching, headlight, secret mode and leaving secret mode are fully r
 
 ### 📱 Control tab
 - Live speed dial with a power sub-dial that scales to the active mode's watt limit times
-  the number of controllers on the bus, a battery bar alternating charge and estimated
-  range, and voltage, current, controller and motor temperature - the temperatures flash
-  red above the warning thresholds
+  the number of controllers on the bus, and a battery bar carrying charge in the middle
+  with estimated range at whichever end is one solid colour
+- **Four readouts** under the bar. Hold one to pick what it shows: voltage, battery or
+  motor current, controller, motor or battery temperature, battery %, uptime or trip
+  distance. Temperatures flash red above their warning thresholds
 - A disabled function reads as off: with cruise or secret switched off in Setup, its button
   greys out and stops responding rather than sitting there coloured
 - Buttons for power, lock/unlock, headlight, secret, cruise and mode selection
@@ -129,14 +131,16 @@ including pairing.
 - **Auto headlight** at power on
 - **Rear / brake light** on the servo pin: dim tail light following the headlight (or always
   on), full or blinking brake light while braking. **Tail Light Brightness** sets how dim,
-  5 - 100%, default 40
+  in ten steps from 10 to 100%
+- **Headlight and tail light off when locked**, each on its own switch, restored on unlock
 
 ### 🖥️ Dashboard
 - **Idle display** - while standing still the dash speed readout shows battery %, pack
   voltage, controller or motor temperature instead. Set separately for normal and secret modes
-- **BMS battery %** - a reporting VESC BMS supplies the percentage, with a temperature
-  warning above 50 °C or below 0 °C
-- **Use Miles** - dash speed and every speed-related setting switch between km/h and mph
+- **BMS battery %** - a reporting VESC BMS supplies the percentage, and its pack
+  temperature raises the dash warning outside a hot and a cold limit you set
+- **Use Imperial Units** - dash speed, every speed setting and every temperature switch
+  between km/h with °C and mph with °F
 - **Temperature warning icon** with configurable thresholds
 - **Faults reach the dashboard** - the controller's own fault code goes into the dash's
   error field, so the display flashes it. The number is a **VESC** fault code shown by a

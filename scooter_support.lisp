@@ -7,6 +7,8 @@
 (def adc-touch 0.02)
 (def temp-warning-motor 80) ; temperature warning for motor in degree celsius
 (def temp-warning-fet 80) ; temperature warning for fet in degree celsius
+(def bms-temp-hi 50) ; pack too hot, from the BMS cell sensors
+(def bms-temp-lo 0) ; pack too cold to charge or pull hard
 (def show-batt-in-idle false) ; show idle-display instead of speed at idle, normal modes
 (def idle-display 0) ; 0 battery %, 1 battery V, 2 controller C, 3 motor C
 (def last-alarm-code 0) ; the code the app reads back after an alarm has cleared
@@ -101,6 +103,8 @@
 (def auto-taillight false) ; taillight on from power on
 (def brake-light-mode 1) ; 0=off, 1=on while braking, 2=blink while braking
 (def taillight-brightness 0.4) ; tail light duty, 0-1
+(def tail-off-lock false)
+(def head-off-lock false)
 (def slip-erpm 1200.0) ; wheel spread that counts as slip, from VESC's own at boot
 (def slip-hold 2.0) ; seconds the slip lamp stays on after the last one
 (def slip-time 0)
@@ -194,6 +198,7 @@
 (def cur-batt 0.0)
 (def cur-vin 0.0)
 (def cur-amps 0.0)
+(def cur-bms-temp -100.0) ; no BMS reporting
 (def cur-range 0.0)
 (def cur-trip 0)
 (def cur-odo 0)
@@ -312,7 +317,7 @@
 
 @const-start
 
-(def settings-version 411i32)
+(def settings-version 420i32)
 
 ; Persistent settings: (label . (eeprom-offset type))
 ; Every setting in one place: name, eeprom slot, type, default. read-setting
@@ -322,8 +327,12 @@
     (ver-code 0 i 0)
     (software-adc 1 b true)
     (software-adc2 87 b true)
+    (tail-off-lock 95 b false)
+    (head-off-lock 96 b false)
     (temp-warning-motor 4 f 80.0)
     (temp-warning-fet 5 f 80.0)
+    (bms-temp-hi 97 f 50.0)
+    (bms-temp-lo 98 f 0.0)
     (show-batt-in-idle 6 b false)
     (min-speed-kmh 7 f 1.0)
     (alarm-tone 8 b true)
@@ -421,10 +430,11 @@
 ; when it is flipped rather than when settings are saved.
 (def setting-groups '(
     (misc light-on-boot button-speed-kmh use-mph bms-soc-enable secret-exit-on-lock
-        light-offset-thr light-gain-thr light-offset-brk light-gain-brk app-pin power-pin)
+        light-offset-thr light-gain-thr light-offset-brk light-gain-brk app-pin power-pin
+        head-off-lock)
     (general software-adc software-adc2 show-batt-in-idle show-batt-idle-secret
         min-speed-kmh app-enable idle-display)
-    (temps temp-warning-motor temp-warning-fet)
+    (temps temp-warning-motor temp-warning-fet bms-temp-hi bms-temp-lo)
     (modes eco-speed-kmh eco-current eco-watts eco-fw
         drive-speed-kmh drive-current drive-watts drive-fw
         sport-speed-kmh sport-current sport-watts sport-fw
@@ -442,7 +452,8 @@
         mode-presses mode-combo mode-requires-lock
         light-presses light-combo light-requires-lock
         secret-off-presses secret-off-combo secret-off-requires-lock)
-    (rear rear-light-enable auto-taillight brake-light-mode taillight-brightness)
+    (rear rear-light-enable auto-taillight brake-light-mode taillight-brightness
+        tail-off-lock)
     (cruise cruise-allow cruise-delay cruise-deviation cruise-min-speed cruise-max-speed)
     (alarm alarm-tone alarm-speed-threshold alarm-gyro-threshold alarm-voltage)
 ))
@@ -456,19 +467,17 @@
 
 ; assoc walks the table, so it is asked once and the slot and type read off the
 ; one answer - a settings load is ninety of these
+; A slot that was never written reads back nil - and so does a bool that was
+; written false, because false IS nil. Callers could not tell the two apart, so
+; every bool saved as false came back as "never written" and was replaced by its
+; default. Any bool defaulting to true could therefore never be turned off.
+; 'unset is what an empty slot answers now, and nothing else can collide with it.
 (defun read-setting (name)
     {
         (var d (assoc setting-defs name))
-        (var addr (first d))
-        (cond
-            ; a slot that was never written reads back nil, and every caller
-            ; wants that nil so it can fall back to the default. The bool
-            ; conversion used to swallow it and hand back a value either way.
-            ((eq (second d) 'f) (eeprom-read-f addr))
-            ((eq (second d) 'b) (let ((v (eeprom-read-i addr)))
-                                     (if (eq v nil) nil (!= v 0))))
-            (t (eeprom-read-i addr))
-        )
+        (var ty (second d))
+        (var v (if (eq ty 'f) (eeprom-read-f (first d)) (eeprom-read-i (first d))))
+        (if (eq v nil) 'unset (if (eq ty 'b) (!= v 0) v))
     }
 )
 
@@ -495,8 +504,8 @@
     }
 )
 
-(defun valid-model (m) ; eeprom reads nil when never written
-    (and (not (eq m nil)) (>= m 0) (<= m 3))
+(defun valid-model (m) ; an empty slot answers 'unset
+    (and (not (eq m 'unset)) (not (eq m nil)) (>= m 0) (<= m 3))
 )
 
 (defun restore-defaults (keep-model)
@@ -526,9 +535,9 @@
         (loopforeach g setting-groups
             (loopforeach n (cdr g)
                 (if (not (member n speed-settings))
-                    (set n (let ((v (read-setting n))) (if (eq v nil) (eval n) v))))))
+                    (set n (let ((v (read-setting n))) (if (eq v 'unset) (eval n) v))))))
         ; the Control tab switch is persisted on its own, outside any group
-        (set 'cruise-enabled (let ((v (read-setting 'cruise-enabled))) (if (eq v nil) cruise-enabled v)))
+        (set 'cruise-enabled (let ((v (read-setting 'cruise-enabled))) (if (eq v 'unset) cruise-enabled v)))
         ; these divide, so an unwritten slot has to come back as its default and
         ; not as nil - setting-def is what guarantees that
         (set 'min-speed (setting-def 'min-speed-kmh))
@@ -638,6 +647,9 @@
                 (setq i (+ i 1))
             }
         )
+        ; the writes above block for as long as they block - answering is what
+        ; lets the UI send the next group instead of guessing at a safe gap
+        (send-data "ack")
     }
 )
 
@@ -723,14 +735,16 @@
 ; the feature loop already sampled instead of asking the firmware again. Only the
 ; consumption figure is still live: it is three cheap reads, and it is the one
 ; number here that answers to the throttle.
+(defun tf (v) (if v "true " "false "))
+
 (defun send-state ()
     (let ((whkm (send-state-whkm)))
         (send-data (str-merge
             "state "
-            (if off "true " "false ")
-            (if lock "true " "false ")
-            (if light "true " "false ")
-            (if unlock "true " "false ")
+            (tf off)
+            (tf lock)
+            (tf light)
+            (tf unlock)
             (str-from-n speedmode "%d ")
             (str-from-n cur-batt "%.0f ")
             (str-from-n cur-vin "%.1f ")
@@ -740,16 +754,18 @@
             (str-from-n cur-range "%.1f ")
             (str-from-n cur-amps "%.1f ")
             (str-from-n (send-state-maxkmh) "%.0f ")
-            (if cruising "true " "false ")
-            (if cruise-enabled "true " "false ")
-            (if cruise-allow "true " "false ")
-            (if img-ok "true " "false ")
+            (tf cruising)
+            (tf cruise-enabled)
+            (tf cruise-allow)
+            (tf img-ok)
             (str-from-n cur-fet-max "%.0f ")
             (str-from-n cur-mot-max "%.0f ")
-            (if secret-enabled "true " "false ")
+            (tf secret-enabled)
             (str-from-n (+ 1 (length (can-devs))) "%d ")
             (str-from-n (get-fault) "%d ")
-            (str-from-n (wheel-slip) "%d")
+            (str-from-n (wheel-slip) "%d ")
+            (str-from-n cur-bms-temp "%.0f ")
+            (str-from-n (secs-since app-boot-time) "%.0f")
         ))
     )
 )
@@ -791,7 +807,7 @@
 ; which is what every caller wants, and what a bare read-setting cannot give the
 ; ones below that divide by it
 (defun setting-def (n)
-    (let ((v (read-setting n))) (if (eq v nil) (ix (assoc setting-defs n) 2) v))
+    (let ((v (read-setting n))) (if (eq v 'unset) (ix (assoc setting-defs n) 2) v))
 )
 
 (defun setting-str (n)
@@ -1087,8 +1103,9 @@
 
 (defun handle-taillight()
     (if rear-light-enable {
-        (var base (and (not off) (or light auto-taillight)))
-        (var braking (and (not off) (> lev-brk adc-touch)))
+        (var live (and (not off) (not (and lock tail-off-lock))))
+        (var base (and live (or light auto-taillight)))
+        (var braking (and live (> lev-brk adc-touch)))
         (pwm-set-duty
             (if braking
                 (cond
@@ -1201,9 +1218,17 @@
                     (set 'bms-active true)
                     (set 'cur-batt (* (get-bms-val 'bms-soc) 100))
                     (var bt (get-bms-val 'bms-temp-cell-max))
-                    (set 'bms-warn (or (> bt 50) (< bt 0)))
+                    (set 'cur-bms-temp bt)
+                    (set 'bms-warn (or (> bt bms-temp-hi) (< bt bms-temp-lo)))
                 }
-                (set 'cur-batt (* (get-batt) 100))
+                {
+                    (set 'cur-batt (* (get-batt) 100))
+                    ; nothing resets these on its own, and both the pack tile and
+                    ; the dash warning read them
+                    (set 'bms-active false)
+                    (set 'bms-warn false)
+                    (set 'cur-bms-temp -100.0)
+                }
             )
         )
         (var current-speed cur-speed-kmh)
@@ -1330,7 +1355,7 @@
         (if (not off)
             (if (> alarm 4)
                 (bufset-u8 tx-frame (+ tx-base 2) lamp) ; alarm on
-                (bufset-u8 tx-frame (+ tx-base 2) (+ (if light lamp 0)
+                (bufset-u8 tx-frame (+ tx-base 2) (+ (if (and light (not (and lock head-off-lock))) lamp 0)
                                                      (if (and (= model 3) cruising) 4 0)))
             )
             (bufset-u8 tx-frame (+ tx-base 2) 0)
@@ -1685,17 +1710,20 @@
 ; tells the feature loop to persist the setting.
 (defun app-refresh-7b () (if (!= model 1) (build-app-frame app-f-7b 0x7b 6)))
 
+; the app's writes all land as a bit for the feature loop to pick up
+(defun app-todo+ (bit) (set 'app-todo (bitwise-or app-todo bit)))
+
 (defun app-write (reg val)
     (cond
         ; lock and unlock are only valid in non-riding mode
         ((= reg 0x70) (if (and (!= val 0) (not lock) (<= (abs cur-speed-kmh) 0.5))
-            (set 'app-todo (bitwise-or app-todo 32))))
+            (app-todo+ 32)))
         ((= reg 0x71) (if (and (!= val 0) lock (<= (abs cur-speed-kmh) 0.5))
-            (set 'app-todo (bitwise-or app-todo 32))))
+            (app-todo+ 32)))
         ((= reg 0x75) (let ((m (cond ((= val 1) 2) ((= val 2) 4) (t 1))))
             (if (!= m speedmode) {
                 (set 'speedmode m)
-                (set 'app-todo (bitwise-or app-todo 16))
+                (app-todo+ 16)
             })))
         ; 0x7A is Reserved in the Ninebot protocol, so it is free for a proper
         ; headlight switch. Note that changing the headlight ends the BLE
@@ -1709,13 +1737,13 @@
             (if (not (eq v cruise-enabled)) {
                 (set 'cruise-enabled v)
                 (app-refresh-7b)
-                (set 'app-todo (bitwise-or app-todo 1))
+                (app-todo+ 1)
             })))
         ((= reg 0x7d) (let ((v (!= val 0)))
             (if (not (eq v auto-taillight)) {
                 (set 'auto-taillight v)
                 (app-refresh-7b)
-                (set 'app-todo (bitwise-or app-todo 2))
+                (app-todo+ 2)
             })))
         ; The app's KERS selector, walk-mode and direct-power-control toggles
         ; have no VESC equivalent, so they drive speed mode, secret and the
@@ -1723,12 +1751,12 @@
         ((= reg 0x7b) (let ((m (cond ((= val 1) 1) ((= val 2) 4) (t 2)))) ; weak eco, medium drive, strong sport
             (if (!= m speedmode) {
                 (set 'speedmode m)
-                (set 'app-todo (bitwise-or app-todo 16))
+                (app-todo+ 16)
             })))
         ((= reg 0x77) (let ((u (!= val 0)))
             (if (not (eq u unlock)) {
                 (set 'unlock u)
-                (set 'app-todo (bitwise-or app-todo 16))
+                (app-todo+ 16)
             })))
         ((= reg 0x76) (let ((v (!= val 0)))
             (if (not (eq v light)) {
@@ -1739,17 +1767,17 @@
         ; 0x79 powerdown: the dashboard is powered separately from a VESC, so
         ; this turns it off the same way the appUI button and a long press do,
         ; rather than cutting the whole vehicle
-        ((= reg 0x79) (if (!= val 0) (set 'app-todo (bitwise-or app-todo 64))))
+        ((= reg 0x79) (if (!= val 0) (app-todo+ 64)))
         ((= reg 0x7e) (if (!= val 0) (set 'feedback 3))) ; find my scooter
         ((or (= reg 0x91) (= reg 0x92)) (let ((v (!= val 0)))
             (if (not (eq v alarm-tone)) {
                 (set 'alarm-tone v)
-                (set 'app-todo (bitwise-or app-todo 4))
+                (app-todo+ 4)
             })))
         ((= reg 0x17) (if (and (>= val 0) (<= val 999999) (!= val app-pin)) {
             (set 'app-pin val)
             (app-build-pin)
-            (set 'app-todo (bitwise-or app-todo 8))
+            (app-todo+ 8)
         }))
     )
 )
@@ -1979,7 +2007,7 @@
                 (if (and (= a 0x50) (!= g2-aux 0x50) cruise-allow (not off) (not lock)) {
                     (set 'cruise-enabled (not cruise-enabled))
                     (set 'feedback 2)
-                    (set 'app-todo (bitwise-or app-todo 1)) ; the flash write waits for the feature loop
+                    (app-todo+ 1) ; the flash write waits for the feature loop
                 })
                 (set 'g2-aux a)
             }

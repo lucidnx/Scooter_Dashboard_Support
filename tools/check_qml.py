@@ -72,6 +72,36 @@ def duplicate_ids(src):
     return dup
 
 
+def duplicate_props(src):
+    """One property assigned twice in an object - qmllint passes it, the engine
+    refuses to build the file, and the tab comes up empty."""
+    prop = re.compile(r"(?:^|[{;\s])([A-Za-z_][\w.]*)\s*:")
+    inline = re.compile(r"[A-Z]\w*\s*\{[^{}]*\}")
+    stack, dup = [{}], []
+    for n, raw in enumerate(src.split("\n"), 1):
+        line = re.sub(r"//.*$", "", raw)
+        # a one-line child carries its own scope, so check it apart from its parent
+        for frag in inline.findall(line):
+            seen = set()
+            for m in prop.finditer(frag):
+                if m.group(1) in seen:
+                    dup.append(f"{m.group(1)} (line {n})")
+                seen.add(m.group(1))
+            line = line.replace(frag, "")
+        for tok in re.finditer(r"[{}]|(?:^|[;\s])([A-Za-z_][\w.]*)\s*:", line):
+            if tok.group(0) == "{":
+                stack.append({})
+            elif tok.group(0) == "}":
+                if len(stack) > 1:
+                    stack.pop()
+            elif tok.group(1) and not tok.group(1).startswith("on"):
+                name = tok.group(1)
+                if name in stack[-1]:
+                    dup.append(f"{name} (line {n}, first at {stack[-1][name]})")
+                stack[-1][name] = n
+    return dup
+
+
 # scope names the engine supplies, so never a mistyped id
 BUILTIN_SCOPE = {"parent", "modelData", "model", "control"}
 
@@ -98,6 +128,9 @@ def main():
     dup = duplicate_ids(src)
     if dup:
         raise SystemExit("check_qml: id used twice: " + ", ".join(dup))
+    dup = duplicate_props(src)
+    if dup:
+        raise SystemExit("check_qml: property set twice: " + ", ".join(dup))
     missing = undeclared(src)
     if missing:
         raise SystemExit(f"check_qml: referenced but never declared: {', '.join(missing)}")

@@ -19,18 +19,29 @@ import sys
 # Measured with :info in the VESC Tool Lisp console, on two units running the
 # v4.0 release. The const heap and the image share 128 KB:
 #
-#   unit  const heap   image   free   extensions
-#   A         109684   21372     16   307 of 322
-#   B         109672   21320     80   304 of 319
+#   unit  release  tokens   const heap   image   free   extensions
+#   A       v4.0     16386      109684   21372     16   307 of 322
+#   B       v4.0     16386      109672   21320     80   304 of 319
+#   B       v4.1     14090       89400   22120  19552   304 of 319
+#   B       v4.2     14086       88992   22404  19676   304 of 319
 #
 # Sixteen bytes. The image holds the symbol table, so a firmware build with a
 # few more extensions than unit A has none - image-save fails, and a script that
 # cannot save an image bootloops the controller with no way in but an ST-Link.
-# The two units' images differ by 52 bytes over 3 extensions, so the ceiling is
-# that 128 KB less the largest image seen and 6 KB - about a hundred times the
-# variation measured, and room for the image itself to grow by a third.
+# The two v4.0 units' images differ by 52 bytes over 3 extensions, so unit to
+# unit the variation is tens of bytes; the ceiling is that 128 KB less the
+# largest image seen and 6 KB of margin.
+#
+# The image is the number to re-measure every release. It grew 800 bytes from
+# v4.0 to v4.1 on the same unit while the script itself got 2296 tokens shorter,
+# so it does not track the token count and nothing in this build catches it.
+#
+# BYTES_PER_TOKEN stays calibrated on v4.0: cost per token is not uniform (6.69
+# there, 6.35 at v4.1, 8.83 marginal between the two), and v4.0 is the build
+# measured a hair from failing. Fitting the ceiling to v4.1 instead would put it
+# back at roughly the token count that bootlooped.
 BYTES_PER_TOKEN = 6.694
-IMAGE_BYTES = 21372
+IMAGE_BYTES = 22404
 MARGIN_BYTES = 6144
 TOKEN_MAX = int((131072 - IMAGE_BYTES - MARGIN_BYTES) / BYTES_PER_TOKEN)
 TOKEN_WARN = TOKEN_MAX - 600
@@ -152,7 +163,8 @@ def main():
     # is reparsed on every boot and collides with the previous one.
     n = len(tokenize(dst))
     print(f"const-heap tokens: {n} of {TOKEN_MAX} "
-          f"({n * 6.694 / 1024:.0f} KB of the 128 KB const heap, image takes 20)")
+          f"({n * BYTES_PER_TOKEN / 1024:.0f} KB of the 128 KB const heap, "
+          f"image takes {IMAGE_BYTES / 1024:.0f})")
     if n > TOKEN_MAX:
         raise SystemExit(
             f"minify: {n} tokens is over the {TOKEN_MAX} ceiling. image-save will "

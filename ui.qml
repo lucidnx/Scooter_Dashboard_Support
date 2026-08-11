@@ -43,6 +43,10 @@ Item {
     readonly property color cWarnTint: darkUi ? "#8e3b3b" : "#e8a9a5"
 
     property int loadedModel: -1
+    // Read straight off the controller with getDecodedAdc, so the pin voltages
+    // cost the script nothing - it is already near the const-heap ceiling.
+    property real adcV1: 0.0
+    property real adcV2: 0.0
     property bool isSlave: modelBox.currentIndex === 2
     // Load is only complete once every settings message has arrived. Saving
     // before that would write empty fields as 0 and wipe modes/general, so
@@ -51,6 +55,29 @@ Item {
     property int settingsSeenCount: 0
     property bool settingsLoaded: false
     property bool saving: false
+    // Edits the controller has not been told about yet. textEdited, toggled and
+    // activated only fire for a real touch, so the fields a settings message
+    // fills in on load never count as changes.
+    property bool cfgDirty: false
+
+    function markDirty() { if (settingsLoaded) cfgDirty = true }
+
+    // Anything that throws here runs inside Component.onCompleted and takes
+    // getSettings() down with it, leaving the UI on "Loading..." for good - so
+    // a page SwipeView has not built yet, or a child that is not an Item, has
+    // to be stepped over rather than trusted.
+    function watchEdits(item) {
+        if (!item || !item.children) return
+        for (var i = 0; i < item.children.length; i++) {
+            var c = item.children[i]
+            if (!c) continue
+            if (c.textEdited) c.textEdited.connect(root.markDirty)
+            else if (c.toggled) c.toggled.connect(root.markDirty)
+            else if (c.activated) c.activated.connect(root.markDirty)
+            watchEdits(c)
+        }
+    }
+
     property bool statePending: false
     property double statePendingSince: 0
     readonly property var settingsMsgs: ["model", "general", "temps", "modes",
@@ -61,8 +88,11 @@ Item {
             return
         settingsSeen[key] = true
         settingsSeenCount += 1
-        if (settingsSeenCount >= settingsMsgs.length)
+        if (settingsSeenCount >= settingsMsgs.length) {
             settingsLoaded = true
+            // whatever is on screen is now exactly what the controller holds
+            cfgDirty = false
+        }
     }
 
     function resetSettingsLoad() {
@@ -76,13 +106,102 @@ Item {
     // that is a point size, while an anchor margin is in pixels, and the two are
     // only the same number on a desktop. Widest case for each slot, so the four
     // cards hold a column whatever they happen to be showing.
-    FontMetrics { id: chipValFm; font.bold: true; font.pointSize: root.titleSize * 1.05 }
-    FontMetrics { id: chipCapFm; font.bold: true; font.pointSize: root.titleSize * 0.78 }
-    readonly property real chipDigW: chipValFm.advanceWidth("00")
-    readonly property real chipDegW: chipValFm.advanceWidth("°")
-    readonly property real chipCapW: chipCapFm.advanceWidth("M")
-    readonly property real chipGap: Math.round(chipValFm.height * 0.20)
-    readonly property real chipGrpW: chipDigW + chipDegW + chipGap + chipCapW
+    FontMetrics { id: chipUnitFm; font.bold: true; font.pointSize: root.titleSize * 0.96 }
+    // The unit pane is as wide as the widest unit plus a little air. The
+    // reading is right-aligned against it, so nothing is centred and there is
+    // no per-card offset left to get wrong.
+    readonly property real chipUnitW: Math.round(chipUnitFm.advanceWidth("km")
+                                                 + chipUnitFm.height * 0.35)
+
+    // The four readouts under the battery bar. Every one of these already
+    // arrives in the state line, so choosing between them costs the script
+    // nothing. Caps are one letter each: the tile reserves a column the width
+    // of an M and the digits line up across all four from it.
+    readonly property var statOpts: [
+        { key: "vin",   name: "Voltage" },
+        { key: "amps",  name: "Battery Current" },
+        { key: "mamps", name: "Motor Current" },
+        { key: "fet",   name: "ESC Temperature" },
+        { key: "mot",   name: "Motor Temperature" },
+        { key: "bmst",  name: "Battery Temperature" },
+        { key: "batt",  name: "Battery Percentage" },
+        { key: "up",    name: "Uptime" },
+        { key: "trip",  name: "Trip Distance" }
+    ]
+    // Offered whenever the BMS is switched on, not once it has answered - the
+    // reading only arrives while a pack is actually reporting, and waiting for
+    // it hides the choice from anyone setting the scooter up beforehand. The
+    // tile itself shows "-" until there is something to show.
+    readonly property var statOptsShown: statOpts.filter(function (o) {
+        return o.key !== "bmst" || bmsSoc.checked
+    })
+    property var statSel: ["vin", "amps", "fet", "mot"]
+    property var statTiles: [statTile(statSel[0]), statTile(statSel[1]),
+                             statTile(statSel[2]), statTile(statSel[3])]
+
+    // Uptime carries its unit in the cap slot, so the letter beside the
+    // number says what the number counts - seconds, minutes, hours or days.
+    function fmtUptime(sec) {
+        if (sec < 60)    return { v: String(Math.floor(sec)), u: "s" }
+        if (sec < 3600)  return { v: String(Math.floor(sec / 60)), u: "m" }
+        if (sec < 86400) return { v: String(Math.floor(sec / 3600)), u: "h" }
+        return { v: String(Math.floor(sec / 86400)), u: "d" }
+    }
+
+    function statTile(key) {
+        switch (key) {
+        case "amps":  return { unit: "A", val: String(Math.round(stAmps)) }
+        case "mamps": return { unit: "A", val: String(Math.round(stMotAmps)) }
+        case "fet":   return { icon: "temp", val: String(Math.round(toShownTemp(stFet))),
+                               warn: stFet > tempLimitC(tempWarningFet, 999) }
+        case "mot":   return { icon: "temp", val: String(Math.round(toShownTemp(stMot))),
+                               warn: stMot > tempLimitC(tempWarningMotor, 999) }
+        case "bmst":  return stBmsTemp > -99
+                             ? { icon: "temp", val: String(Math.round(toShownTemp(stBmsTemp))),
+                                 warn: stBmsTemp > tempLimitC(bmsTempHi, 50)
+                                       || stBmsTemp < tempLimitC(bmsTempLo, 0) }
+                             : { icon: "temp", val: "-" }
+        case "batt":  return { icon: "batt", val: String(Math.round(stBatt)) }
+        case "up":    var u = fmtUptime(stUptime)
+                      return { unit: u.u, val: u.v }
+        case "trip":  return useMph.checked
+                             ? { unit: "mi", val: String(Math.round(stTrip * 0.621371)) }
+                             : { unit: "km", val: String(Math.round(stTrip)) }
+        default:      return { unit: "V", val: String(Math.round(stVin)) }
+        }
+    }
+
+    function setStat(slot, key) {
+        var n = statSel.slice()
+        n[slot] = key
+        statSel = n
+        if (uiPrefs) uiPrefs.statSlots = n.join(",")
+    }
+
+    // Qt.labs.settings is not guaranteed to be deployed in every VESC Tool
+    // build, and a failed file-level import takes the whole page down with it.
+    // Built at run time instead: if neither module is there the tiles simply
+    // stop being remembered between sessions.
+    property var uiPrefs: null
+
+    function initPrefs() {
+        var decl = ' Settings { category: "vesc_scooter_support"; property string statSlots: "" }'
+        var mods = ["import Qt.labs.settings 1.0;", "import QtCore 6.5;"]
+        for (var i = 0; i < mods.length; i++) {
+            try {
+                uiPrefs = Qt.createQmlObject(mods[i] + decl, root, "uiPrefs")
+                break
+            } catch (e) { uiPrefs = null }
+        }
+        if (uiPrefs && uiPrefs.statSlots !== "") {
+            var v = String(uiPrefs.statSlots).split(",")
+            if (v.length === 4) {
+                for (var k = 0; k < 4; k++)
+                    if (!statOpts.some(function (o) { return o.key === v[k] })) return
+                statSel = v
+            }
+        }
+    }
 
     // Live scooter state for the Control tab
     property bool stOff: false
@@ -105,6 +224,13 @@ Item {
     property int stMotors: 1
     property int stFault: 0
     property int stSlip: 0
+    property real stMotAmps: 0
+    property real stBmsTemp: -100
+    property real stUptime: 0
+    property real stTrip: 0
+    // above half, the fill reaches past the middle - so the centred figure
+    // and the range parked on the left are both sitting on colour
+    readonly property bool battOnFill: stBatt > 50
     property bool stImgOk: true
     property real stFet: 0
     property real stMot: 0
@@ -113,6 +239,8 @@ Item {
     readonly property color palRed: "#dc2e28"
     readonly property color palAmber: "#e49e26"
     readonly property color palGreen: "#25af32"
+    // text sitting on the charge fill: the fill is bright in either theme
+    readonly property color palOnFill: "#16181c"
 
     function mixColor(a, b, t) {
         return Qt.rgba(a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t,
@@ -154,9 +282,109 @@ Item {
         [0.4607, 0.5703, 0.4487, 0.5998, 0.4589, 0.6275, 0.4872, 0.6404, 0.516, 0.6305, 0.5298, 0.6, 0.5178, 0.5716,
          0.4888, 0.5592]]
 
+    // The two units that read better as a picture than a letter. Drawn rather
+    // than set in text for the same reason the warning lamps are: a package
+    // ships no image files, and a font glyph for either one cannot be relied on.
+    // Both use the full box rather than its shortest side - the pane is taller
+    // than it is wide, and both shapes stand up.
+    function paintUnitIcon(ctx, kind, w, h, col) {
+        ctx.reset()
+        ctx.fillStyle = col
+        ctx.strokeStyle = col
+        ctx.lineJoin = "round"
+        ctx.lineCap = "round"
+
+        // The canvas fills the pane, so centring here is exact - sizing the
+        // canvas instead left a rounded width that anchors could not halve
+        // evenly, and the glyph sat a pixel off. Work inset from it.
+        var iw = w * 0.58
+        var ih = h * 0.48
+        ctx.translate((w - iw) / 2, (h - ih) / 2)
+        w = iw
+        h = ih
+
+        if (kind === "temp") {
+            // Traced off temperature-low (SVG Repo) on its own 24 grid: bulb of
+            // r4 at 8,17 and a 6-wide tube capped at 8,6. Stroke included that
+            // spans x 3.25..12.75 and y 2.25..21.75, which is what gets fitted.
+            var k = Math.min(w / 9.5, h / 19.5)
+            ctx.save()
+            ctx.translate((w - 9.5 * k) / 2 - 3.25 * k, (h - 19.5 * k) / 2 - 2.25 * k)
+            ctx.scale(k, k)
+            ctx.lineWidth = 1.5
+            ctx.lineCap = "round"
+            ctx.lineJoin = "round"
+
+            // body: round the bulb, up the left wall, over the cap, back down
+            ctx.beginPath()
+            ctx.arc(8, 17, 4, -0.7227, 3.8643)
+            ctx.lineTo(5, 6)
+            ctx.arc(8, 6, 3, Math.PI, 0)
+            ctx.lineTo(11, 14.354)
+            ctx.closePath()
+            ctx.stroke()
+
+            // the column, and the bulb it stands in
+            ctx.beginPath()
+            ctx.moveTo(8, 16)
+            ctx.lineTo(8, 12)
+            ctx.stroke()
+            ctx.beginPath()
+            ctx.arc(8, 17, 1 + ctx.lineWidth / 2, 0, Math.PI * 2)
+            ctx.fill()
+
+            ctx.restore()
+            return
+        }
+
+        // battery stood on end - the pane has height to spare and no width
+        var bw = w * 0.56
+        var bh = h * 0.74
+        var x0 = (w - bw) / 2
+        var lw2 = Math.max(1.2, w * 0.10)
+        var r = w * 0.13
+        ctx.lineWidth = lw2
+
+        // The terminal is part of the shape, so the body alone is not what gets
+        // centred - measure the pair, stroke included, and place from that.
+        var termH = h * 0.10
+        var termGap = h * 0.012
+        var top = (h - (termH + termGap + bh + lw2)) / 2
+        var y0 = top + termH + termGap + lw2 / 2
+
+        ctx.beginPath()
+        ctx.rect(x0 + bw * 0.29, top, bw * 0.42, termH)
+        ctx.fill()
+
+        ctx.beginPath()
+        ctx.moveTo(x0 + r, y0)
+        ctx.lineTo(x0 + bw - r, y0)
+        ctx.quadraticCurveTo(x0 + bw, y0, x0 + bw, y0 + r)
+        ctx.lineTo(x0 + bw, y0 + bh - r)
+        ctx.quadraticCurveTo(x0 + bw, y0 + bh, x0 + bw - r, y0 + bh)
+        ctx.lineTo(x0 + r, y0 + bh)
+        ctx.quadraticCurveTo(x0, y0 + bh, x0, y0 + bh - r)
+        ctx.lineTo(x0, y0 + r)
+        ctx.quadraticCurveTo(x0, y0, x0 + r, y0)
+        ctx.closePath()
+        ctx.stroke()
+
+        // charge, filled from the foot up
+        var ix = x0 + lw2 * 1.5
+        var iy = y0 + lw2 * 1.5
+        var iw = bw - lw2 * 3
+        var ih = bh - lw2 * 3
+        ctx.beginPath()
+        ctx.rect(ix, iy + ih * 0.38, iw, ih * 0.62)
+        ctx.fill()
+    }
+
     // dx/dy are fractions of the badge: a shape is centred on its bounding box,
-    // which is not where the eye puts it once something sticks out of one corner
-    function paintIcon(ctx, rings, size, frac, dx, dy, col) {
+    // which is not where the eye puts it once something sticks out of one corner.
+    // grow re-strokes the first ring in place - every stroke here is traced as a
+    // closed outline, so the only way to fatten one is to lay a line back down
+    // along its own edge, and only the ring that leads carries it.
+    function paintIcon(ctx, rings, size, frac, dx, dy, col, grow) {
         ctx.reset()
         var e = size * frac
         var ox = (size - e) / 2 + dx * size
@@ -171,9 +399,20 @@ Item {
         }
         ctx.fillStyle = col
         ctx.fill()
+        if (grow > 0) {
+            var f = rings[0]
+            ctx.beginPath()
+            ctx.moveTo(ox + f[0] * e, oy + f[1] * e)
+            for (var k = 2; k < f.length; k += 2)
+                ctx.lineTo(ox + f[k] * e, oy + f[k + 1] * e)
+            ctx.closePath()
+            ctx.lineWidth = e * grow
+            ctx.lineJoin = "round"
+            ctx.strokeStyle = col
+            ctx.stroke()
+        }
     }
 
-    property bool battShowRange: false
 
     // Highest draw seen this session, the fallback when nothing caps watts.
     property real stWattPeak: 500
@@ -216,6 +455,9 @@ Item {
         stMotors = Math.max(1, Number.parseInt(p[21]) || 1)
         stFault = Number.parseInt(p[22]) || 0
         stSlip = Number.parseInt(p[23]) || 0
+        stBmsTemp = Number.parseFloat(p[24])
+        if (isNaN(stBmsTemp)) stBmsTemp = -100
+        stUptime = Number.parseFloat(p[25]) || 0
         if (Math.abs(stWatts) > stWattPeak)
             stWattPeak = Math.abs(stWatts)
     }
@@ -229,26 +471,57 @@ Item {
         mCommands.sendCustomAppData(str + "\0")
     }
 
-    // Saving fires many commands - pace them so the BLE link and the
-    // script's event queue keep up (a raw burst drops packets over nRF)
+    // Saving fires a dozen commands and each one blocks the script for as long
+    // as its EEPROM writes take, so a fixed gap between them is a guess that a
+    // full group can outrun - and the dropped one is the last, which is what
+    // reloads the saved values into the running script. Wait for the script to
+    // answer instead. A step is idempotent, so a lost answer can be retried.
     property var sendQueue: []
-
-    Timer {
-        id: sendTimer
-        interval: 60
-        repeat: true
-        onTriggered: {
-            if (root.sendQueue.length === 0) {
-                sendTimer.stop()
-                return
-            }
-            mCommands.sendCustomAppData(root.sendQueue.shift() + "\0")
-        }
-    }
+    property string sendCur: ""
+    property int sendTries: 0
+    property bool sendBusy: false
 
     function queueCode(str) {
         root.sendQueue.push(str)
-        sendTimer.start()
+        if (!root.sendBusy) sendStep()
+    }
+
+    function sendStep() {
+        if (root.sendCur === "") {
+            if (root.sendQueue.length === 0) {
+                root.sendBusy = false
+                ackTimer.stop()
+                return
+            }
+            root.sendCur = root.sendQueue.shift()
+            root.sendTries = 0
+        }
+        root.sendBusy = true
+        root.sendTries += 1
+        mCommands.sendCustomAppData(root.sendCur + "\0")
+        ackTimer.restart()
+    }
+
+    function stepDone() {
+        if (!root.sendBusy) return
+        ackTimer.stop()
+        root.sendCur = ""
+        sendStep()
+    }
+
+    // Long enough to clear the slowest step by a wide margin. finish-settings-save
+    // reloads, re-applies the mode - which can spend half a second per parameter
+    // on a CAN device that does not answer - and then sends all eleven groups
+    // back with a 50ms gap between them. Firing early there is worse than not
+    // firing at all: the retry re-sends every setting from EEPROM and overwrites
+    // whatever is on screen, which reads as a control that refuses to change.
+    Timer {
+        id: ackTimer
+        interval: 6000
+        onTriggered: {
+            if (root.sendTries >= 2) root.sendCur = ""  // give up, never stall
+            root.sendStep()
+        }
     }
 
     // The script looks the names up itself, so a group travels as its name plus
@@ -440,8 +713,8 @@ Item {
         sendCode(ch === "thr" ? "(calib-start-thr)" : "(calib-start-brk)")
     }
 
-    // Speed fields are stored/sent in km/h but shown in mph when "Use Miles" is
-    // on. Convert only at the UI boundary; km/h stays the internal unit.
+    // Speed fields are stored/sent in km/h but shown in mph when imperial units
+    // are on. Convert only at the UI boundary; km/h stays the internal unit.
     readonly property real mphFactor: 0.621371
 
     function readSpeed(field, decimals) {
@@ -458,7 +731,45 @@ Item {
         field.text = (Math.abs(n - Math.round(n)) < 0.05) ? Math.round(n).toString() : n.toFixed(decimals)
     }
 
-    // Re-render all speed fields when the unit toggle flips (user action)
+    // Temperatures ride along with the same switch: the script keeps and stores
+    // celsius, the fields and the tiles show fahrenheit when it is on.
+    readonly property string degUnit: useMph.checked ? "°F" : "°C"
+
+    function toShownTemp(c) { return useMph.checked ? (c * 9 / 5 + 32) : c }
+
+    function readTemp(field, decimals) {
+        var n = Number.parseFloat(field.text.replace(",", "."))
+        if (!Number.isFinite(n)) n = 0
+        if (useMph.checked) n = (n - 32) * 5 / 9 // F -> C
+        return n.toFixed(decimals)
+    }
+
+    function setTemp(field, c, decimals) {
+        var n = Number(c)
+        if (!Number.isFinite(n)) return
+        n = toShownTemp(n)
+        field.text = (Math.abs(n - Math.round(n)) < 0.05) ? Math.round(n).toString() : n.toFixed(decimals)
+    }
+
+    // A warning threshold typed in fahrenheit still has to be compared against
+    // the celsius the script reports, so the tiles read the field back down.
+    function tempLimitC(field, fallback) {
+        var n = Number.parseFloat(field.text.replace(",", "."))
+        if (!Number.isFinite(n)) return fallback
+        return useMph.checked ? (n - 32) * 5 / 9 : n
+    }
+
+    // Re-render all speed and temperature fields when the unit toggle flips
+    function convertTempFields(toF) {
+        var fs = [tempWarningMotor, tempWarningFet, bmsTempHi, bmsTempLo]
+        for (var i = 0; i < fs.length; i++) {
+            var n = Number.parseFloat(fs[i].text.replace(",", "."))
+            if (!Number.isFinite(n)) continue
+            var v = toF ? (n * 9 / 5 + 32) : ((n - 32) * 5 / 9)
+            fs[i].text = (Math.abs(v - Math.round(v)) < 0.05) ? Math.round(v).toString() : v.toFixed(1)
+        }
+    }
+
     function convertSpeedFields(toMiles) {
         var factor = toMiles ? mphFactor : (1 / mphFactor)
         var fs = [ecoSpeed, driveSpeed, sportSpeed, secretEcoSpeed, secretDriveSpeed,
@@ -483,13 +794,15 @@ Item {
             boolAtom(bmsSoc), boolAtom(secretExitOnLock),
             readOffsetV(lightOffThr), readGain(lightGainThr),
             readOffsetV(lightOffBrk), readGain(lightGainBrk),
-            (Number.parseInt(appPin.text) || 0), dashPowerOut.currentIndex])
+            (Number.parseInt(appPin.text) || 0), dashPowerOut.currentIndex,
+            boolAtom(headOffLock)])
 
         saveGroup("general", [boolAtom(softwareAdc), boolAtom(softwareAdc2),
             boolAtom(showBatteryInIdle), boolAtom(showBatterySecret),
             readSpeed(minSpeed, 1), boolAtom(appEnable), idleDisplay.currentIndex])
 
-        saveGroup("temps", [readReal(tempWarningMotor, 1), readReal(tempWarningFet, 1)])
+        saveGroup("temps", [readTemp(tempWarningMotor, 1), readTemp(tempWarningFet, 1),
+            readTemp(bmsTempHi, 1), readTemp(bmsTempLo, 1)])
 
         saveGroup("modes", [
             readSpeed(ecoSpeed, 1), readPct(ecoCurrent), readReal(ecoWatts, 0), readReal(ecoFw, 1),
@@ -518,7 +831,7 @@ Item {
 
         saveGroup("rear", [boolAtom(rearLightEnable), boolAtom(autoTaillight),
             [1, 2, 0][brakeLightMode.currentIndex],
-            (Math.max(5, Math.min(100, Number.parseFloat(tailBright.text) || 40)) / 100)])
+            ((tailBright.currentIndex + 1) / 10), boolAtom(tailOffLock)])
 
         saveGroup("cruise", [boolAtom(cruiseEnable), readReal(cruiseDelay, 1),
             readSpeed(cruiseDeviation, 1), readSpeed(cruiseMinSpeed, 1), readSpeed(cruiseMaxSpeed, 1)])
@@ -577,11 +890,29 @@ Item {
         var wasLoaded = settingsLoaded
         settingsLoaded = false
         var n = 0
+        // A backup from an older release is short a field or two per group.
+        // Nothing downstream notices: setReal ignores a missing number, but
+        // parseBoolToken reads undefined as false, so every toggle the old
+        // build did not have would import as off. The line the script last sent
+        // says how many fields a group takes now - anything else is refused.
+        var skipped = 0
         for (var k = 0; k < cfgKeys.length; k++) {
             var line = found[cfgKeys[k]]
-            if (line !== undefined) { applySettingsLine(line); n += 1 }
+            if (line === undefined)
+                continue
+            var known = cfgLines[cfgKeys[k]]
+            if (known !== undefined
+                    && line.split(" ").length !== known.split(" ").length) {
+                skipped += 1
+                continue
+            }
+            applySettingsLine(line)
+            n += 1
         }
         settingsLoaded = wasLoaded
+        if (skipped > 0)
+            VescIf.emitStatusMessage(
+                "Skipped " + skipped + " group(s) from an older backup.", false)
         return n
     }
 
@@ -602,8 +933,10 @@ Item {
             appEnable.checked = parseBoolToken(parts[6])
             idleDisplay.currentIndex = Number.parseInt(parts[7]) || 0
         } else if (parts[0] === "temps") {
-            setReal(tempWarningMotor, parts[1], 1)
-            setReal(tempWarningFet, parts[2], 1)
+            setTemp(tempWarningMotor, parts[1], 1)
+            setTemp(tempWarningFet, parts[2], 1)
+            setTemp(bmsTempHi, parts[3], 1)
+            setTemp(bmsTempLo, parts[4], 1)
         } else if (parts[0] === "modes") {
             setSpeed(ecoSpeed, parts[1], 1)
             setPct(ecoCurrent, parts[2])
@@ -677,12 +1010,15 @@ Item {
             setGain(lightGainBrk, parts[9])
             appPin.text = ("00000" + (Number.parseInt(parts[10]) || 0)).slice(-6)
             dashPowerOut.currentIndex = Number.parseInt(parts[11]) || 0
+            headOffLock.checked = parseBoolToken(parts[12])
         } else if (parts[0] === "rear") {
             rearLightEnable.checked = parseBoolToken(parts[1])
             autoTaillight.checked = parseBoolToken(parts[2])
             var blm = Number.parseInt(parts[3])
             brakeLightMode.currentIndex = blm === 1 ? 0 : (blm === 2 ? 1 : 2)
-            tailBright.text = Math.round((Number.parseFloat(parts[4]) || 0.4) * 100)
+            tailBright.currentIndex = Math.max(0, Math.min(9,
+                Math.round((Number.parseFloat(parts[4]) || 0.4) * 10) - 1))
+            tailOffLock.checked = parseBoolToken(parts[5])
         } else if (parts[0] === "cruise") {
             cruiseEnable.checked = parseBoolToken(parts[1])
             setReal(cruiseDelay, parts[2], 1)
@@ -698,6 +1034,16 @@ Item {
     }
 
     Component.onCompleted: {
+        initPrefs()
+        // page 0 is the Control tab - its switches are written when they are
+        // flipped, so they are not what Save is for. Settings loading must not
+        // depend on this working, so it goes first and cannot take it down.
+        try {
+            for (var i = 1; i < swipeView.count; i++)
+                watchEdits(swipeView.itemAt(i))
+        } catch (e) {
+            console.log("watchEdits: " + e)
+        }
         getSettings()
     }
 
@@ -716,6 +1062,24 @@ Item {
         onTriggered: getSettings()
     }
 
+    Timer {
+        interval: 150
+        repeat: true
+        running: swipeView.currentIndex === 3 && (softwareAdc.checked || softwareAdc2.checked)
+        onTriggered: mCommands.getDecodedAdc()
+    }
+
+    // Motor current and trip distance are the controller's own figures, so they
+    // are read from it rather than carried through the script. Setup values are
+    // combined across CAN, which is what setup-current-in gives the rest of the
+    // state line, and tachometer_abs is metres with the wheel size applied.
+    Timer {
+        interval: 300
+        repeat: true
+        running: swipeView.currentIndex === 0
+        onTriggered: mCommands.getValuesSetup()
+    }
+
     // Client-side countdown for the light-calibration hold. Purely visual -
     // the actual result comes from calib-progress/calib-result messages, so a
     // slightly early/late display here has no functional effect.
@@ -732,8 +1096,149 @@ Item {
     // written yields to the rest of the system, so a full save is a few seconds.
     Timer {
         id: saveTimeout
-        interval: 12000
+        interval: 25000
         onTriggered: root.saving = false
+    }
+
+    // mc_fault_code in firmware order. A code past the end of the table is shown
+    // as its number rather than guessed at, so a newer firmware still reads.
+    readonly property var faultNames: [
+        "None", "Over Voltage", "Under Voltage", "DRV", "ABS Over Current",
+        "ESC Over Temperature", "Motor Over Temperature",
+        "Gate Driver Over Voltage", "Gate Driver Under Voltage",
+        "MCU Under Voltage", "Booting From Watchdog Reset", "Encoder SPI",
+        "Encoder Sin/Cos Below Min Amplitude", "Encoder Sin/Cos Above Max Amplitude",
+        "Flash Corruption", "High Offset Current Sensor 1",
+        "High Offset Current Sensor 2", "High Offset Current Sensor 3",
+        "Unbalanced Currents", "Brake", "Resolver LOT", "Resolver DOS",
+        "Resolver LOS", "Flash Corruption App CFG", "Flash Corruption MC CFG",
+        "Encoder No Magnet", "Encoder Magnet Too Strong", "Phase Filter",
+        "Encoder Fault", "LV Output Fault"
+    ]
+
+    function faultName(code) {
+        return (code >= 0 && code < faultNames.length) ? faultNames[code]
+                                                       : ("Fault " + code)
+    }
+
+    Dialog {
+        id: faultInfo
+        background: Rectangle { radius: 16; color: root.cDialog }
+        x: Math.round((parent.width - width) / 2)
+        y: Math.round((parent.height - height) / 2)
+        width: Math.min(parent.width - 40, 360)
+        modal: true
+
+        ColumnLayout {
+            width: faultInfo.availableWidth
+            spacing: 6
+
+            Label {
+                Layout.fillWidth: true
+                Layout.bottomMargin: 4
+                text: "Controller Fault"
+                font.bold: true
+                font.pointSize: root.titleSize * 1.1
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: faultText.implicitHeight + 28
+                radius: 12
+                color: root.cWarnBg
+                Label {
+                    id: faultText
+                    anchors.fill: parent
+                    anchors.margins: 14
+                    wrapMode: Text.WordWrap
+                    verticalAlignment: Text.AlignVCenter
+                    text: root.faultName(root.stFault) + "  (" + root.stFault + ")"
+                    font.bold: true
+                    color: root.cWarnInk
+                }
+            }
+
+            Label {
+                Layout.fillWidth: true
+                Layout.topMargin: 2
+                wrapMode: Text.WordWrap
+                text: "The controller's own fault code. VESC Tool's terminal has the "
+                      + "full history with the values at the moment it tripped."
+                font.pointSize: root.titleSize * 0.82
+                color: root.cDim
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.topMargin: 6
+                Layout.preferredHeight: 44
+                radius: 12
+                color: faultClose.pressed ? root.cCtlHi : root.cCtl
+                Label {
+                    anchors.centerIn: parent
+                    text: "Close"
+                    font.bold: true
+                    color: root.cInk
+                }
+                MouseArea {
+                    id: faultClose
+                    anchors.fill: parent
+                    onClicked: faultInfo.close()
+                }
+            }
+        }
+    }
+
+    Dialog {
+        id: statPick
+        property int slot: 0
+        function openAt(i) { slot = i; open() }
+        background: Rectangle { radius: 16; color: root.cDialog }
+        x: Math.round((parent.width - width) / 2)
+        y: Math.round((parent.height - height) / 2)
+        width: Math.min(parent.width - 40, 360)
+        modal: true
+
+        ColumnLayout {
+            width: statPick.availableWidth
+            spacing: 6
+
+            Label {
+                Layout.fillWidth: true
+                Layout.bottomMargin: 4
+                text: "Select content:"
+                horizontalAlignment: Text.AlignHCenter
+                font.bold: true
+                font.pointSize: root.titleSize * 1.1
+            }
+
+            Repeater {
+                model: root.statOptsShown
+                Rectangle {
+                    id: optRow
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 44
+                    radius: 12
+                    property bool taken: root.statSel[statPick.slot] === modelData.key
+                    color: taken ? root.cAccentBg2 : (optTouch.pressed ? root.cCtlHi : root.cCtl)
+                    Label {
+                        anchors.fill: parent
+                        anchors.leftMargin: 14
+                        anchors.rightMargin: 14
+                        verticalAlignment: Text.AlignVCenter
+                        horizontalAlignment: Text.AlignHCenter
+                        text: modelData.name
+                        font.bold: true
+                        color: optRow.taken ? root.cAccent : root.cInk
+                    }
+                    MouseArea {
+                        id: optTouch
+                        anchors.fill: parent
+                        onClicked: { root.setStat(statPick.slot, modelData.key); statPick.close() }
+                    }
+                }
+            }
+        }
     }
 
     Dialog {
@@ -810,7 +1315,7 @@ Item {
             width: ListView.view ? ListView.view.width : implicitWidth
             height: 34
             text: modelData
-            font.weight: Font.Normal
+            font.weight: Font.Normal; font.pointSize: root.titleSize * 0.95
             highlighted: ListView.isCurrentItem
             background: Rectangle {
                 radius: 10
@@ -1512,39 +2017,64 @@ Item {
                                 anchors.verticalCenterOffset: dial.dcy - dial.drad * 0.56
                                 spacing: Math.round(dial.ccd * 0.30)
 
-                                Item {
+                                // Filled like the CC badge, icon knocked out dark: a
+                                // thin coloured glyph washes out in sun, and amber on
+                                // the light theme's white was barely there at all. What
+                                // carries outdoors is a solid disc of colour.
+                                Rectangle {
                                     width: dial.ccd
                                     height: width
+                                    radius: width / 2
+                                    color: "#dc2e28"
                                     visible: root.stFault > 0
                                     Canvas {
                                         anchors.fill: parent
                                         // a canvas hidden before it ever drew comes back blank
                                         onVisibleChanged: if (visible) requestPaint()
                                         onPaint: root.paintIcon(getContext("2d"),
-                                                                root.iconEngine,
-                                                                width, 0.75, 0, 0, "#dc2e28")
+                                                                root.iconEngine, width,
+                                                                0.64, 0, 0, root.palOnFill, 0.03)
+                                    }
+                                    // the badge is smaller than a fingertip, so the
+                                    // tap that names the fault reaches past its edge
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        anchors.margins: -10
+                                        onClicked: faultInfo.open()
                                     }
                                 }
 
-                                Item {
+                                Rectangle {
                                     id: tcLamp
                                     width: dial.ccd
                                     height: width
+                                    radius: width / 2
                                     readonly property bool slipping: root.stSlip > 0
                                     visible: slipping
+                                    // The blink inverts instead of fading: filled disc
+                                    // with the icon knocked out, then the icon alone in
+                                    // the disc's own amber. Nothing ever goes
+                                    // translucent, so neither half of the cycle washes
+                                    // out against the light theme's white.
+                                    property bool blinkOn: true
+                                    color: blinkOn ? "#e49e26" : "transparent"
+                                    onBlinkOnChanged: tcIcon.requestPaint()
+                                    onSlippingChanged: if (slipping) blinkOn = true
+                                    Timer {
+                                        interval: 240
+                                        repeat: true
+                                        running: tcLamp.slipping
+                                        onTriggered: tcLamp.blinkOn = !tcLamp.blinkOn
+                                    }
                                     Canvas {
+                                        id: tcIcon
                                         anchors.fill: parent
                                         onVisibleChanged: if (visible) requestPaint()
                                         onPaint: root.paintIcon(getContext("2d"),
-                                                                root.iconSlip,
-                                                                width, 0.75, 0.015, 0.014, "#e49e26")
-                                        SequentialAnimation on opacity {
-                                            running: tcLamp.slipping
-                                            loops: Animation.Infinite
-                                            alwaysRunToEnd: true
-                                            NumberAnimation { from: 1.0; to: 0.25; duration: 180 }
-                                            NumberAnimation { from: 0.25; to: 1.0; duration: 180 }
-                                        }
+                                                                root.iconSlip, width,
+                                                                0.58, 0.015, 0.014,
+                                                                tcLamp.blinkOn ? root.palOnFill
+                                                                               : "#e49e26", 0.05)
                                     }
                                 }
                             }
@@ -1618,25 +2148,32 @@ Item {
                                         Behavior on color { ColorAnimation { duration: 320 } }
                                     }
 
-                                    // The bar already shows the charge, so the figure on it
-                                    // alternates with what people actually want from it.
-                                    Timer {
-                                        interval: 3000
-                                        repeat: true
-                                        running: swipeView.currentIndex === 0
-                                        onTriggered: root.battShowRange = !root.battShowRange
-                                    }
-
                                     Label {
                                         anchors.centerIn: parent
-                                        text: root.battShowRange
-                                            ? "~" + Math.round(useMph.checked ? (root.stRange * 0.621371)
+                                        text: Math.round(root.stBatt) + " %"
+                                        font.bold: true
+                                        font.pointSize: root.titleSize * 1.18
+                                        color: root.battOnFill ? root.palOnFill : root.cInk
+                                    }
+
+                                    // Range keeps to whichever end of the bar is one
+                                    // solid colour, so it never straddles the fill edge:
+                                    // the filled left while there is charge to spare,
+                                    // the empty right once the fill has retreated past
+                                    // the middle. The percentage holds the centre.
+                                    Label {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        // Positioned rather than re-anchored: binding an
+                                        // anchor to undefined is how you break one, and
+                                        // driving both ends that way leaves the label stuck
+                                        // at whichever end it was on when the fill crossed.
+                                        x: root.battOnFill ? 12 : (parent.width - width - 12)
+                                        text: "~" + Math.round(useMph.checked ? (root.stRange * 0.621371)
                                                                               : root.stRange)
                                               + (useMph.checked ? " mi" : " km")
-                                            : Math.round(root.stBatt) + " %"
                                         font.bold: true
-                                        font.pointSize: root.titleSize * 1.05
-                                        color: root.cInk
+                                        font.pointSize: root.titleSize * 1.18
+                                        color: root.battOnFill ? root.palOnFill : root.cInk
                                     }
                                 }
                             }
@@ -1647,26 +2184,46 @@ Item {
                                 spacing: 8
 
                                 Repeater {
-                                    model: [
-                                        { cap: "V", deg: false, val: String(Math.round(root.stVin)), warn: false },
-                                        { cap: "A", deg: false, val: String(Math.round(root.stAmps)), warn: false },
-                                        { cap: "E", deg: true, val: String(Math.round(root.stFet)),
-                                          warn: root.stFet > (Number.parseFloat(tempWarningFet.text) || 999) },
-                                        { cap: "M", deg: true, val: String(Math.round(root.stMot)),
-                                          warn: root.stMot > (Number.parseFloat(tempWarningMotor.text) || 999) }
-                                    ]
+                                    model: root.statTiles
                                     Rectangle {
                                         Layout.fillWidth: true
                                         Layout.preferredWidth: 1
-                                        Layout.preferredHeight: Math.round(40 * ctlScroll.wS)
+                                        Layout.preferredHeight: Math.round(34 * ctlScroll.wS)
                                         radius: 12
                                         color: root.cCtl
+
+                                        clip: true
+
+                                        // Two panes: the reading right-aligned against a
+                                        // slightly offset unit pane. The warning tint is laid
+                                        // over both, and the three labels over that, so the
+                                        // pane never cuts the blink in half.
+                                        Rectangle {
+                                            id: chipUnit
+                                            anchors.right: parent.right
+                                            anchors.top: parent.top
+                                            anchors.bottom: parent.bottom
+                                            width: root.chipUnitW
+                                            radius: parent.radius
+                                            color: root.cCtlHi
+                                            // only the card's own right corners are round -
+                                            // square off the edge that meets the reading
+                                            Rectangle {
+                                                anchors.left: parent.left
+                                                anchors.top: parent.top
+                                                anchors.bottom: parent.bottom
+                                                width: parent.radius
+                                                color: parent.color
+                                            }
+                                        }
 
                                         Rectangle {
                                             anchors.fill: parent
                                             radius: parent.radius
                                             color: root.cWarnTint
-                                            visible: modelData.warn
+                                            // undefined is not assignable to bool,
+                                            // and the property falls back to true
+                                            visible: modelData.warn === true
                                             SequentialAnimation on opacity {
                                                 running: true
                                                 loops: Animation.Infinite
@@ -1675,69 +2232,44 @@ Item {
                                             }
                                         }
 
-                                        clip: true
+                                        Label {
+                                            anchors.right: chipUnit.left
+                                            anchors.rightMargin: 8
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            anchors.verticalCenterOffset: -0.5
+                                            text: modelData.val
+                                            font.bold: true
+                                            font.pointSize: root.titleSize * 1.0
+                                        }
 
-                                        // Reading, degree and unit share one group centred in the
-                                        // card, each slot as wide as its widest case. So the group
-                                        // is balanced however wide the card gets, the letters hold
-                                        // a column across the four, the digits end at one x whether
-                                        // or not a degree is drawn, and a third digit grows into
-                                        // room already reserved for it.
-                                        Item {
-                                            id: chipGrp
-                                            anchors.horizontalCenter: parent.horizontalCenter
-                                            // shift right by half the degree and the letter, so
-                                            // what centres is the reading and not the group -
-                                            // clamped to keep 4px of card to the right of it
-                                            anchors.horizontalCenterOffset: Math.min(
-                                                Math.round((root.chipDegW + root.chipGap
-                                                            + root.chipCapW) / 2),
-                                                Math.round(parent.width / 2 - root.chipGrpW / 2 - 4))
-                                            anchors.top: parent.top
-                                            anchors.bottom: parent.bottom
-                                            width: root.chipGrpW
+                                        Label {
+                                            anchors.centerIn: chipUnit
+                                            anchors.verticalCenterOffset: -0.5
+                                            visible: modelData.icon === undefined
+                                            text: modelData.unit ? modelData.unit : ""
+                                            font.bold: true
+                                            font.pointSize: root.titleSize * 0.96
+                                            opacity: 0.6
+                                        }
 
-                                            Label {
-                                                id: chipCap
-                                                anchors.right: parent.right
-                                                // A slot as wide as the widest letter, with the
-                                                // glyph centred in it. Right anchoring it at its
-                                                // own width is what left M snug against the degree
-                                                // and E four pixels clear of it: everything else
-                                                // is positioned from M's width, so a narrower
-                                                // letter handed the difference back as gap.
-                                                width: root.chipCapW
-                                                horizontalAlignment: Text.AlignHCenter
-                                                // one baseline for all three. Aligning boxes
-                                                // instead drops the smaller font by the
-                                                // difference in descent, and V, A, E and M have
-                                                // no descender for it to buy anything
-                                                anchors.baseline: chipVal.baseline
-                                                text: modelData.cap
-                                                font.bold: true
-                                                font.pointSize: root.titleSize * 0.83
-                                                opacity: 0.5
-                                            }
-                                            Label {
-                                                id: chipDeg
-                                                anchors.right: parent.right
-                                                anchors.rightMargin: root.chipCapW + root.chipGap
-                                                anchors.baseline: chipVal.baseline
-                                                text: "\u00b0"
-                                                font.bold: true
-                                                font.pointSize: root.titleSize * 1.09
-                                                opacity: modelData.deg ? 0.45 : 0
-                                            }
-                                            Label {
-                                                id: chipVal
-                                                anchors.right: parent.right
-                                                anchors.rightMargin: root.chipCapW + root.chipGap + root.chipDegW + 2
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                anchors.verticalCenterOffset: 2
-                                                text: modelData.val
-                                                font.bold: true
-                                                font.pointSize: root.titleSize * 1.09
-                                            }
+                                        Canvas {
+                                            anchors.fill: chipUnit
+                                            visible: modelData.icon !== undefined
+                                            opacity: 0.6
+                                            // a canvas hidden before it ever drew comes back blank
+                                            onVisibleChanged: if (visible) requestPaint()
+                                            Component.onCompleted: requestPaint()
+                                            onPaint: root.paintUnitIcon(getContext("2d"),
+                                                                        modelData.icon,
+                                                                        width, height, root.cInk)
+                                        }
+
+
+                                        // Last child, so it is above the reading: a press on
+                                        // the digits is a press on the tile, not a miss.
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            onPressAndHold: statPick.openAt(index)
                                         }
                                     }
                                 }
@@ -1802,6 +2334,7 @@ Item {
                                                     anchors.centerIn: parent
                                                     text: modelData.t
                                                     font.bold: true
+                                                    font.pointSize: root.titleSize * 0.92
                                                     color: root.stMode === modelData.m ? "#ffffff" : root.cDim2
                                                     Behavior on color { ColorAnimation { duration: 220 } }
                                                 }
@@ -1915,7 +2448,7 @@ Item {
                                 RowLayout {
                                     Layout.fillWidth: true
                                     Layout.preferredHeight: 40
-                                    Label { text: "Startup Mode"; Layout.fillWidth: true }
+                                    Label { font.bold: true; text: "Startup Mode"; Layout.fillWidth: true }
                                     ComboBox {
                                         id: bootMode
                                         Layout.preferredWidth: 100
@@ -1930,86 +2463,46 @@ Item {
                                         topPadding: 0
                                         bottomPadding: 0
                                         implicitHeight: 34
-                                        font.weight: Font.Normal
+                                        font.weight: Font.Normal; font.pointSize: root.titleSize * 0.95
                                         Component.onCompleted: { popup.contentItem.boundsBehavior = Flickable.StopAtBounds; popup.contentItem.interactive = false }
                                         delegate: comboItem
                                     }
                                 }
+                                Label { text: "The mode the scooter starts in when the VESC is turned on."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6 }
 
                                 RowLayout {
                                     Layout.fillWidth: true
+                                    Layout.preferredHeight: 40
                                     enabled: secretEnabled.checked
-                                    Label { text: "Disable Secret when Locked"; Layout.fillWidth: true }
+                                    Label { font.bold: true; text: "Disable Secret when Locked"; Layout.fillWidth: true }
                                     CheckBox { id: secretExitOnLock; spacing: 4; padding: 7; indicator: Rectangle { implicitWidth: 40; implicitHeight: 22; x: parent.leftPadding; y: parent.height / 2 - height / 2; radius: 11; color: parent.checked ? root.cAccentBg : root.cTrack; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } Rectangle { y: 3; width: 16; height: 16; radius: 8; color: parent.parent.checked ? root.cAccent : root.cDim2; x: parent.parent.checked ? 21 : 3; Behavior on color { ColorAnimation { duration: 140 } } Behavior on x { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } } } } }
                                 }
+                                Label { text: "Locking the scooter drops it back out of the secret modes."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6 }
 
                                 RowLayout {
                                     Layout.fillWidth: true
                                     Layout.preferredHeight: 40
-                                    Label { text: "Start Speed (" + (useMph.checked ? "mph" : "km/h") + ")"; Layout.fillWidth: true }
-                                    TextField { id: minSpeed; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                    Label { font.bold: true; text: "Start Speed (" + (useMph.checked ? "mph" : "km/h") + ")"; Layout.fillWidth: true }
+                                    TextField { font.pointSize: root.titleSize * 0.95; id: minSpeed; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
                                 }
+                                Label { text: "Kick-off speed. Throttle will not work below this value."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6 }
 
                                 RowLayout {
                                     Layout.fillWidth: true
                                     Layout.preferredHeight: 40
-                                    Label { text: "Auto Headlight"; Layout.fillWidth: true }
-                                    CheckBox { id: lightOnBoot; spacing: 4; padding: 7; indicator: Rectangle { implicitWidth: 40; implicitHeight: 22; x: parent.leftPadding; y: parent.height / 2 - height / 2; radius: 11; color: parent.checked ? root.cAccentBg : root.cTrack; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } Rectangle { y: 3; width: 16; height: 16; radius: 8; color: parent.parent.checked ? root.cAccent : root.cDim2; x: parent.parent.checked ? 21 : 3; Behavior on color { ColorAnimation { duration: 140 } } Behavior on x { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } } } } }
-                                }
-
-                                RowLayout {
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: 40
-                                    Label { text: "Always ON Tail Light"; Layout.fillWidth: true; enabled: rearLightEnable.checked }
-                                    CheckBox { id: autoTaillight; spacing: 4; enabled: rearLightEnable.checked; padding: 7; indicator: Rectangle { implicitWidth: 40; implicitHeight: 22; x: parent.leftPadding; y: parent.height / 2 - height / 2; radius: 11; color: parent.checked ? root.cAccentBg : root.cTrack; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } Rectangle { y: 3; width: 16; height: 16; radius: 8; color: parent.parent.checked ? root.cAccent : root.cDim2; x: parent.parent.checked ? 21 : 3; Behavior on color { ColorAnimation { duration: 140 } } Behavior on x { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } } } } }
-                                }
-
-                                RowLayout {
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: 40
-                                    enabled: rearLightEnable.checked
-                                    Label { text: "Tail Light Brightness (%)"; Layout.fillWidth: true }
-                                    TextField { id: tailBright; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 3; inputMethodHints: Qt.ImhDigitsOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
-                                }
-
-                                RowLayout {
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: 40
-                                    Label { text: "Brake Light"; Layout.fillWidth: true; enabled: rearLightEnable.checked }
-                                    ComboBox {
-                                        id: brakeLightMode
-                                        Layout.preferredWidth: 100
-                                        model: ["On", "Blink", "Off"]
-                                        enabled: rearLightEnable.checked
-                                        background: Rectangle { radius: 10; color: root.cCtl; implicitHeight: 34 }
-                                        popup.background: Rectangle { radius: 12; color: root.cCard; border.width: 1; border.color: root.cEdge }
-                                        popup.padding: 6
-                                        popup.height: popup.contentItem.implicitHeight + 12
-                                        topInset: 0
-                                        bottomInset: 0
-                                        topPadding: 0
-                                        bottomPadding: 0
-                                        implicitHeight: 34
-                                        font.weight: Font.Normal
-                                        Component.onCompleted: { popup.contentItem.boundsBehavior = Flickable.StopAtBounds; popup.contentItem.interactive = false }
-                                        delegate: comboItem
-                                    }
-                                }
-
-                                RowLayout {
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: 40
-                                    Label { text: "Show Idle Display"; Layout.fillWidth: true }
+                                    Label { font.bold: true; text: "Idle Display"; Layout.fillWidth: true }
                                     CheckBox { id: showBatteryInIdle; text: "Normal"; spacing: 4; topPadding: 0; bottomPadding: 0; leftPadding: 14; rightPadding: 14; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? root.cAccentBg2 : root.cCard; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.95; color: parent.checked ? root.cAccent : root.cDim } }
                                     CheckBox { id: showBatterySecret; text: "Secret"; spacing: 4
                                         enabled: secretEnabled.checked
                                         topPadding: 0; bottomPadding: 0; leftPadding: 14; rightPadding: 14; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? root.cAccentBg2 : root.cCard; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.95; color: parent.checked ? root.cAccent : root.cDim } }
                                 }
+                                Label { text: "Show a different value on the dash while standing still."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6 }
 
                                 RowLayout {
                                     Layout.fillWidth: true
                                     Label {
-                                        text: "Idle Display"
+                                        text: "Idle Display Shows"
+                                        font.bold: true
                                         Layout.fillWidth: true
                                         enabled: showBatteryInIdle.checked || showBatterySecret.checked
                                     }
@@ -2024,22 +2517,124 @@ Item {
                                         topPadding: 0
                                         bottomPadding: 0
                                         implicitHeight: 34
-                                        font.weight: Font.Normal
+                                        font.weight: Font.Normal; font.pointSize: root.titleSize * 0.95
                                         Component.onCompleted: { popup.contentItem.boundsBehavior = Flickable.StopAtBounds; popup.contentItem.interactive = false }
                                         delegate: comboItem
                                         Layout.preferredWidth: 130
                                         enabled: showBatteryInIdle.checked || showBatterySecret.checked
-                                        model: ["Battery %", "Battery V", "VESC \u00B0C", "Motor \u00B0C"]
+                                        model: ["Battery %", "Battery V", "VESC " + root.degUnit, "Motor " + root.degUnit]
                                     }
                                 }
+                                Label { text: "Select what to show while standing still."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6 }
 
                                 RowLayout {
                                     Layout.fillWidth: true
                                     Layout.preferredHeight: 40
-                                    Label { text: "Alarm"; Layout.fillWidth: true }
+                                    Label { font.bold: true; text: "Alarm"; Layout.fillWidth: true }
                                     CheckBox { id: alarmTone; spacing: 4; padding: 7; indicator: Rectangle { implicitWidth: 40; implicitHeight: 22; x: parent.leftPadding; y: parent.height / 2 - height / 2; radius: 11; color: parent.checked ? root.cAccentBg : root.cTrack; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } Rectangle { y: 3; width: 16; height: 16; radius: 8; color: parent.parent.checked ? root.cAccent : root.cDim2; x: parent.parent.checked ? 21 : 3; Behavior on color { ColorAnimation { duration: 140 } } Behavior on x { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } } } } }
                                 }
+                                Label { text: "Enable the alarm when the scooter is locked."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6; Layout.bottomMargin: 6 }
 
+                            }
+                        }
+                        Label { text: "Lights"; font.bold: true; font.pointSize: root.titleSize * 0.92; font.capitalization: Font.AllUppercase; font.letterSpacing: 1; opacity: 0.8; Layout.topMargin: 26; Layout.leftMargin: 4 }
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: cardLights.implicitHeight + 28
+                            radius: 14
+                            color: root.cDeep
+                            border.width: root.darkUi ? 0 : 1
+                            border.color: root.cEdge
+                            ColumnLayout {
+                                id: cardLights
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.top: parent.top
+                                anchors.margins: 14
+                                spacing: 12
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 40
+                                    Label { font.bold: true; text: "Auto Headlight"; Layout.fillWidth: true }
+                                    CheckBox { id: lightOnBoot; spacing: 4; padding: 7; indicator: Rectangle { implicitWidth: 40; implicitHeight: 22; x: parent.leftPadding; y: parent.height / 2 - height / 2; radius: 11; color: parent.checked ? root.cAccentBg : root.cTrack; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } Rectangle { y: 3; width: 16; height: 16; radius: 8; color: parent.parent.checked ? root.cAccent : root.cDim2; x: parent.parent.checked ? 21 : 3; Behavior on color { ColorAnimation { duration: 140 } } Behavior on x { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } } } } }
+                                }
+                                Label { text: "Headlight comes on by itself every time the scooter starts."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6 }
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 40
+                                    Label { font.bold: true; text: "Headlight OFF when Locked"; Layout.fillWidth: true }
+                                    CheckBox { id: headOffLock; spacing: 4; padding: 7; indicator: Rectangle { implicitWidth: 40; implicitHeight: 22; x: parent.leftPadding; y: parent.height / 2 - height / 2; radius: 11; color: parent.checked ? root.cAccentBg : root.cTrack; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } Rectangle { y: 3; width: 16; height: 16; radius: 8; color: parent.parent.checked ? root.cAccent : root.cDim2; x: parent.parent.checked ? 21 : 3; Behavior on color { ColorAnimation { duration: 140 } } Behavior on x { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } } } } }
+                                }
+                                Label { text: "Headlight is turned OFF when locked, and restored when unlocked."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6 }
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 40
+                                    Label { font.bold: true; text: "Always ON Tail Light"; Layout.fillWidth: true; enabled: rearLightEnable.checked }
+                                    CheckBox { id: autoTaillight; spacing: 4; enabled: rearLightEnable.checked; padding: 7; indicator: Rectangle { implicitWidth: 40; implicitHeight: 22; x: parent.leftPadding; y: parent.height / 2 - height / 2; radius: 11; color: parent.checked ? root.cAccentBg : root.cTrack; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } Rectangle { y: 3; width: 16; height: 16; radius: 8; color: parent.parent.checked ? root.cAccent : root.cDim2; x: parent.parent.checked ? 21 : 3; Behavior on color { ColorAnimation { duration: 140 } } Behavior on x { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } } } } }
+                                }
+                                Label { text: "Tail light stays lit the whole time the scooter is on, not only under braking."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6 }
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 40
+                                    Label { font.bold: true; text: "Tail Light OFF when Locked"; Layout.fillWidth: true; enabled: rearLightEnable.checked }
+                                    CheckBox { id: tailOffLock; spacing: 4; enabled: rearLightEnable.checked; padding: 7; indicator: Rectangle { implicitWidth: 40; implicitHeight: 22; x: parent.leftPadding; y: parent.height / 2 - height / 2; radius: 11; color: parent.checked ? root.cAccentBg : root.cTrack; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } Rectangle { y: 3; width: 16; height: 16; radius: 8; color: parent.parent.checked ? root.cAccent : root.cDim2; x: parent.parent.checked ? 21 : 3; Behavior on color { ColorAnimation { duration: 140 } } Behavior on x { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } } } } }
+                                }
+                                Label { text: "Tail light is turned OFF when locked, and restored when unlocked."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6 }
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 40
+                                    enabled: rearLightEnable.checked
+                                    Label { font.bold: true; text: "Tail Light Brightness (1-10)"; Layout.fillWidth: true }
+                                    ComboBox {
+                                        id: tailBright
+                                        Layout.preferredWidth: 100
+                                        model: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
+                                        enabled: rearLightEnable.checked
+                                        background: Rectangle { radius: 10; color: root.cCtl; implicitHeight: 34 }
+                                        popup.background: Rectangle { radius: 12; color: root.cCard; border.width: 1; border.color: root.cEdge }
+                                        popup.padding: 6
+                                        popup.height: popup.contentItem.implicitHeight + 12
+                                        topInset: 0
+                                        bottomInset: 0
+                                        topPadding: 0
+                                        bottomPadding: 0
+                                        implicitHeight: 34
+                                        font.weight: Font.Normal; font.pointSize: root.titleSize * 0.95
+                                        Component.onCompleted: { popup.contentItem.boundsBehavior = Flickable.StopAtBounds; popup.contentItem.interactive = false }
+                                        delegate: comboItem
+                                    }
+                                }
+                                Label { text: "Tail light brightness, in ten steps."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6 }
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 40
+                                    Label { font.bold: true; text: "Brake Light"; Layout.fillWidth: true; enabled: rearLightEnable.checked }
+                                    ComboBox {
+                                        id: brakeLightMode
+                                        Layout.preferredWidth: 100
+                                        model: ["On", "Blink", "Off"]
+                                        enabled: rearLightEnable.checked
+                                        background: Rectangle { radius: 10; color: root.cCtl; implicitHeight: 34 }
+                                        popup.background: Rectangle { radius: 12; color: root.cCard; border.width: 1; border.color: root.cEdge }
+                                        popup.padding: 6
+                                        popup.height: popup.contentItem.implicitHeight + 12
+                                        topInset: 0
+                                        bottomInset: 0
+                                        topPadding: 0
+                                        bottomPadding: 0
+                                        implicitHeight: 34
+                                        font.weight: Font.Normal; font.pointSize: root.titleSize * 0.95
+                                        Component.onCompleted: { popup.contentItem.boundsBehavior = Flickable.StopAtBounds; popup.contentItem.interactive = false }
+                                        delegate: comboItem
+                                    }
+                                }
+                                Label { text: "Select the brake light effect when the brake is pressed."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6; Layout.bottomMargin: 6 }
                             }
                         }
                         Label { text: "Gestures"; font.bold: true; font.pointSize: root.titleSize * 0.92; font.capitalization: Font.AllUppercase; font.letterSpacing: 1; opacity: 0.8; Layout.topMargin: 26; Layout.leftMargin: 4 }
@@ -2063,7 +2658,7 @@ Item {
                                     Layout.topMargin: 8
                                     spacing: 4
 
-                                    Label { text: "Lock"; font.bold: true }
+                                    Label { text: "Lock"; font.bold: true; Layout.bottomMargin: 3 }
 
                                     RowLayout {
                                         Layout.fillWidth: true
@@ -2085,7 +2680,7 @@ Item {
                                             topPadding: 0
                                             bottomPadding: 0
                                             implicitHeight: 34
-                                            font.weight: Font.Normal
+                                            font.weight: Font.Normal; font.pointSize: root.titleSize * 0.95
                                             Component.onCompleted: { popup.contentItem.boundsBehavior = Flickable.StopAtBounds; popup.contentItem.interactive = false }
                                             delegate: comboItem
                                         }
@@ -2097,7 +2692,7 @@ Item {
                                     Layout.topMargin: 8
                                     spacing: 4
 
-                                    Label { text: "Modes"; font.bold: true }
+                                    Label { text: "Modes"; font.bold: true; Layout.bottomMargin: 3 }
 
                                     RowLayout {
                                         Layout.fillWidth: true
@@ -2120,7 +2715,7 @@ Item {
                                             topPadding: 0
                                             bottomPadding: 0
                                             implicitHeight: 34
-                                            font.weight: Font.Normal
+                                            font.weight: Font.Normal; font.pointSize: root.titleSize * 0.95
                                             Component.onCompleted: { popup.contentItem.boundsBehavior = Flickable.StopAtBounds; popup.contentItem.interactive = false }
                                             delegate: comboItem
                                         }
@@ -2132,7 +2727,7 @@ Item {
                                     Layout.topMargin: 8
                                     spacing: 4
 
-                                    Label { text: "Headlight"; font.bold: true }
+                                    Label { text: "Headlight"; font.bold: true; Layout.bottomMargin: 3 }
 
                                     RowLayout {
                                         Layout.fillWidth: true
@@ -2155,7 +2750,7 @@ Item {
                                             topPadding: 0
                                             bottomPadding: 0
                                             implicitHeight: 34
-                                            font.weight: Font.Normal
+                                            font.weight: Font.Normal; font.pointSize: root.titleSize * 0.95
                                             Component.onCompleted: { popup.contentItem.boundsBehavior = Flickable.StopAtBounds; popup.contentItem.interactive = false }
                                             delegate: comboItem
                                         }
@@ -2168,7 +2763,7 @@ Item {
                                     spacing: 4
                                     enabled: secretEnabled.checked
 
-                                    Label { text: "Secret"; font.bold: true }
+                                    Label { text: "Secret"; font.bold: true; Layout.bottomMargin: 3 }
 
                                     RowLayout {
                                         Layout.fillWidth: true
@@ -2191,7 +2786,7 @@ Item {
                                             topPadding: 0
                                             bottomPadding: 0
                                             implicitHeight: 34
-                                            font.weight: Font.Normal
+                                            font.weight: Font.Normal; font.pointSize: root.titleSize * 0.95
                                             Component.onCompleted: { popup.contentItem.boundsBehavior = Flickable.StopAtBounds; popup.contentItem.interactive = false }
                                             delegate: comboItem
                                         }
@@ -2204,7 +2799,7 @@ Item {
                                     spacing: 4
                                     enabled: secretEnabled.checked
 
-                                    Label { text: "Secret OFF"; font.bold: true }
+                                    Label { text: "Secret OFF"; font.bold: true; Layout.bottomMargin: 3 }
 
                                     RowLayout {
                                         Layout.fillWidth: true
@@ -2227,12 +2822,14 @@ Item {
                                             topPadding: 0
                                             bottomPadding: 0
                                             implicitHeight: 34
-                                            font.weight: Font.Normal
+                                            font.weight: Font.Normal; font.pointSize: root.titleSize * 0.95
                                             Component.onCompleted: { popup.contentItem.boundsBehavior = Flickable.StopAtBounds; popup.contentItem.interactive = false }
                                             delegate: comboItem
                                         }
                                     }
                                 }
+
+                                Label { text: "Each gesture is a number of power button presses with the listed levers held down at the same time."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: 6; Layout.bottomMargin: 6 }
                             }
                         }
                     }
@@ -2288,42 +2885,47 @@ Item {
                                 RowLayout {
                                     Layout.fillWidth: true
                                     CheckBox { id: applySpeed; text: "Speed"; checked: true; Layout.preferredWidth: 106; topPadding: 0; bottomPadding: 0; leftPadding: 3; rightPadding: 3; Layout.rightMargin: 6; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? root.cAccentBg2 : root.cCard; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.95; color: parent.checked ? root.cAccent : root.cDim } }
-                                    TextField { id: ecoSpeed; horizontalAlignment: TextInput.AlignHCenter; enabled: applySpeed.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
-                                    TextField { id: driveSpeed; horizontalAlignment: TextInput.AlignHCenter; enabled: applySpeed.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
-                                    TextField { id: sportSpeed; horizontalAlignment: TextInput.AlignHCenter; enabled: applySpeed.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                    TextField { font.pointSize: root.titleSize * 0.95; id: ecoSpeed; horizontalAlignment: TextInput.AlignHCenter; enabled: applySpeed.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                    TextField { font.pointSize: root.titleSize * 0.95; id: driveSpeed; horizontalAlignment: TextInput.AlignHCenter; enabled: applySpeed.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                    TextField { font.pointSize: root.titleSize * 0.95; id: sportSpeed; horizontalAlignment: TextInput.AlignHCenter; enabled: applySpeed.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
                                 }
+                                Label { text: "Set the maximum speed for each mode."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6 }
 
                                 RowLayout {
                                     Layout.fillWidth: true
                                     CheckBox { id: applyCurrent; text: "Current %"; checked: true; Layout.preferredWidth: 106; topPadding: 0; bottomPadding: 0; leftPadding: 3; rightPadding: 3; Layout.rightMargin: 6; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? root.cAccentBg2 : root.cCard; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.95; color: parent.checked ? root.cAccent : root.cDim } }
-                                    TextField { id: ecoCurrent; horizontalAlignment: TextInput.AlignHCenter; enabled: applyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampPct(ecoCurrent); topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
-                                    TextField { id: driveCurrent; horizontalAlignment: TextInput.AlignHCenter; enabled: applyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampPct(driveCurrent); topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
-                                    TextField { id: sportCurrent; horizontalAlignment: TextInput.AlignHCenter; enabled: applyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampPct(sportCurrent); topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                    TextField { font.pointSize: root.titleSize * 0.95; id: ecoCurrent; horizontalAlignment: TextInput.AlignHCenter; enabled: applyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampPct(ecoCurrent); topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                    TextField { font.pointSize: root.titleSize * 0.95; id: driveCurrent; horizontalAlignment: TextInput.AlignHCenter; enabled: applyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampPct(driveCurrent); topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                    TextField { font.pointSize: root.titleSize * 0.95; id: sportCurrent; horizontalAlignment: TextInput.AlignHCenter; enabled: applyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampPct(sportCurrent); topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
                                 }
+                                Label { text: "Percentage of the motor current configured in VESC."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6 }
 
                                 RowLayout {
                                     Layout.fillWidth: true
                                     CheckBox { id: applyWatts; text: "Watts"; checked: true; Layout.preferredWidth: 106; topPadding: 0; bottomPadding: 0; leftPadding: 3; rightPadding: 3; Layout.rightMargin: 6; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? root.cAccentBg2 : root.cCard; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.95; color: parent.checked ? root.cAccent : root.cDim } }
-                                    TextField { id: ecoWatts; horizontalAlignment: TextInput.AlignHCenter; enabled: applyWatts.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
-                                    TextField { id: driveWatts; horizontalAlignment: TextInput.AlignHCenter; enabled: applyWatts.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
-                                    TextField { id: sportWatts; horizontalAlignment: TextInput.AlignHCenter; enabled: applyWatts.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                    TextField { font.pointSize: root.titleSize * 0.95; id: ecoWatts; horizontalAlignment: TextInput.AlignHCenter; enabled: applyWatts.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                    TextField { font.pointSize: root.titleSize * 0.95; id: driveWatts; horizontalAlignment: TextInput.AlignHCenter; enabled: applyWatts.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                    TextField { font.pointSize: root.titleSize * 0.95; id: sportWatts; horizontalAlignment: TextInput.AlignHCenter; enabled: applyWatts.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
                                 }
+                                Label { text: "Set the maximum power."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6 }
 
                                 RowLayout {
                                     Layout.fillWidth: true
                                     CheckBox { id: applyFw; text: "Field Weak."; checked: true; Layout.preferredWidth: 106; topPadding: 0; bottomPadding: 0; leftPadding: 3; rightPadding: 3; Layout.rightMargin: 6; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? root.cAccentBg2 : root.cCard; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.95; color: parent.checked ? root.cAccent : root.cDim } }
-                                    TextField { id: ecoFw; horizontalAlignment: TextInput.AlignHCenter; enabled: applyFw.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
-                                    TextField { id: driveFw; horizontalAlignment: TextInput.AlignHCenter; enabled: applyFw.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
-                                    TextField { id: sportFw; horizontalAlignment: TextInput.AlignHCenter; enabled: applyFw.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                    TextField { font.pointSize: root.titleSize * 0.95; id: ecoFw; horizontalAlignment: TextInput.AlignHCenter; enabled: applyFw.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                    TextField { font.pointSize: root.titleSize * 0.95; id: driveFw; horizontalAlignment: TextInput.AlignHCenter; enabled: applyFw.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                    TextField { font.pointSize: root.titleSize * 0.95; id: sportFw; horizontalAlignment: TextInput.AlignHCenter; enabled: applyFw.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
                                 }
+                                Label { text: "Field Weakening current. Raises top speed."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6 }
 
                                 RowLayout {
                                     Layout.fillWidth: true
                                     CheckBox { id: applyOm; text: "Overmod."; Layout.preferredWidth: 106; topPadding: 0; bottomPadding: 0; leftPadding: 3; rightPadding: 3; Layout.rightMargin: 6; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? root.cAccentBg2 : root.cCard; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.95; color: parent.checked ? root.cAccent : root.cDim } }
-                                    TextField { id: ecoOm; horizontalAlignment: TextInput.AlignHCenter; enabled: applyOm.checked; text: "1.000"; onEditingFinished: clampOm(ecoOm); Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
-                                    TextField { id: driveOm; horizontalAlignment: TextInput.AlignHCenter; enabled: applyOm.checked; text: "1.000"; onEditingFinished: clampOm(driveOm); Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
-                                    TextField { id: sportOm; horizontalAlignment: TextInput.AlignHCenter; enabled: applyOm.checked; text: "1.000"; onEditingFinished: clampOm(sportOm); Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                    TextField { font.pointSize: root.titleSize * 0.95; id: ecoOm; horizontalAlignment: TextInput.AlignHCenter; enabled: applyOm.checked; text: "1.000"; onEditingFinished: clampOm(ecoOm); Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                    TextField { font.pointSize: root.titleSize * 0.95; id: driveOm; horizontalAlignment: TextInput.AlignHCenter; enabled: applyOm.checked; text: "1.000"; onEditingFinished: clampOm(driveOm); Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                    TextField { font.pointSize: root.titleSize * 0.95; id: sportOm; horizontalAlignment: TextInput.AlignHCenter; enabled: applyOm.checked; text: "1.000"; onEditingFinished: clampOm(sportOm); Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
                                 }
+                                Label { text: "Overmodulation factor. Above 1.00 gains a little top speed."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6; Layout.bottomMargin: 6 }
 
                             }
                         }
@@ -2347,9 +2949,10 @@ Item {
                                 RowLayout {
                                     Layout.fillWidth: true
                                     Layout.preferredHeight: 40
-                                    Label { text: "Secret Modes"; Layout.fillWidth: true }
+                                    Label { font.bold: true; text: "Secret Modes"; Layout.fillWidth: true }
                                     CheckBox { id: secretEnabled; spacing: 4; padding: 7; indicator: Rectangle { implicitWidth: 40; implicitHeight: 22; x: parent.leftPadding; y: parent.height / 2 - height / 2; radius: 11; color: parent.checked ? root.cAccentBg : root.cTrack; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } Rectangle { y: 3; width: 16; height: 16; radius: 8; color: parent.parent.checked ? root.cAccent : root.cDim2; x: parent.parent.checked ? 21 : 3; Behavior on color { ColorAnimation { duration: 140 } } Behavior on x { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } } } } }
                                 }
+                                Label { text: "Enable the use of Secret modes."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6 }
 
                                 RowLayout {
                                     Layout.fillWidth: true
@@ -2362,52 +2965,71 @@ Item {
                                 RowLayout {
                                     Layout.fillWidth: true
                                     CheckBox { id: secretApplySpeed; text: "Speed"; checked: true; Layout.preferredWidth: 106; topPadding: 0; bottomPadding: 0; leftPadding: 3; rightPadding: 3; Layout.rightMargin: 6; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? root.cAccentBg2 : root.cCard; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.95; color: parent.checked ? root.cAccent : root.cDim } }
-                                    TextField { id: secretEcoSpeed; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplySpeed.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
-                                    TextField { id: secretDriveSpeed; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplySpeed.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
-                                    TextField { id: secretSportSpeed; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplySpeed.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                    TextField { font.pointSize: root.titleSize * 0.95; id: secretEcoSpeed; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplySpeed.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                    TextField { font.pointSize: root.titleSize * 0.95; id: secretDriveSpeed; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplySpeed.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                    TextField { font.pointSize: root.titleSize * 0.95; id: secretSportSpeed; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplySpeed.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
                                 }
+                                Label { text: "Set the maximum speed for each mode."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6 }
 
                                 RowLayout {
                                     Layout.fillWidth: true
                                     CheckBox { id: secretApplyCurrent; text: "Current %"; checked: true; Layout.preferredWidth: 106; topPadding: 0; bottomPadding: 0; leftPadding: 3; rightPadding: 3; Layout.rightMargin: 6; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? root.cAccentBg2 : root.cCard; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.95; color: parent.checked ? root.cAccent : root.cDim } }
-                                    TextField { id: secretEcoCurrent; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampPct(secretEcoCurrent); topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
-                                    TextField { id: secretDriveCurrent; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampPct(secretDriveCurrent); topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
-                                    TextField { id: secretSportCurrent; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampPct(secretSportCurrent); topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                    TextField { font.pointSize: root.titleSize * 0.95; id: secretEcoCurrent; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampPct(secretEcoCurrent); topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                    TextField { font.pointSize: root.titleSize * 0.95; id: secretDriveCurrent; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampPct(secretDriveCurrent); topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                    TextField { font.pointSize: root.titleSize * 0.95; id: secretSportCurrent; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyCurrent.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampPct(secretSportCurrent); topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
                                 }
+                                Label { text: "Percentage of the motor current configured in VESC."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6 }
 
                                 RowLayout {
                                     Layout.fillWidth: true
                                     CheckBox { id: secretApplyWatts; text: "Watts"; checked: true; Layout.preferredWidth: 106; topPadding: 0; bottomPadding: 0; leftPadding: 3; rightPadding: 3; Layout.rightMargin: 6; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? root.cAccentBg2 : root.cCard; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.95; color: parent.checked ? root.cAccent : root.cDim } }
-                                    TextField { id: secretEcoWatts; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyWatts.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
-                                    TextField { id: secretDriveWatts; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyWatts.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
-                                    TextField { id: secretSportWatts; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyWatts.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                    TextField { font.pointSize: root.titleSize * 0.95; id: secretEcoWatts; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyWatts.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                    TextField { font.pointSize: root.titleSize * 0.95; id: secretDriveWatts; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyWatts.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                    TextField { font.pointSize: root.titleSize * 0.95; id: secretSportWatts; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyWatts.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
                                 }
+                                Label { text: "Set the maximum power."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6 }
 
                                 RowLayout {
                                     Layout.fillWidth: true
                                     CheckBox { id: secretApplyFw; text: "Field Weak."; checked: true; Layout.preferredWidth: 106; topPadding: 0; bottomPadding: 0; leftPadding: 3; rightPadding: 3; Layout.rightMargin: 6; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? root.cAccentBg2 : root.cCard; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.95; color: parent.checked ? root.cAccent : root.cDim } }
-                                    TextField { id: secretEcoFw; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyFw.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
-                                    TextField { id: secretDriveFw; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyFw.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
-                                    TextField { id: secretSportFw; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyFw.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                    TextField { font.pointSize: root.titleSize * 0.95; id: secretEcoFw; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyFw.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                    TextField { font.pointSize: root.titleSize * 0.95; id: secretDriveFw; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyFw.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                    TextField { font.pointSize: root.titleSize * 0.95; id: secretSportFw; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyFw.checked; Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
                                 }
+                                Label { text: "Field Weakening current. Raises top speed."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6 }
 
                                 RowLayout {
                                     Layout.fillWidth: true
                                     CheckBox { id: secretApplyOm; text: "Overmod."; Layout.preferredWidth: 106; topPadding: 0; bottomPadding: 0; leftPadding: 3; rightPadding: 3; Layout.rightMargin: 6; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? root.cAccentBg2 : root.cCard; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.95; color: parent.checked ? root.cAccent : root.cDim } }
-                                    TextField { id: secretEcoOm; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyOm.checked; text: "1.000"; onEditingFinished: clampOm(secretEcoOm); Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
-                                    TextField { id: secretDriveOm; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyOm.checked; text: "1.000"; onEditingFinished: clampOm(secretDriveOm); Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
-                                    TextField { id: secretSportOm; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyOm.checked; text: "1.000"; onEditingFinished: clampOm(secretSportOm); Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                    TextField { font.pointSize: root.titleSize * 0.95; id: secretEcoOm; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyOm.checked; text: "1.000"; onEditingFinished: clampOm(secretEcoOm); Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                    TextField { font.pointSize: root.titleSize * 0.95; id: secretDriveOm; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyOm.checked; text: "1.000"; onEditingFinished: clampOm(secretDriveOm); Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                    TextField { font.pointSize: root.titleSize * 0.95; id: secretSportOm; horizontalAlignment: TextInput.AlignHCenter; enabled: secretApplyOm.checked; text: "1.000"; onEditingFinished: clampOm(secretSportOm); Layout.fillWidth: true; Layout.preferredWidth: 50; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
                                 }
+                                Label { text: "Overmodulation factor. Above 1.00 gains a little top speed."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6; Layout.bottomMargin: 6 }
                             }
                         }
 
-                        Label {
+                        Rectangle {
                             Layout.fillWidth: true
-                            Layout.topMargin: 10
-                            wrapMode: Text.WordWrap
-                            opacity: 0.6
-                            text: "Every value here is written to each controller, so two motors draw twice the watts."
+                            Layout.topMargin: 12
+                            Layout.preferredHeight: modeNotes.implicitHeight + 28
+                            radius: 14
+                            color: root.cDeep
+                            border.width: root.darkUi ? 0 : 1
+                            border.color: root.cEdge
+                            ColumnLayout {
+                                id: modeNotes
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.top: parent.top
+                                anchors.margins: 14
+                                spacing: 8
+
+                                Label { text: "Every value here is applied to each controller separately. Two controllers on the CAN bus draw twice the watts and twice the current. Speed is not doubled - each one holds the same limit."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.bottomMargin: 6 }
+                                Label { text: "The switch on the left of each row decides whether that value is written at all. Left off, the controller keeps whatever is already set in VESC."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                            }
                         }
+
                     }
                 }
             }
@@ -2440,31 +3062,37 @@ Item {
                             color: root.cDeep
                             border.width: root.darkUi ? 0 : 1
                             border.color: root.cEdge
-                                RowLayout {
+                                ColumnLayout {
                                     id: card0
                                     anchors.left: parent.left
                                     anchors.right: parent.right
                                     anchors.top: parent.top
                                     anchors.margins: 14
-                                    Label { text: "Model"; font.bold: true; Layout.fillWidth: true }
-                                    ComboBox {
-                                        id: modelBox
-                                        background: Rectangle { radius: 10; color: root.cCtl; implicitHeight: 34 }
-                                        popup.background: Rectangle { radius: 12; color: root.cCard; border.width: 1; border.color: root.cEdge }
-                                        popup.padding: 6
-                                        popup.height: popup.contentItem.implicitHeight + 12
-                                        topInset: 0
-                                        bottomInset: 0
-                                        topPadding: 0
-                                        bottomPadding: 0
-                                        implicitHeight: 34
-                                        font.weight: Font.Normal
-                                        Component.onCompleted: { popup.contentItem.boundsBehavior = Flickable.StopAtBounds; popup.contentItem.interactive = false }
-                                        delegate: comboItem
-                                        Layout.preferredWidth: 170
-                                        model: ["G30", "M365/1S/PRO2", "Slave", "G2 (untested)"]
-                                        currentIndex: 2
+                                    spacing: 12
+
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        Label { text: "Model"; font.bold: true; Layout.fillWidth: true }
+                                        ComboBox {
+                                            id: modelBox
+                                            background: Rectangle { radius: 10; color: root.cCtl; implicitHeight: 34 }
+                                            popup.background: Rectangle { radius: 12; color: root.cCard; border.width: 1; border.color: root.cEdge }
+                                            popup.padding: 6
+                                            popup.height: popup.contentItem.implicitHeight + 12
+                                            topInset: 0
+                                            bottomInset: 0
+                                            topPadding: 0
+                                            bottomPadding: 0
+                                            implicitHeight: 34
+                                            font.weight: Font.Normal; font.pointSize: root.titleSize * 0.95
+                                            Component.onCompleted: { popup.contentItem.boundsBehavior = Flickable.StopAtBounds; popup.contentItem.interactive = false }
+                                            delegate: comboItem
+                                            Layout.preferredWidth: 170
+                                            model: ["G30", "M365/1S/PRO2", "Slave", "G2 (untested)"]
+                                            currentIndex: 2
+                                        }
                                     }
+                                    Label { text: "Select your dashboard/scooter model."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6; Layout.bottomMargin: 6 }
                                 }
                         }
 
@@ -2492,10 +3120,11 @@ Item {
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Layout.preferredHeight: 40
-                                        Label { text: "Software ADC"; Layout.fillWidth: true }
+                                        Label { text: "Software ADC"; font.bold: true; Layout.fillWidth: true }
                                         CheckBox { id: softwareAdc; text: "Throttle"; spacing: 4; topPadding: 0; bottomPadding: 0; leftPadding: 14; rightPadding: 14; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? root.cAccentBg2 : root.cCard; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.95; color: parent.checked ? root.cAccent : root.cDim } }
                                         CheckBox { id: softwareAdc2; text: "Brake"; spacing: 4; topPadding: 0; bottomPadding: 0; leftPadding: 14; rightPadding: 14; indicator: Item { } background: Rectangle { radius: 9; implicitHeight: 36; color: parent.checked ? root.cAccentBg2 : root.cCard; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } } contentItem: Label { text: parent.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; font.weight: Font.DemiBold; font.pointSize: root.titleSize * 0.95; color: parent.checked ? root.cAccent : root.cDim } }
                                     }
+                                    Label { text: "Throttle and brake come from the dashboard over UART. Turn this off when they are wired straight to the VESC's ADC pins."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6 }
 
                                     ColumnLayout {
                                         Layout.fillWidth: true
@@ -2504,14 +3133,8 @@ Item {
 
                                         Rectangle { Layout.fillWidth: true; Layout.topMargin: 14; height: 1; color: root.cDialog }
 
-                                        Label { text: "Light Compensation"; font.bold: true; opacity: 0.75; Layout.topMargin: 8 }
-
-                                        Label {
-                                            Layout.fillWidth: true
-                                            wrapMode: Text.WordWrap
-                                            opacity: 0.7
-                                            text: "The headlight sags throttle/brake voltages. You can use this to correct voltages when light is ON."
-                                        }
+                                        Label { text: "Light Compensation"; font.bold: true; Layout.topMargin: 8 }
+                                        Label { text: "The dash lifts the lever voltages when the headlight is on. These cancel that out so the throttle feels the same either way."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: 2 }
 
                                         ColumnLayout {
                                             Layout.fillWidth: true
@@ -2522,15 +3145,22 @@ Item {
                                             RowLayout {
                                                 Layout.fillWidth: true
                                                 Layout.preferredHeight: 40
-                                                Label { text: "Throttle Offset (V)"; Layout.fillWidth: true }
-                                                TextField { id: lightOffThr; horizontalAlignment: TextInput.AlignHCenter; text: "0.000"; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampOffsetV(lightOffThr); topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                                Label { font.bold: true; text: "Throttle ADC1 (V)"; Layout.fillWidth: true }
+                                                Label { text: root.adcV1.toFixed(4) + "V"; Layout.preferredWidth: 100; horizontalAlignment: Text.AlignHCenter; font.bold: true; color: root.cAccent }
                                             }
 
                                             RowLayout {
                                                 Layout.fillWidth: true
                                                 Layout.preferredHeight: 40
-                                                Label { text: "Throttle Gain (k)"; Layout.fillWidth: true }
-                                                TextField { id: lightGainThr; horizontalAlignment: TextInput.AlignHCenter; text: "1.000"; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampGain(lightGainThr); topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                                Label { font.bold: true; text: "Throttle Offset (V)"; Layout.fillWidth: true }
+                                                TextField { font.pointSize: root.titleSize * 0.95; id: lightOffThr; horizontalAlignment: TextInput.AlignHCenter; text: "0.000"; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampOffsetV(lightOffThr); topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                            }
+
+                                            RowLayout {
+                                                Layout.fillWidth: true
+                                                Layout.preferredHeight: 40
+                                                Label { font.bold: true; text: "Throttle Gain (k)"; Layout.fillWidth: true }
+                                                TextField { font.pointSize: root.titleSize * 0.95; id: lightGainThr; horizontalAlignment: TextInput.AlignHCenter; text: "1.000"; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampGain(lightGainThr); topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
                                             }
 
                                             Button {
@@ -2562,15 +3192,22 @@ Item {
                                             RowLayout {
                                                 Layout.fillWidth: true
                                                 Layout.preferredHeight: 40
-                                                Label { text: "Brake Offset (V)"; Layout.fillWidth: true }
-                                                TextField { id: lightOffBrk; horizontalAlignment: TextInput.AlignHCenter; text: "0.000"; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampOffsetV(lightOffBrk); topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                                Label { font.bold: true; text: "Brake ADC2 (V)"; Layout.fillWidth: true }
+                                                Label { text: root.adcV2.toFixed(4) + "V"; Layout.preferredWidth: 100; horizontalAlignment: Text.AlignHCenter; font.bold: true; color: root.cAccent }
                                             }
 
                                             RowLayout {
                                                 Layout.fillWidth: true
                                                 Layout.preferredHeight: 40
-                                                Label { text: "Brake Gain (k)"; Layout.fillWidth: true }
-                                                TextField { id: lightGainBrk; horizontalAlignment: TextInput.AlignHCenter; text: "1.000"; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampGain(lightGainBrk); topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                                Label { font.bold: true; text: "Brake Offset (V)"; Layout.fillWidth: true }
+                                                TextField { font.pointSize: root.titleSize * 0.95; id: lightOffBrk; horizontalAlignment: TextInput.AlignHCenter; text: "0.000"; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampOffsetV(lightOffBrk); topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                            }
+
+                                            RowLayout {
+                                                Layout.fillWidth: true
+                                                Layout.preferredHeight: 40
+                                                Label { font.bold: true; text: "Brake Gain (k)"; Layout.fillWidth: true }
+                                                TextField { font.pointSize: root.titleSize * 0.95; id: lightGainBrk; horizontalAlignment: TextInput.AlignHCenter; text: "1.000"; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; onEditingFinished: clampGain(lightGainBrk); topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
                                             }
 
                                             Button {
@@ -2612,9 +3249,10 @@ Item {
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Layout.preferredHeight: 40
-                                        Label { text: "Disable Gestures above (" + (useMph.checked ? "mph" : "km/h") + ")"; Layout.fillWidth: true }
-                                        TextField { id: buttonSpeed; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                        Label { font.bold: true; text: "Disable Gestures above (" + (useMph.checked ? "mph" : "km/h") + ")"; Layout.fillWidth: true }
+                                        TextField { font.pointSize: root.titleSize * 0.95; id: buttonSpeed; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
                                     }
+                                    Label { text: "Button gestures are disabled above this speed."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6; Layout.bottomMargin: 6 }
 
                                 }
                             }
@@ -2637,16 +3275,33 @@ Item {
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Layout.preferredHeight: 40
-                                        Label { text: "Motor Temp Warning (°C)"; Layout.fillWidth: true }
-                                        TextField { id: tempWarningMotor; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                        Label { font.bold: true; text: "Motor Temp Warning (" + root.degUnit + ")"; Layout.fillWidth: true }
+                                        TextField { font.pointSize: root.titleSize * 0.95; id: tempWarningMotor; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
                                     }
 
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Layout.preferredHeight: 40
-                                        Label { text: "FET Temp Warning (°C)"; Layout.fillWidth: true }
-                                        TextField { id: tempWarningFet; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                        Label { font.bold: true; text: "VESC (MOSFET) Temp Warning (" + root.degUnit + ")"; Layout.fillWidth: true }
+                                        TextField { font.pointSize: root.titleSize * 0.95; id: tempWarningFet; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
                                     }
+
+                                    // the pack temperature comes off the BMS, so these
+                                    // do nothing until Use VESC BMS for Dash is on
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: 40
+                                        Label { font.bold: true; text: "Battery Hot Warning (" + root.degUnit + ")"; Layout.fillWidth: true; enabled: bmsSoc.checked }
+                                        TextField { font.pointSize: root.titleSize * 0.95; id: bmsTempHi; enabled: bmsSoc.checked; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                    }
+
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: 40
+                                        Label { font.bold: true; text: "Battery Cold Warning (" + root.degUnit + ")"; Layout.fillWidth: true; enabled: bmsSoc.checked }
+                                        TextField { font.pointSize: root.titleSize * 0.95; id: bmsTempLo; enabled: bmsSoc.checked; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                    }
+                                    Label { text: "Show a warning on the dash when a temperature goes outside these limits."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6; Layout.bottomMargin: 6 }
 
                                 }
                             }
@@ -2669,39 +3324,44 @@ Item {
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Layout.preferredHeight: 40
-                                        Label { text: "Use Miles"; Layout.fillWidth: true }
+                                        Label { font.bold: true; text: "Use Imperial Units"; Layout.fillWidth: true }
                                         CheckBox {
                                             id: useMph
                                             spacing: 4
                                             // convert already-shown speed fields on user toggle only
-                                            onCheckedChanged: if (root.settingsLoaded) root.convertSpeedFields(checked)
+                                            onCheckedChanged: if (root.settingsLoaded) { root.convertSpeedFields(checked); root.convertTempFields(checked) }
                                             padding: 7; indicator: Rectangle { implicitWidth: 40; implicitHeight: 22; x: parent.leftPadding; y: parent.height / 2 - height / 2; radius: 11; color: parent.checked ? root.cAccentBg : root.cTrack; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } Rectangle { y: 3; width: 16; height: 16; radius: 8; color: parent.parent.checked ? root.cAccent : root.cDim2; x: parent.parent.checked ? 21 : 3; Behavior on color { ColorAnimation { duration: 140 } } Behavior on x { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } } } }
                                         }
                                     }
+                                    Label { text: "Change values to imperial units everywhere."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6 }
 
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Layout.preferredHeight: 40
-                                        Label { text: "Use VESC BMS for Dash"; Layout.fillWidth: true }
+                                        Label { font.bold: true; text: "Use VESC BMS"; Layout.fillWidth: true }
                                         CheckBox { id: bmsSoc; spacing: 4; padding: 7; indicator: Rectangle { implicitWidth: 40; implicitHeight: 22; x: parent.leftPadding; y: parent.height / 2 - height / 2; radius: 11; color: parent.checked ? root.cAccentBg : root.cTrack; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } Rectangle { y: 3; width: 16; height: 16; radius: 8; color: parent.parent.checked ? root.cAccent : root.cDim2; x: parent.parent.checked ? 21 : 3; Behavior on color { ColorAnimation { duration: 140 } } Behavior on x { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } } } } }
                                     }
+                                    Label { text: "Battery info is read from the VESC BMS."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6 }
 
                                     RowLayout {
                                         Layout.fillWidth: true
+                                        Layout.preferredHeight: 40
                                         Label {
                                             Layout.fillWidth: true
+                                            font.bold: true
                                             wrapMode: Text.WordWrap
                                             text: (root.isSlave ? "App Support"
                                                    : (modelBox.currentIndex === 1 ? "Xiaomi" : "Segway")
-                                                     + " App Support (experimental)")
+                                                     + " App Support (exp.)")
                                         }
                                         CheckBox { id: appEnable; spacing: 4; padding: 7; indicator: Rectangle { implicitWidth: 40; implicitHeight: 22; x: parent.leftPadding; y: parent.height / 2 - height / 2; radius: 11; color: parent.checked ? root.cAccentBg : root.cTrack; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } Rectangle { y: 3; width: 16; height: 16; radius: 8; color: parent.parent.checked ? root.cAccent : root.cDim2; x: parent.parent.checked ? 21 : 3; Behavior on color { ColorAnimation { duration: 140 } } Behavior on x { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } } } } }
                                     }
+                                    Label { text: "Enable the original Segway/Xiaomi and third-party apps to connect over the dashboard's BLE."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6 }
 
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Layout.preferredHeight: 40
-                                        Label { text: "App pairing PIN"; Layout.fillWidth: true }
+                                        Label { font.bold: true; text: "App pairing PIN"; Layout.fillWidth: true }
                                         TextField {
                                             id: appPin
                                             horizontalAlignment: TextInput.AlignHCenter
@@ -2718,18 +3378,20 @@ Item {
                                             background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard }
                                         }
                                     }
+                                    Label { text: "The six digits the phone app asks for when it connects."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6 }
 
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Layout.preferredHeight: 40
-                                        Label { text: "Tail Light Output (Servo/PPM)"; Layout.fillWidth: true }
+                                        Label { font.bold: true; text: "Tail Light Output (Servo/PPM)"; Layout.fillWidth: true }
                                         CheckBox { id: rearLightEnable; spacing: 4; padding: 7; indicator: Rectangle { implicitWidth: 40; implicitHeight: 22; x: parent.leftPadding; y: parent.height / 2 - height / 2; radius: 11; color: parent.checked ? root.cAccentBg : root.cTrack; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } Rectangle { y: 3; width: 16; height: 16; radius: 8; color: parent.parent.checked ? root.cAccent : root.cDim2; x: parent.parent.checked ? 21 : 3; Behavior on color { ColorAnimation { duration: 140 } } Behavior on x { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } } } } }
                                     }
+                                    Label { text: "Control rear light using MOSFET. Check README for more info."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6 }
 
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Layout.preferredHeight: 40
-                                        Label { text: "Dashboard Power Pin (experimental)"; Layout.fillWidth: true }
+                                        Label { font.bold: true; text: "Dashboard Power Pin (exp.)"; Layout.fillWidth: true }
                                         ComboBox {
                                             id: dashPowerOut
                                             Layout.preferredWidth: 100
@@ -2743,11 +3405,12 @@ Item {
                                             topPadding: 0
                                             bottomPadding: 0
                                             implicitHeight: 34
-                                            font.weight: Font.Normal
+                                            font.weight: Font.Normal; font.pointSize: root.titleSize * 0.95
                                             Component.onCompleted: { popup.contentItem.boundsBehavior = Flickable.StopAtBounds; popup.contentItem.interactive = false }
                                             delegate: comboItem
                                         }
                                     }
+                                    Label { text: "Turn off the dash/stepdown using an ADC pin. Check README for more info."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6 }
 
                                     Label {
                                         visible: dashPowerOut.currentIndex === 1 && !softwareAdc.checked
@@ -2769,7 +3432,7 @@ Item {
 
                                 }
                             }
-                            Label { text: "Cruise control (experimental)"; font.bold: true; font.pointSize: root.titleSize * 0.92; font.capitalization: Font.AllUppercase; font.letterSpacing: 1; opacity: 0.8; Layout.topMargin: 26; Layout.leftMargin: 4 }
+                            Label { text: "Cruise control (exp.)"; font.bold: true; font.pointSize: root.titleSize * 0.92; font.capitalization: Font.AllUppercase; font.letterSpacing: 1; opacity: 0.8; Layout.topMargin: 26; Layout.leftMargin: 4 }
                             Rectangle {
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: card9.implicitHeight + 28
@@ -2788,44 +3451,42 @@ Item {
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Layout.preferredHeight: 40
-                                        Label { text: "Cruise Control"; Layout.fillWidth: true }
+                                        Label { font.bold: true; text: "Cruise Control"; Layout.fillWidth: true }
                                         CheckBox { id: cruiseEnable; spacing: 4; padding: 7; indicator: Rectangle { implicitWidth: 40; implicitHeight: 22; x: parent.leftPadding; y: parent.height / 2 - height / 2; radius: 11; color: parent.checked ? root.cAccentBg : root.cTrack; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } Rectangle { y: 3; width: 16; height: 16; radius: 8; color: parent.parent.checked ? root.cAccent : root.cDim2; x: parent.parent.checked ? 21 : 3; Behavior on color { ColorAnimation { duration: 140 } } Behavior on x { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } } } } }
                                     }
+                                    Label { text: "Enables the use of Cruise Control. Can be quickly toggled on the dash."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6 }
 
                                     RowLayout {
                                         Layout.fillWidth: true
                                         enabled: cruiseEnable.checked
-                                        Label { text: "Activation Delay (s)"; Layout.fillWidth: true }
-                                        TextField { id: cruiseDelay; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                        Label { font.bold: true; text: "Activation Delay (s)"; Layout.fillWidth: true }
+                                        TextField { font.pointSize: root.titleSize * 0.95; id: cruiseDelay; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
                                     }
+                                    Label { text: "How long a steady speed must be held before cruise control takes over."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6 }
 
                                     RowLayout {
                                         Layout.fillWidth: true
                                         enabled: cruiseEnable.checked
-                                        Label { text: "Speed deviation (" + (useMph.checked ? "mph" : "km/h") + ")"; Layout.fillWidth: true }
-                                        TextField { id: cruiseDeviation; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                        Label { font.bold: true; text: "Speed Deviation (" + (useMph.checked ? "mph" : "km/h") + ")"; Layout.fillWidth: true }
+                                        TextField { font.pointSize: root.titleSize * 0.95; id: cruiseDeviation; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
                                     }
+                                    Label { text: "The largest speed change still counted as steady."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6 }
 
                                     RowLayout {
                                         Layout.fillWidth: true
                                         enabled: cruiseEnable.checked
-                                        Label { text: "Min activation speed (" + (useMph.checked ? "mph" : "km/h") + ")"; Layout.fillWidth: true }
-                                        TextField { id: cruiseMinSpeed; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                        Label { font.bold: true; text: "Min. Activation Speed (" + (useMph.checked ? "mph" : "km/h") + ")"; Layout.fillWidth: true }
+                                        TextField { font.pointSize: root.titleSize * 0.95; id: cruiseMinSpeed; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
                                     }
+                                    Label { text: "Lowest speed at which cruise control can trigger."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6 }
 
                                     RowLayout {
                                         Layout.fillWidth: true
                                         enabled: cruiseEnable.checked
-                                        Label { text: "Max activation speed (" + (useMph.checked ? "mph" : "km/h") + ")"; Layout.fillWidth: true }
-                                        TextField { id: cruiseMaxSpeed; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                        Label { font.bold: true; text: "Max. Activation Speed (" + (useMph.checked ? "mph" : "km/h") + ")"; Layout.fillWidth: true }
+                                        TextField { font.pointSize: root.titleSize * 0.95; id: cruiseMaxSpeed; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
                                     }
-
-                                    Label {
-                                        text: "Activates by holding steady speed for set time. Cancel on throttle/brake input. Requires Cruise Control enabled in VESC."
-                                        opacity: 0.6
-                                        wrapMode: Text.WordWrap
-                                        Layout.fillWidth: true
-                                    }
+                                    Label { text: "Highest speed at which cruise control can trigger."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6; Layout.bottomMargin: 6 }
 
                                 }
                             }
@@ -2848,23 +3509,26 @@ Item {
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Layout.preferredHeight: 40
-                                        Label { text: "Speed Trigger (" + (useMph.checked ? "mph" : "km/h") + ")"; Layout.fillWidth: true }
-                                        TextField { id: alarmSpeedThreshold; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                        Label { font.bold: true; text: "Speed Trigger (" + (useMph.checked ? "mph" : "km/h") + ")"; Layout.fillWidth: true }
+                                        TextField { font.pointSize: root.titleSize * 0.95; id: alarmSpeedThreshold; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
                                     }
+                                    Label { text: "Speed above which the alarm is triggered."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6 }
 
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Layout.preferredHeight: 40
-                                        Label { text: "Gyro Trigger (deg/s)"; Layout.fillWidth: true }
-                                        TextField { id: alarmGyroThreshold; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                        Label { font.bold: true; text: "Gyro Trigger (deg/s)"; Layout.fillWidth: true }
+                                        TextField { font.pointSize: root.titleSize * 0.95; id: alarmGyroThreshold; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
                                     }
+                                    Label { text: "Degrees above which the alarm is triggered."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6 }
 
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Layout.preferredHeight: 40
-                                        Label { text: "Volume (V)"; Layout.fillWidth: true }
-                                        TextField { id: alarmVoltage; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                        Label { font.bold: true; text: "Volume (V)"; Layout.fillWidth: true }
+                                        TextField { font.pointSize: root.titleSize * 0.95; id: alarmVoltage; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
                                     }
+                                    Label { text: "Alarm loudness. Higher is louder."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6; Layout.bottomMargin: 6 }
                                 }
                             }
 
@@ -2952,10 +3616,23 @@ Item {
                     Behavior on scale { NumberAnimation { duration: 90 } }
 
                     Label {
+                        id: actLabel
                         anchors.centerIn: parent
                         text: modelData.t
                         font.bold: true
                         color: modelData.accent ? "#ffffff" : root.cInk
+                    }
+                    // a dot beside Save for as long as something on screen has
+                    // not reached the controller
+                    Rectangle {
+                        visible: modelData.act === 2 && root.cfgDirty && !root.saving
+                        anchors.right: actLabel.left
+                        anchors.rightMargin: 8
+                        anchors.verticalCenter: actLabel.verticalCenter
+                        width: 9
+                        height: width
+                        radius: width / 2
+                        color: "#ffffff"
                     }
                     MouseArea {
                         id: actTouch
@@ -2975,12 +3652,27 @@ Item {
     Connections {
         target: mCommands
 
+        function onValuesSetupReceived(values, mask) {
+            root.stMotAmps = values.current_motor
+            root.stTrip = values.tachometer_abs / 1000
+        }
+
+        function onDecodedAdcReceived(value, voltage, value2, voltage2) {
+            root.adcV1 = voltage
+            root.adcV2 = voltage2
+        }
+
         function onCustomAppDataReceived(data) {
             var message = data.toString().trim()
 
             if (message.startsWith("state ")) {
                 root.statePending = false
                 applyStateLine(message)
+                return
+            }
+
+            if (message === "ack") {
+                root.stepDone()
                 return
             }
 
@@ -3051,12 +3743,14 @@ Item {
                     || message.startsWith("alarm ")) {
                 applySettingsLine(message)
             } else if (message === "model-ok") {
+                root.stepDone()
                 loadedModel = modelBox.currentIndex
                 resetSettingsLoad()
                 VescIf.emitStatusMessage("Model saved, restarting...", true)
                 mCommands.lispSetRunning(false)
                 restartTimer.start()
             } else if (message === "reset-ok") {
+                root.stepDone()
                 // reset takes the model back to Slave, which only applies on a restart
                 modelBox.currentIndex = 2
                 loadedModel = 2
@@ -3067,7 +3761,9 @@ Item {
                 mCommands.lispSetRunning(false)
                 restartTimer.start()
             } else if (message === "ok") {
+                root.stepDone()
                 root.saving = false
+                root.cfgDirty = false
                 saveTimeout.stop()
                 VescIf.emitStatusMessage("Scooter settings saved.", true)
             }
