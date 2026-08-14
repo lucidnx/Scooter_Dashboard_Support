@@ -42,7 +42,7 @@ the QML UI and stored in EEPROM — never in separate script variants.
 
 - `README.md` is screenshots, disclaimer, functions, requirements, setup. Nothing else -
   no per-version "what's new", no hardware lists, no long analysis. Function descriptions
-  are a few lines each; the depth belongs in `docs/`.
+  are a few lines each. There is no `docs/` any more - do not start one.
 - Release notes go in the GitHub release itself, not the README and not the repository.
 - Bus captures live in `logs/`, gitignored, named
   `date_time_dash_build_app_subject.log` and indexed by `logs/README.md`.

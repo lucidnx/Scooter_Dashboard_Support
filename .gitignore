@@ -18,4 +18,3 @@ __pycache__/
 screenshots/*-old.*
 build/
 padded.lisp
-docs/*.pdf

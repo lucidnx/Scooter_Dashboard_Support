@@ -132,8 +132,6 @@ including pairing.
   none of the three apps above ever asks: they treat a headlight state change as the
   pairing confirmation instead, so the code is there for an app that wants it
 - Can be turned off in **Setup -> Miscellaneous** for the sharpest possible throttle response
-- Protocol details and app pacing measurements:
-  [notes for the NineDash developer](docs/ninedash.md)
 
 ### 💡 Lights
 - **Auto headlight** at power on
