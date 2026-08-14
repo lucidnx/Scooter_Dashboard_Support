@@ -9,17 +9,18 @@ and stored on the ESC.
      so three stacked cells stand taller than the one beside them and the columns
      drift apart. The nine settings shots are one cell broken by <br>, which puts
      their rows on image height alone. Every shot shares an aspect ratio, so three
-     rows of 140 come to the same height as one shot at 420. Keep that 3:1 or the
-     columns stop ending level; 420 + 3x140 plus GitHub cell padding fills the
-     README column -->
+     rows of 120 come to the same height as one shot at 360. Keep that 3:1 or the
+     columns stop ending level. Do not chase the last of the column width either:
+     at 420 + 3x140 the three no longer fit the cell and wrap one to a line, which
+     is why the settings cell also carries nowrap -->
 
 <table>
 <tr>
-<td valign="top"><img src="screenshots/control.jpg" alt="Control" width="420"></td>
-<td valign="top">
-<img src="screenshots/general1.jpg" alt="General" width="140"><img src="screenshots/general2.jpg" alt="Lights" width="140"><img src="screenshots/general3.jpg" alt="Gestures" width="140"><br>
-<img src="screenshots/modes1.jpg" alt="Parameters" width="140"><img src="screenshots/modes2.jpg" alt="Normal and secret modes" width="140"><img src="screenshots/setup1.jpg" alt="Model and throttle" width="140"><br>
-<img src="screenshots/setup2.jpg" alt="Temperatures" width="140"><img src="screenshots/setup3.jpg" alt="Cruise control" width="140"><img src="screenshots/setup4.jpg" alt="Backup and restore" width="140">
+<td valign="top"><img src="screenshots/control.jpg" alt="Control" width="360"></td>
+<td valign="top" nowrap>
+<img src="screenshots/general1.jpg" alt="General" width="120"><img src="screenshots/general2.jpg" alt="Lights" width="120"><img src="screenshots/general3.jpg" alt="Gestures" width="120"><br>
+<img src="screenshots/modes1.jpg" alt="Parameters" width="120"><img src="screenshots/modes2.jpg" alt="Normal and secret modes" width="120"><img src="screenshots/setup1.jpg" alt="Model and throttle" width="120"><br>
+<img src="screenshots/setup2.jpg" alt="Temperatures" width="120"><img src="screenshots/setup3.jpg" alt="Cruise control" width="120"><img src="screenshots/setup4.jpg" alt="Backup and restore" width="120">
 </td>
 </tr>
 </table>
