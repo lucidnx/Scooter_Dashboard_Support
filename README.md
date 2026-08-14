@@ -5,27 +5,20 @@ lock with alarm, fully remappable button/lever gestures, cruise control, rear li
 BMS support and a live remote-control dashboard - all configured from a phone-friendly UI
 and stored on the ESC.
 
-<!-- fixed widths so screenshots render the same size regardless of capture resolution.
-     one cell per shot and valign=top. Control spans all three rows at 320, which is the
-     width that leaves it the same height as three 107 rows plus their cell padding -
-     every shot shares one aspect ratio, so equal widths give equal heights -->
+<!-- Two cells, not a rowspan across three rows: GitHub pads every table cell,
+     so three stacked cells stand taller than the one beside them and the columns
+     drift apart. The nine settings shots are one cell broken by <br>, which puts
+     their rows on image height alone. Every shot shares an aspect ratio, so three
+     rows of 107 come to the same height as one shot at 320 -->
 
 <table>
 <tr>
-<td rowspan="3" valign="top"><img src="screenshots/control.jpg" alt="Control" width="320"></td>
-<td valign="top"><img src="screenshots/general1.jpg" alt="General" width="107"></td>
-<td valign="top"><img src="screenshots/general2.jpg" alt="Lights" width="107"></td>
-<td valign="top"><img src="screenshots/general3.jpg" alt="Gestures" width="107"></td>
-</tr>
-<tr>
-<td valign="top"><img src="screenshots/modes1.jpg" alt="Parameters" width="107"></td>
-<td valign="top"><img src="screenshots/modes2.jpg" alt="Normal and secret modes" width="107"></td>
-<td valign="top"><img src="screenshots/setup1.jpg" alt="Model and throttle" width="107"></td>
-</tr>
-<tr>
-<td valign="top"><img src="screenshots/setup2.jpg" alt="Temperatures" width="107"></td>
-<td valign="top"><img src="screenshots/setup3.jpg" alt="Cruise control" width="107"></td>
-<td valign="top"><img src="screenshots/setup4.jpg" alt="Backup and restore" width="107"></td>
+<td valign="top"><img src="screenshots/control.jpg" alt="Control" width="320"></td>
+<td valign="top">
+<img src="screenshots/general1.jpg" alt="General" width="107"><img src="screenshots/general2.jpg" alt="Lights" width="107"><img src="screenshots/general3.jpg" alt="Gestures" width="107"><br>
+<img src="screenshots/modes1.jpg" alt="Parameters" width="107"><img src="screenshots/modes2.jpg" alt="Normal and secret modes" width="107"><img src="screenshots/setup1.jpg" alt="Model and throttle" width="107"><br>
+<img src="screenshots/setup2.jpg" alt="Temperatures" width="107"><img src="screenshots/setup3.jpg" alt="Cruise control" width="107"><img src="screenshots/setup4.jpg" alt="Backup and restore" width="107">
+</td>
 </tr>
 </table>
 
