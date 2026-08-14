@@ -9,15 +9,17 @@ and stored on the ESC.
      so three stacked cells stand taller than the one beside them and the columns
      drift apart. The nine settings shots are one cell broken by <br>, which puts
      their rows on image height alone. Every shot shares an aspect ratio, so three
-     rows of 107 come to the same height as one shot at 320 -->
+     rows of 140 come to the same height as one shot at 420. Keep that 3:1 or the
+     columns stop ending level; 420 + 3x140 plus GitHub cell padding fills the
+     README column -->
 
 <table>
 <tr>
-<td valign="top"><img src="screenshots/control.jpg" alt="Control" width="320"></td>
+<td valign="top"><img src="screenshots/control.jpg" alt="Control" width="420"></td>
 <td valign="top">
-<img src="screenshots/general1.jpg" alt="General" width="107"><img src="screenshots/general2.jpg" alt="Lights" width="107"><img src="screenshots/general3.jpg" alt="Gestures" width="107"><br>
-<img src="screenshots/modes1.jpg" alt="Parameters" width="107"><img src="screenshots/modes2.jpg" alt="Normal and secret modes" width="107"><img src="screenshots/setup1.jpg" alt="Model and throttle" width="107"><br>
-<img src="screenshots/setup2.jpg" alt="Temperatures" width="107"><img src="screenshots/setup3.jpg" alt="Cruise control" width="107"><img src="screenshots/setup4.jpg" alt="Backup and restore" width="107">
+<img src="screenshots/general1.jpg" alt="General" width="140"><img src="screenshots/general2.jpg" alt="Lights" width="140"><img src="screenshots/general3.jpg" alt="Gestures" width="140"><br>
+<img src="screenshots/modes1.jpg" alt="Parameters" width="140"><img src="screenshots/modes2.jpg" alt="Normal and secret modes" width="140"><img src="screenshots/setup1.jpg" alt="Model and throttle" width="140"><br>
+<img src="screenshots/setup2.jpg" alt="Temperatures" width="140"><img src="screenshots/setup3.jpg" alt="Cruise control" width="140"><img src="screenshots/setup4.jpg" alt="Backup and restore" width="140">
 </td>
 </tr>
 </table>
