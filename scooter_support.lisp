@@ -59,10 +59,6 @@
 (def apply-fw true)
 
 ; Secret modes gate each parameter separately
-(def secret-apply-speed true)
-(def secret-apply-current true)
-(def secret-apply-watts true)
-(def secret-apply-fw true)
 
 ; Button gestures (combo: 0=brake+throttle, 1=brake only, 2=throttle only, 3=none)
 ; presses = 0 means no button press needed, the gesture fires from levers alone
@@ -117,7 +113,6 @@
 (def secret-drive-om 1.0)
 (def secret-sport-om 1.0)
 (def apply-om false)
-(def secret-apply-om false)
 
 ; Cruise control (experimental)
 (def cruise-allow false) ; master switch - without it nothing can turn cruise on
@@ -158,6 +153,9 @@
 (def speedmode 4)
 (def light false)
 (def unlock false)
+
+; set while the UI is being handed the defaults, so one reader serves both
+(def use-defaults false)
 
 ; alarm states
 (def alarm 0)
@@ -378,10 +376,6 @@
     (secret-requires-lock 44 b false)
     (lock-presses 45 i 2)
     (lock-combo 46 i 1)
-    (secret-apply-fw 47 b true)
-    (secret-apply-speed 48 b true)
-    (secret-apply-current 49 b true)
-    (secret-apply-watts 50 b true)
     (mode-presses 51 i 2)
     (mode-combo 52 i 3)
     (light-presses 53 i 1)
@@ -403,7 +397,6 @@
     (secret-drive-om 69 f 1.0)
     (secret-sport-om 70 f 1.0)
     (apply-om 71 b false)
-    (secret-apply-om 72 b false)
     (bms-soc-enable 73 b false)
     (cruise-enabled 74 b false)
     (cruise-delay 75 f 5.0)
@@ -444,9 +437,7 @@
         secret-drive-speed-kmh secret-drive-current secret-drive-watts secret-drive-fw
         secret-sport-speed-kmh secret-sport-current secret-sport-watts secret-sport-fw
         secret-eco-om secret-drive-om secret-sport-om)
-    (apply apply-speed apply-current apply-watts apply-fw apply-om
-        secret-apply-speed secret-apply-current secret-apply-watts secret-apply-fw
-        secret-apply-om)
+    (apply apply-speed apply-current apply-watts apply-fw apply-om)
     (gesture secret-presses secret-combo secret-requires-lock
         lock-presses lock-combo
         mode-presses mode-combo mode-requires-lock
@@ -494,11 +485,20 @@
         (var addr (first d))
         (var ty (second d))
         (var new (if (eq ty 'b) (if val 1 0) val))
+        (var dflt (let ((x (ix d 2))) (if (eq ty 'b) (if x 1 0) x)))
         (var cur (if (eq ty 'f) (eeprom-read-f addr) (eeprom-read-i addr)))
-        (if (or (eq cur nil) (!= cur new)) ; nil is a slot never written
+        ; An empty slot already reads back as its table default, so storing that
+        ; default into it changes nothing and costs a flash write. On a unit
+        ; straight out of the box that is ninety-odd blocking writes in the
+        ; middle of the first boot, on top of the parse and the image save.
+        ; The gap is what lets the frame reader answer the dash in between. Every
+        ; write locks interrupts, and the one that fills an emulation page erases
+        ; 16 KB behind them - a dash left unanswered for much over 200 ms powers
+        ; itself off, and a model change can put ninety of these in a row.
+        (if (if (eq cur nil) (!= new dflt) (!= cur new))
             {
                 (if (eq ty 'f) (eeprom-store-f addr new) (eeprom-store-i addr new))
-                (sleep 0.01)
+                (sleep 0.05)
             }
         )
     }
@@ -508,13 +508,12 @@
     (and (not (eq m 'unset)) (not (eq m nil)) (>= m 0) (<= m 3))
 )
 
-(defun restore-defaults (keep-model)
+(defun restore-defaults ()
     {
-        (var cur-model (read-setting 'model))
         ; the version first: a restore cut short by a reset cannot come back and
         ; repeat itself
         (write-setting 'ver-code settings-version)
-        (write-setting 'model (if (and keep-model (valid-model cur-model)) cur-model 2))
+        (write-setting 'model 2)
         (loopforeach s setting-defs
             (let ((n (ix s 0)))
                 (if (not (or (eq n 'model) (eq n 'ver-code)))
@@ -524,10 +523,18 @@
 
 (defun load-settings ()
     {
-        ; A version that does not match is reconfigured from defaults. The script
-        ; carries no migrations, so every release starts from a known set rather
-        ; than from whatever an older one happened to leave behind.
-        (if (not-eq (read-setting 'ver-code) settings-version) (restore-defaults true))
+        ; Installing the package stamps the version and puts the model back to
+        ; Slave. Nothing else is touched: an empty slot already reads back as its
+        ; default, and a controller that ran another package keeps whatever that
+        ; left in the slots until a model is picked - which is when the UI fills
+        ; itself with defaults and a save writes them over the top. A Slave slot
+        ; holding anything but Slave is written back here, whoever put it there.
+        (if (not-eq (read-setting 'ver-code) settings-version)
+            {
+                (write-setting 'ver-code settings-version)
+                (write-setting 'model 2)
+            }
+        )
 
         ; Every setting whose runtime variable carries the same name, straight off
         ; the group table. The ones below are the exceptions: stored in km/h and
@@ -672,7 +679,7 @@
 
 (defun restore-settings-ui ()
     {
-        (restore-defaults false) ; back to Slave, like a fresh install
+        (restore-defaults) ; back to Slave, like a fresh install
         (apply-runtime-settings)
         (send-data "reset-ok") ; the model only takes effect on a restart
     }
@@ -713,16 +720,27 @@
     }
 )
 
+; Turning on leaves the script where a reboot leaves it: the startup mode and
+; the light as configured, not whatever was set before the last power off.
+(defun boot-state ()
+    {
+        (set 'speedmode (if (or (= boot-mode 1) (= boot-mode 2) (= boot-mode 4)) boot-mode 4))
+        (set 'light light-on-boot)
+    }
+)
+
 (defun ctrl-power (on)
     (if on
         (if off {
             (set 'off false)
             (set 'feedback 1)
             (set 'unlock false)
+            (boot-state)
             (apply-mode)
             (stats-reset)
         })
         (if (and (not off) (not lock) (<= (abs (get-speed)) 1.0)) {
+            (set 'light false)
             (set 'feedback 1)
             (set 'unlock false)
             (apply-mode)
@@ -807,7 +825,8 @@
 ; which is what every caller wants, and what a bare read-setting cannot give the
 ; ones below that divide by it
 (defun setting-def (n)
-    (let ((v (read-setting n))) (if (eq v 'unset) (ix (assoc setting-defs n) 2) v))
+    (let ((v (if use-defaults 'unset (read-setting n))))
+        (if (eq v 'unset) (ix (assoc setting-defs n) 2) v))
 )
 
 (defun setting-str (n)
@@ -824,19 +843,35 @@
 
 ; misc leads, as it always has: it carries the mph switch, and every speed in the
 ; groups after it is rendered for whichever unit that sets.
+(defun send-groups ()
+    (loopforeach g setting-groups
+        {
+            (var line (to-str (first g)))
+            (loopforeach n (cdr g)
+                (setq line (str-merge line " " (setting-str n))))
+            (send-data line)
+            (sleep 0.05)
+        }
+    )
+)
+
 (defun send-settings ()
     {
         (send-data (str-merge "model " (setting-str 'model)))
         (sleep 0.05)
-        (loopforeach g setting-groups
-            {
-                (var line (to-str (first g)))
-                (loopforeach n (cdr g)
-                    (setq line (str-merge line " " (setting-str n))))
-                (send-data line)
-                (sleep 0.05)
-            }
-        )
+        (send-groups)
+    }
+)
+
+; Picking a model asks for these - the same group lines, read off the table
+; instead of EEPROM. They land in the fields as an unsaved change, so a model
+; can be chosen and its settings looked over before anything is written. The
+; model line is left out on purpose: the UI already knows which one was picked.
+(defun send-defaults ()
+    {
+        (set 'use-defaults true)
+        (send-groups)
+        (set 'use-defaults false)
     }
 )
 
@@ -1355,7 +1390,7 @@
         (if (not off)
             (if (> alarm 4)
                 (bufset-u8 tx-frame (+ tx-base 2) lamp) ; alarm on
-                (bufset-u8 tx-frame (+ tx-base 2) (+ (if (and light (not (and lock head-off-lock))) lamp 0)
+                (bufset-u8 tx-frame (+ tx-base 2) (+ (if (and light (or (not-eq calib-stage 'idle) (not (and lock head-off-lock)))) lamp 0)
                                                      (if (and (= model 3) cruising) 4 0)))
             )
             (bufset-u8 tx-frame (+ tx-base 2) 0)
@@ -2170,6 +2205,7 @@
                     (set 'off false) ; turn on
                     (set 'feedback 1) ; beep feedback
                     (set 'unlock false) ; Disable unlock on turn off
+                    (boot-state)
                     (apply-mode) ; Apply mode on start-up
                     (stats-reset) ; reset stats when turning on
                 }
@@ -2285,25 +2321,25 @@
 (defun apply-mode()
     (if (not unlock)
         (cond
-            ((= speedmode 1) (configure-speed drive-speed drive-watts drive-current drive-fw drive-om false))
-            ((= speedmode 2) (configure-speed eco-speed eco-watts eco-current eco-fw eco-om false))
-            ((= speedmode 4) (configure-speed sport-speed sport-watts sport-current sport-fw sport-om false))
+            ((= speedmode 1) (configure-speed drive-speed drive-watts drive-current drive-fw drive-om))
+            ((= speedmode 2) (configure-speed eco-speed eco-watts eco-current eco-fw eco-om))
+            ((= speedmode 4) (configure-speed sport-speed sport-watts sport-current sport-fw sport-om))
         )
         (cond
-            ((= speedmode 1) (configure-speed secret-drive-speed secret-drive-watts secret-drive-current secret-drive-fw secret-drive-om true))
-            ((= speedmode 2) (configure-speed secret-eco-speed secret-eco-watts secret-eco-current secret-eco-fw secret-eco-om true))
-            ((= speedmode 4) (configure-speed secret-sport-speed secret-sport-watts secret-sport-current secret-sport-fw secret-sport-om true))
+            ((= speedmode 1) (configure-speed secret-drive-speed secret-drive-watts secret-drive-current secret-drive-fw secret-drive-om))
+            ((= speedmode 2) (configure-speed secret-eco-speed secret-eco-watts secret-eco-current secret-eco-fw secret-eco-om))
+            ((= speedmode 4) (configure-speed secret-sport-speed secret-sport-watts secret-sport-current secret-sport-fw secret-sport-om))
         )
     )
 )
 
-(defun configure-speed(speed watts current fw om secret) ; normal and secret modes gate each parameter separately
+(defun configure-speed(speed watts current fw om) ; one gate per parameter, normal and secret alike
     {
-        (if (if secret secret-apply-speed apply-speed) (set-param 'max-speed speed))
-        (if (if secret secret-apply-watts apply-watts) (set-param 'l-watt-max watts))
-        (if (if secret secret-apply-current apply-current) (set-param 'l-current-max-scale current))
-        (if (if secret secret-apply-fw apply-fw) (set-param 'foc-fw-current-max fw))
-        (if (if secret secret-apply-om apply-om) (set-param 'foc-overmod-factor om))
+        (if apply-speed (set-param 'max-speed speed))
+        (if apply-watts (set-param 'l-watt-max watts))
+        (if apply-current (set-param 'l-current-max-scale current))
+        (if apply-fw (set-param 'foc-fw-current-max fw))
+        (if apply-om (set-param 'foc-overmod-factor om))
     }
 )
 
@@ -2616,8 +2652,7 @@
         (if (= model 2) { ; Slave: code server only, model stays switchable over CAN
             (start-code-server)
         } {
-            (set 'speedmode (if (or (= boot-mode 1) (= boot-mode 2) (= boot-mode 4)) boot-mode 4))
-            (if light-on-boot (set 'light true))
+            (boot-state)
             (if rear-light-enable {
                 (pwm-start 200 0)
                 (set 'pwm-started true)

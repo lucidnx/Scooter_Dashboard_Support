@@ -6,22 +6,26 @@ BMS support and a live remote-control dashboard - all configured from a phone-fr
 and stored on the ESC.
 
 <!-- fixed widths so screenshots render the same size regardless of capture resolution.
-     one cell per shot and valign=top, so the two rows of settings tabs line up with
-     the top of Control and Modes. 107 rather than half of 220 because each row also
-     carries the table cell's own padding -->
+     one cell per shot and valign=top. Control spans all three rows at 320, which is the
+     width that leaves it the same height as three 107 rows plus their cell padding -
+     every shot shares one aspect ratio, so equal widths give equal heights -->
 
 <table>
 <tr>
-<td rowspan="2" valign="top"><img src="screenshots/control.jpg" alt="Control" width="220"></td>
-<td rowspan="2" valign="top"><img src="screenshots/modes.jpg" alt="Modes" width="220"></td>
-<td valign="top"><img src="screenshots/general1.jpg" alt="General 1" width="107"></td>
-<td valign="top"><img src="screenshots/general2.jpg" alt="General 2" width="107"></td>
-<td valign="top"><img src="screenshots/setup1.jpg" alt="Setup 1" width="107"></td>
+<td rowspan="3" valign="top"><img src="screenshots/control.jpg" alt="Control" width="320"></td>
+<td valign="top"><img src="screenshots/general1.jpg" alt="General" width="107"></td>
+<td valign="top"><img src="screenshots/general2.jpg" alt="Lights" width="107"></td>
+<td valign="top"><img src="screenshots/general3.jpg" alt="Gestures" width="107"></td>
 </tr>
 <tr>
-<td valign="top"><img src="screenshots/setup2.jpg" alt="Setup 2" width="107"></td>
-<td valign="top"><img src="screenshots/setup3.jpg" alt="Setup 3" width="107"></td>
-<td valign="top"><img src="screenshots/setup4.jpg" alt="Setup 4" width="107"></td>
+<td valign="top"><img src="screenshots/modes1.jpg" alt="Parameters" width="107"></td>
+<td valign="top"><img src="screenshots/modes2.jpg" alt="Normal and secret modes" width="107"></td>
+<td valign="top"><img src="screenshots/setup1.jpg" alt="Model and throttle" width="107"></td>
+</tr>
+<tr>
+<td valign="top"><img src="screenshots/setup2.jpg" alt="Temperatures" width="107"></td>
+<td valign="top"><img src="screenshots/setup3.jpg" alt="Cruise control" width="107"></td>
+<td valign="top"><img src="screenshots/setup4.jpg" alt="Backup and restore" width="107"></td>
 </tr>
 </table>
 
