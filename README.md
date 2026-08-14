@@ -12,15 +12,23 @@ and stored on the ESC.
      rows of 120 come to the same height as one shot at 360. Keep that 3:1 or the
      columns stop ending level. Do not chase the last of the column width either:
      at 420 + 3x140 the three no longer fit the cell and wrap one to a line, which
-     is why the settings cell also carries nowrap -->
+     is why the settings cell also carries nowrap. That is what makes the newlines
+     between the tags safe: they render as the gaps between shots without ever
+     costing a wrap -->
 
 <table>
 <tr>
 <td valign="top"><img src="screenshots/control.jpg" alt="Control" width="360"></td>
 <td valign="top" nowrap>
-<img src="screenshots/general1.jpg" alt="General" width="120"><img src="screenshots/general2.jpg" alt="Lights" width="120"><img src="screenshots/general3.jpg" alt="Gestures" width="120"><br>
-<img src="screenshots/modes1.jpg" alt="Parameters" width="120"><img src="screenshots/modes2.jpg" alt="Normal and secret modes" width="120"><img src="screenshots/setup1.jpg" alt="Model and throttle" width="120"><br>
-<img src="screenshots/setup2.jpg" alt="Temperatures" width="120"><img src="screenshots/setup3.jpg" alt="Cruise control" width="120"><img src="screenshots/setup4.jpg" alt="Backup and restore" width="120">
+<img src="screenshots/general1.jpg" alt="General" width="120">
+<img src="screenshots/general2.jpg" alt="Lights" width="120">
+<img src="screenshots/general3.jpg" alt="Gestures" width="120"><br>
+<img src="screenshots/modes1.jpg" alt="Parameters" width="120">
+<img src="screenshots/modes2.jpg" alt="Normal and secret modes" width="120">
+<img src="screenshots/setup1.jpg" alt="Model and throttle" width="120"><br>
+<img src="screenshots/setup2.jpg" alt="Temperatures" width="120">
+<img src="screenshots/setup3.jpg" alt="Cruise control" width="120">
+<img src="screenshots/setup4.jpg" alt="Backup and restore" width="120">
 </td>
 </tr>
 </table>
