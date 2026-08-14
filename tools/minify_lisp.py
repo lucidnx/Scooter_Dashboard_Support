@@ -24,6 +24,7 @@ import sys
 #   B       v4.0     16386      109672   21320     80   304 of 319
 #   B       v4.1     14090       89400   22120  19552   304 of 319
 #   B       v4.2     14086       88992   22404  19676   304 of 319
+#   B       v4.3     14090       89080   21940  20052   304 of 319
 #
 # Sixteen bytes. The image holds the symbol table, so a firmware build with a
 # few more extensions than unit A has none - image-save fails, and a script that
@@ -35,6 +36,11 @@ import sys
 # The image is the number to re-measure every release. It grew 800 bytes from
 # v4.0 to v4.1 on the same unit while the script itself got 2296 tokens shorter,
 # so it does not track the token count and nothing in this build catches it.
+#
+# IMAGE_BYTES stays at the largest image ever measured, not the newest one. v4.3
+# came back 464 bytes under v4.2 on the same unit with four more tokens, so the
+# figure moves in both directions for reasons the token count does not explain -
+# and the ceiling has to hold for the worst image seen, not the last one.
 #
 # BYTES_PER_TOKEN stays calibrated on v4.0: cost per token is not uniform (6.69
 # there, 6.35 at v4.1, 8.83 marginal between the two), and v4.0 is the build
