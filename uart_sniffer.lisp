@@ -1,4 +1,4 @@
-; VESC Scooter Support - UART sniffer v1.0
+; Scooter Dashboard Support - UART sniffer v1.0
 ; Passive logger for the dash link. Listens on the COMM port (half-duplex on the
 ; TX pin, same wiring as the package) and prints what the dash sends to the
 ; VESC Tool Lisp console. Nothing is ever written to the wire, so the dash gets
@@ -15,7 +15,7 @@
 ; One line per frame, same format as the package's own console log:
 ; uptime  src>dst  cmd  arg  payload-length  payload
 ;
-; Guide and wiring: https://github.com/lucidnx/vesc_scooter_support
+; Guide and wiring: https://github.com/lucidnx/Scooter_Dashboard_Support
 
 ; -> Settings
 

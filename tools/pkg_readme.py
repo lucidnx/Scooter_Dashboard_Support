@@ -11,7 +11,7 @@ everything.
 import re
 import sys
 
-REPO = "https://github.com/lucidnx/vesc_scooter_support"
+REPO = "https://github.com/lucidnx/Scooter_Dashboard_Support"
 
 # VESC Tool's renderer applies emphasis to the source text before it works out
 # what is a link, and it honours no backslash escape. So an underscore is lost
@@ -19,7 +19,7 @@ REPO = "https://github.com/lucidnx/vesc_scooter_support"
 # as a literal <em> inside the href. Nothing may carry one: labels avoid them,
 # and encode_link_targets swaps them for %5F, which is the same character to the
 # server and has nothing to pair with.
-REPO_MD = "[VESC Scooter Support on GitHub](" + REPO + ")"
+REPO_MD = "[Scooter Dashboard Support on GitHub](" + REPO + ")"
 
 
 def is_image(line):

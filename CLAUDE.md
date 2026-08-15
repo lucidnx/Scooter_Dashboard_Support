@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Rules for working on VESC Scooter Support. Follow these exactly.
+Rules for working on Scooter Dashboard Support. Follow these exactly.
 
 ## What this is
 
@@ -34,7 +34,7 @@ the QML UI and stored in EEPROM — never in separate script variants.
 
 ## Build
 
-- `make` produces `vesc_scooter_support.vescpkg` (needs `vesc_tool` on PATH or
+- `make` produces `release.vescpkg` (needs `vesc_tool` on PATH or
   `VESC_TOOL=/path/to/vesc_tool`).
 - Test the built package in VESC Tool before releasing anything.
 
