@@ -195,7 +195,7 @@ Item {
     property var uiPrefs: null
 
     function initPrefs() {
-        var decl = ' Settings { category: "vesc_scooter_support"; property string statSlots: "" }'
+        var decl = ' Settings { category: "scooter_dashboard_support"; property string statSlots: "" }'
         var mods = ["import Qt.labs.settings 1.0;", "import QtCore 6.5;"]
         for (var i = 0; i < mods.length; i++) {
             try {
