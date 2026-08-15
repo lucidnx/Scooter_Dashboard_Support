@@ -3,7 +3,7 @@ VESC_TOOL ?= $(if $(wildcard ./vesc_tool),./vesc_tool,vesc_tool)
 # bare command name must be left alone for PATH to find it
 VESC_TOOL_CMD = $(if $(findstring /,$(VESC_TOOL)),$(abspath $(VESC_TOOL)),$(VESC_TOOL))
 
-PKG = vesc_scooter_support.vescpkg
+PKG = release.vescpkg
 BUILD = build
 SRC = pkgdesc.qml ui.qml scooter_support.lisp README.md version
 

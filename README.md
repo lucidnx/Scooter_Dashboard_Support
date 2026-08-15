@@ -1,7 +1,8 @@
-# VESC Scooter Support
+# Scooter Dashboard Support
 
-Connect a Xiaomi or Ninebot dashboard to a VESC controller. Speed modes, secret modes,
-lock with alarm, fully remappable button/lever gestures, cruise control, rear light,
+For VESC-based controllers. Connect a Xiaomi or Ninebot dashboard to a VESC
+controller. Speed modes, secret modes, lock with alarm, fully remappable
+button/lever gestures, cruise control, rear light,
 BMS support and a live remote-control dashboard - all configured from a phone-friendly UI
 and stored on the ESC.
 

@@ -1,4 +1,4 @@
-vesc_scooter_support.vescpkg
+release.vescpkg
 vesc_tool
 tools/*
 !tools/minify_lisp.py
