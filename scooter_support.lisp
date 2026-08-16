@@ -217,6 +217,12 @@
 
 ; app protocol state - buffers are built in main, they must stay out of flash
 (def app-boot-time (systime))
+; The dash counts a ride, not a VESC boot. The firmware's own distance and
+; watt-hour totals cannot be reset, so what the dash shows is measured against
+; a baseline taken when it was switched on.
+(def base-dist 0.0)
+(def base-wh 0.0)
+(def base-wh-chg 0.0)
 (def app-cache-time (systime))
 (def app-slow-time (systime))
 (def app-slow-step 0)
@@ -726,6 +732,10 @@
     {
         (set 'speedmode (if (or (= boot-mode 1) (= boot-mode 2) (= boot-mode 4)) boot-mode 4))
         (set 'light light-on-boot)
+        (set 'app-boot-time (systime))
+        (set 'base-dist (get-dist-abs))
+        (set 'base-wh (setup-wh))
+        (set 'base-wh-chg (setup-wh-chg))
     }
 )
 
@@ -783,7 +793,10 @@
             (str-from-n (get-fault) "%d ")
             (str-from-n (wheel-slip) "%d ")
             (str-from-n cur-bms-temp "%.0f ")
-            (str-from-n (secs-since app-boot-time) "%.0f")
+            (str-from-n (secs-since app-boot-time) "%.0f ")
+            ; the UI took this off the firmware's own tachometer, which does not
+            ; know the dash was switched on - it has to come from here to reset
+            (str-from-n cur-trip "%d")
         ))
     )
 )
@@ -800,9 +813,9 @@
 ; firmware - no need to sum the units by hand
 (defun send-state-whkm () {
         ; matches VESC Tool: (wh - wh_chg) / abs tacho distance, combined values
-        (var dist-km (/ (get-dist-abs) 1000.0))
+        (var dist-km (/ (- (get-dist-abs) base-dist) 1000.0))
         (if (> dist-km 0.05)
-            (/ (- (setup-wh) (setup-wh-chg)) dist-km)
+            (/ (- (- (setup-wh) base-wh) (- (setup-wh-chg) base-wh-chg)) dist-km)
             0.0
         )
 })
@@ -1556,7 +1569,7 @@
                 ((= app-slow-step 0) {
                     (set 'cur-wh-tot (* 0.85 (conf-get 'si-battery-ah) (* 3.7 (conf-get 'si-battery-cells))))
                     (set 'cur-range (send-state-range))
-                    (set 'cur-trip (to-i (get-dist-abs)))
+                    (set 'cur-trip (to-i (- (get-dist-abs) base-dist)))
                 })
                 ((= app-slow-step 1) {
                     (set 'cur-odo (app-sysinfo 'odometer))
@@ -2418,7 +2431,10 @@
         (if lock
             {
                 (set-current-rel 0) ; No current input when locked
-                (if (and (> alarm 0) (> speed 0.0))
+                ; the same threshold that trips the alarm, so the brake answers
+                ; the movement the alarm is complaining about and nothing slower -
+                ; a wheel nudged by hand is not worth a full brake
+                (if (and (> alarm 0) (> speed alarm-speed-threshold))
                     (set-brake-rel 1) ; Full power brake
                     (set-brake-rel 0) ; No brake
                 )
@@ -2716,7 +2732,6 @@
                 ; also an empty checksum - so seal it once here
                 (build-app-frame app-f-b0 0xb0 52)
             })
-            (set 'app-boot-time (systime))
 
             (if (= model 1) {
                 (define tx-frame (array-create 14))

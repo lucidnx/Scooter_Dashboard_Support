@@ -496,6 +496,7 @@ Item {
         stBmsTemp = Number.parseFloat(p[24])
         if (isNaN(stBmsTemp)) stBmsTemp = -100
         stUptime = Number.parseFloat(p[25]) || 0
+        stTrip = (Number.parseFloat(p[26]) || 0) / 1000
         if (Math.abs(stWatts) > stWattPeak)
             stWattPeak = Math.abs(stWatts)
     }
@@ -3388,32 +3389,6 @@ Item {
 
                                 }
                             }
-                            Label { text: "Gestures"; font.bold: true; font.pointSize: root.titleSize * 0.92; font.capitalization: Font.AllUppercase; font.letterSpacing: 1; opacity: 0.8; Layout.topMargin: 26; Layout.leftMargin: 4 }
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: card6.implicitHeight + 28
-                                radius: 14
-                                color: root.cDeep
-                                border.width: root.darkUi ? 0 : 1
-                                border.color: root.cEdge
-                                ColumnLayout {
-                                    id: card6
-                                    anchors.left: parent.left
-                                    anchors.right: parent.right
-                                    anchors.top: parent.top
-                                    anchors.margins: 14
-                                    spacing: 12
-
-                                    RowLayout {
-                                        Layout.fillWidth: true
-                                        Layout.preferredHeight: 40
-                                        Label { font.bold: true; text: "Disable Gestures above (" + (useMph.checked ? "mph" : "km/h") + ")"; Layout.fillWidth: true }
-                                        TextField { font.pointSize: root.titleSize * 0.95; id: buttonSpeed; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
-                                    }
-                                    Label { text: "Button gestures are disabled above this speed."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6; Layout.bottomMargin: 6 }
-
-                                }
-                            }
                             Label { text: "Temperature"; font.bold: true; font.pointSize: root.titleSize * 0.92; font.capitalization: Font.AllUppercase; font.letterSpacing: 1; opacity: 0.8; Layout.topMargin: 26; Layout.leftMargin: 4 }
                             Rectangle {
                                 Layout.fillWidth: true
@@ -3482,6 +3457,14 @@ Item {
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Layout.preferredHeight: 40
+                                        Label { font.bold: true; text: "Disable Gestures above (" + (useMph.checked ? "mph" : "km/h") + ")"; Layout.fillWidth: true }
+                                        TextField { font.pointSize: root.titleSize * 0.95; id: buttonSpeed; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
+                                    }
+                                    Label { text: "Button gestures are disabled above this speed."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6; Layout.bottomMargin: 6 }
+
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: 40
                                         Label { font.bold: true; text: "Use Imperial Units"; Layout.fillWidth: true }
                                         CheckBox {
                                             id: useMph
@@ -3508,15 +3491,16 @@ Item {
                                             Layout.fillWidth: true
                                             font.bold: true
                                             wrapMode: Text.WordWrap
-                                            text: (root.isSlave ? "App Support"
-                                                   : (modelBox.currentIndex === 1 ? "Xiaomi" : "Segway")
-                                                     + " App Support (exp.)")
+                                            text: "App Support"
                                         }
                                         CheckBox { id: appEnable; spacing: 4; padding: 7; indicator: Rectangle { implicitWidth: 40; implicitHeight: 22; x: parent.leftPadding; y: parent.height / 2 - height / 2; radius: 11; color: parent.checked ? root.cAccentBg : root.cTrack; opacity: parent.enabled ? 1 : 0.45; Behavior on color { ColorAnimation { duration: 140 } } Rectangle { y: 3; width: 16; height: 16; radius: 8; color: parent.parent.checked ? root.cAccent : root.cDim2; x: parent.parent.checked ? 21 : 3; Behavior on color { ColorAnimation { duration: 140 } } Behavior on x { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } } } } }
                                     }
                                     Label { text: "Enable the original Segway/Xiaomi and third-party apps to connect over the dashboard's BLE."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6 }
 
                                     RowLayout {
+                                        // kept in the tree so the value still round-trips through save and
+                                        // load - no app on the bus asks for it, so it only raises questions
+                                        visible: false
                                         Layout.fillWidth: true
                                         Layout.preferredHeight: 40
                                         Label { font.bold: true; text: "App pairing PIN"; Layout.fillWidth: true }
@@ -3536,7 +3520,7 @@ Item {
                                             background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard }
                                         }
                                     }
-                                    Label { text: "The six digits the phone app asks for when it connects."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6 }
+                                    Label { visible: false; text: "The six digits the phone app asks for when it connects."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6 }
 
                                     RowLayout {
                                         Layout.fillWidth: true
@@ -3549,7 +3533,7 @@ Item {
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Layout.preferredHeight: 40
-                                        Label { font.bold: true; text: "Dashboard Power Pin (exp.)"; Layout.fillWidth: true }
+                                        Label { font.bold: true; text: "Dashboard Power Pin"; Layout.fillWidth: true }
                                         ComboBox {
                                             id: dashPowerOut
                                             Layout.preferredWidth: 100
@@ -3590,7 +3574,7 @@ Item {
 
                                 }
                             }
-                            Label { text: "Cruise control (exp.)"; font.bold: true; font.pointSize: root.titleSize * 0.92; font.capitalization: Font.AllUppercase; font.letterSpacing: 1; opacity: 0.8; Layout.topMargin: 26; Layout.leftMargin: 4 }
+                            Label { text: "Cruise control"; font.bold: true; font.pointSize: root.titleSize * 0.92; font.capitalization: Font.AllUppercase; font.letterSpacing: 1; opacity: 0.8; Layout.topMargin: 26; Layout.leftMargin: 4 }
                             Rectangle {
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: card9.implicitHeight + 28
@@ -3648,7 +3632,7 @@ Item {
 
                                 }
                             }
-                            Label { text: "Alarm"; font.bold: true; font.pointSize: root.titleSize * 0.92; font.capitalization: Font.AllUppercase; font.letterSpacing: 1; opacity: 0.8; Layout.topMargin: 26; Layout.leftMargin: 4 }
+                            Label { text: "Lock and Alarm"; font.bold: true; font.pointSize: root.titleSize * 0.92; font.capitalization: Font.AllUppercase; font.letterSpacing: 1; opacity: 0.8; Layout.topMargin: 26; Layout.leftMargin: 4 }
                             Rectangle {
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: card10.implicitHeight + 28
@@ -3670,7 +3654,7 @@ Item {
                                         Label { font.bold: true; text: "Speed Trigger (" + (useMph.checked ? "mph" : "km/h") + ")"; Layout.fillWidth: true }
                                         TextField { font.pointSize: root.titleSize * 0.95; id: alarmSpeedThreshold; horizontalAlignment: TextInput.AlignHCenter; Layout.preferredWidth: 100; maximumLength: 7; inputMethodHints: Qt.ImhFormattedNumbersOnly; topPadding: 0; bottomPadding: 0; leftPadding: 6; rightPadding: 6; verticalAlignment: TextInput.AlignVCenter; background: Rectangle { radius: 10; implicitHeight: 34; color: parent.enabled ? root.cCtl : root.cCard } }
                                     }
-                                    Label { text: "Speed above which the alarm is triggered."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6 }
+                                    Label { text: "Speed above which the scooter starts braking and the alarm is triggered."; opacity: 0.6; font.pointSize: root.titleSize * 0.85; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.topMargin: -6 }
 
                                     RowLayout {
                                         Layout.fillWidth: true
@@ -3802,7 +3786,6 @@ Item {
 
         function onValuesSetupReceived(values, mask) {
             root.stMotAmps = values.current_motor
-            root.stTrip = values.tachometer_abs / 1000
         }
 
         function onDecodedAdcReceived(value, voltage, value2, voltage2) {

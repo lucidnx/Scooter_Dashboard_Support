@@ -70,9 +70,10 @@ One package for everything - the model is stored on the ESC and selected in the 
   current, watts, field weakening and overmodulation
 - **Current %** is a percentage of your Motor Current Max, capped at 100%; **Overmodulation**
   is floored at 1.0, so neither can overdrive the motor
-- Each parameter has its own apply toggle - unchecked parameters never touch your motor
-  config, so you can keep your own field weakening setup
-- Selectable startup mode
+- **Parameters** switches at the top of Modes decide which of the five the package writes
+  at all. One switch covers normal and secret together, and anything switched off is left
+  exactly as VESC has it - so you can keep your own field weakening setup
+- Selectable startup mode, restored every time the dashboard is switched on
 
 ### 🎛️ Gestures
 Lock, mode switching, headlight, secret mode and leaving secret mode are fully remappable:
@@ -95,9 +96,11 @@ Lock, mode switching, headlight, secret mode and leaving secret mode are fully r
 
 ### 🔒 Lock & alarm
 - Motor braked when pushed, alarm with beeping and optional siren on gyro or wheel movement
+- The brake and the alarm share one speed threshold, so a wheel nudged by hand is ignored
+  and anything faster is held
 - Configurable thresholds and volume, and an optional "Disable Secret when Locked"
 
-### 🚀 Cruise control (experimental)
+### 🚀 Cruise control
 - Hold a steady speed with the throttle for the configured delay and the scooter keeps it
 - **Cancels on any throttle or brake press** and your live lever takes over the same instant.
   It does not cancel on speed alone, so a bumpy road or traction control cannot drop it
@@ -112,6 +115,9 @@ Lock, mode switching, headlight, secret mode and leaving secret mode are fully r
 - **Four readouts** under the bar. Hold one to pick what it shows: voltage, battery or
   motor current, controller, motor or battery temperature, battery %, uptime or trip
   distance. Temperatures flash red above their warning thresholds
+- **Uptime, trip distance and consumption count the ride, not the controller.** Switching
+  the dashboard off and on again starts them over, as a VESC reboot would. The VESC's own
+  totals and the odometer are left alone
 - A disabled function reads as off: with cruise or secret switched off in Setup, its button
   greys out and stops responding rather than sitting there coloured
 - Buttons for power, lock/unlock, headlight, secret, cruise and mode selection
@@ -129,9 +135,6 @@ including pairing.
   secret, **Direct power control** toggles the headlight
 - **Battery screen** is populated on Xiaomi - the BMS is emulated
 - **Shutdown from the app** switches the dashboard off, refused above walking pace
-- **App pairing PIN** - set your own 6-digit code in Setup. The package answers it, but
-  none of the three apps above ever asks: they treat a headlight state change as the
-  pairing confirmation instead, so the code is there for an app that wants it
 - Can be turned off in **Setup -> Miscellaneous** for the sharpest possible throttle response
 
 ### 💡 Lights
@@ -214,8 +217,10 @@ including pairing.
    - the unit wired to the dashboard gets its dashboard model (**G30**, **M365/1S/PRO2**
      or **G2**),
    - every other unit gets **Slave**.
-4. Press **Save** - the script restarts with the chosen model. The model is stored per unit.
-5. Configure everything else in the **General**, **Modes** and **Setup** tabs and press **Save**.
+4. Choosing a model fills every field with its default, so look them over - or change them -
+   before saving. Nothing is written until you press **Save**.
+5. Press **Save** - the script restarts with the chosen model. The model is stored per unit.
+6. Configure everything else in the **General**, **Modes** and **Setup** tabs and press **Save**.
 
 **Updating:** just install the new package over the old one - your settings are kept and
 migrated automatically. To go back to defaults, use the **Reset** button in the UI - that
