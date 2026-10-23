@@ -32,6 +32,7 @@ gpio-configure gpio-write gpio-read
 uart-start uart-stop uart-write uart-read uart-read-bytes uart-read-until
 can-start can-scan can-send-sid can-send-eid can-recv-sid can-recv-eid
 can-cmd can-list-devs can-local-id can-update-baud
+canset-brake-rel canset-brake canset-current-rel canset-current
 canget-current canget-current-in canget-duty canget-rpm canget-temp-fet
 canget-temp-motor canget-speed canget-dist canget-ah canget-wh canget-vin
 canget-current-dir canget-current-in-dir

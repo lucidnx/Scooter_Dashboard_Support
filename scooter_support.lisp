@@ -2434,10 +2434,10 @@
                 ; the same threshold that trips the alarm, so the brake answers
                 ; the movement the alarm is complaining about and nothing slower -
                 ; a wheel nudged by hand is not worth a full brake
-                (if (and (> alarm 0) (> speed alarm-speed-threshold))
-                    (set-brake-rel 1) ; Full power brake
-                    (set-brake-rel 0) ; No brake
-                )
+                (var brk (if (and (> alarm 0) (> speed alarm-speed-threshold)) 1.0 0.0))
+                (set-brake-rel brk)
+                ; slaves only run the code server, so brake them over CAN
+                (loopforeach id (can-devs) (canset-brake-rel id brk))
             }
         )
 

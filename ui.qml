@@ -2284,7 +2284,9 @@ Item {
                                             // and the property falls back to true
                                             visible: tile.warn === true
                                             SequentialAnimation on opacity {
-                                                running: true
+                                                // a hidden item still repaints the
+                                                // window on every animated frame
+                                                running: tile.warn === true
                                                 loops: Animation.Infinite
                                                 NumberAnimation { from: 0; to: 0.85; duration: 520; easing.type: Easing.InOutQuad }
                                                 NumberAnimation { from: 0.85; to: 0; duration: 520; easing.type: Easing.InOutQuad }
