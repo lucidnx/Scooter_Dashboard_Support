@@ -120,8 +120,18 @@ jobs:
           export PATH="$PWD/$VESC_TOOL_DIR/bin:$PATH"
           QT_QPA_PLATFORM=offscreen make clean all
 
+      # v4 refuses anything that is not github.com, and GitHub has retired v3
       - name: Upload package artifact
+        if: github.server_url == 'https://github.com'
         uses: actions/upload-artifact@v4
+        with:
+          name: scooter-dashboard-support-${{ github.sha }}
+          if-no-files-found: error
+          path: release.vescpkg
+
+      - name: Upload package artifact (Forgejo)
+        if: github.server_url != 'https://github.com'
+        uses: actions/upload-artifact@v3
         with:
           name: scooter-dashboard-support-${{ github.sha }}
           if-no-files-found: error
